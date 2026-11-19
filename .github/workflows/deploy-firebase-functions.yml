@@ -1,4 +1,4 @@
-name: Deploy Yuk Main Firebase Cloud Functions
+name: Deploy Yuk Main Firebase Cloud Functions & Rules
 
 on:
   push:
@@ -8,6 +8,8 @@ on:
     paths:
       - 'functions/**'
       - 'lib/games/**'
+      - 'firestore.rules'
+      - 'database.rules.json'
       - 'firebase.json'
       - '.firebaserc'
   workflow_dispatch:
@@ -18,7 +20,7 @@ concurrency:
 
 jobs:
   deploy-functions:
-    name: Build & Deploy Cloud Functions v2 (yuk-main)
+    name: Build & Deploy Cloud Functions v2 & Firestore Rules (yuk-main)
     runs-on: ubuntu-latest
 
     steps:
@@ -33,7 +35,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
-      - name: Extract Firebase Service Account from YUK_MAIN_DEPLOY_SECRETS
+      - name: Extract & validate Firebase Service Account from YUK_MAIN_DEPLOY_SECRETS
         id: secrets
         env:
           DEPLOY_SECRETS: ${{ secrets.YUK_MAIN_DEPLOY_SECRETS }}
@@ -63,20 +65,88 @@ jobs:
               }
             };
 
-            if (!cfg.firebaseServiceAccount) {
-              console.error("firebaseServiceAccount is not set inside YUK_MAIN_DEPLOY_SECRETS. Add it to auto-deploy Cloud Functions, or deploy manually with: npx firebase-tools deploy --only functions");
+            const parseServiceAccount = (value) => {
+              let current = value;
+              for (let depth = 0; depth < 3; depth++) {
+                if (typeof current === "string") {
+                  const trimmed = current.trim();
+                  if (!trimmed) return null;
+                  try {
+                    current = JSON.parse(trimmed);
+                    continue;
+                  } catch {
+                    try {
+                      const decoded = Buffer.from(trimmed, "base64").toString("utf8").trim();
+                      if (decoded.startsWith("{")) {
+                        current = JSON.parse(decoded);
+                        continue;
+                      }
+                    } catch {
+                      return null;
+                    }
+                    return null;
+                  }
+                }
+                if (current && typeof current === "object" && !Array.isArray(current)) {
+                  if (
+                    !current.private_key &&
+                    current.firebaseServiceAccount &&
+                    typeof current.firebaseServiceAccount === "object"
+                  ) {
+                    current = current.firebaseServiceAccount;
+                    continue;
+                  }
+                  return current;
+                }
+                return null;
+              }
+              return current && typeof current === "object" ? current : null;
+            };
+
+            const saObj = parseServiceAccount(cfg.firebaseServiceAccount);
+            if (!saObj) {
+              console.error(
+                "firebaseServiceAccount is missing or unreadable inside YUK_MAIN_DEPLOY_SECRETS.\n" +
+                "Download the full key from Firebase Console -> Project Settings -> Service accounts -> Generate new private key,\n" +
+                "and paste the entire JSON object under \"firebaseServiceAccount\"."
+              );
               process.exit(1);
             }
 
-            const saObj = typeof cfg.firebaseServiceAccount === "string"
-              ? JSON.parse(cfg.firebaseServiceAccount)
-              : cfg.firebaseServiceAccount;
+            // Normalize double-escaped newlines in private_key (e.g. \\n -> \n)
+            if (typeof saObj.private_key === "string" && saObj.private_key.includes("\\n")) {
+              saObj.private_key = saObj.private_key.replace(/\\n/g, "\n");
+            }
+
+            const missingFields = [];
+            if (saObj.type !== "service_account") missingFields.push("type (must be \"service_account\")");
+            if (typeof saObj.client_email !== "string" || !saObj.client_email.includes("@")) {
+              missingFields.push("client_email");
+            }
+            if (
+              typeof saObj.private_key !== "string" ||
+              !saObj.private_key.includes("BEGIN") ||
+              !saObj.private_key.includes("PRIVATE KEY")
+            ) {
+              missingFields.push("private_key");
+            }
+
+            if (missingFields.length > 0) {
+              const presentKeys = Object.keys(saObj);
+              console.error(
+                "Incomplete firebaseServiceAccount inside YUK_MAIN_DEPLOY_SECRETS.\n" +
+                "Keys currently present: [" + presentKeys.join(", ") + "]\n" +
+                "Missing/invalid required fields: " + missingFields.join(", ") + "\n" +
+                "Fix: Go to Firebase Console -> Project Settings -> Service accounts -> Generate new private key,\n" +
+                "and replace \"firebaseServiceAccount\" in GitHub Secret YUK_MAIN_DEPLOY_SECRETS with the full downloaded JSON."
+              );
+              process.exit(1);
+            }
 
             const saJson = JSON.stringify(saObj);
             mask(saJson);
-            if (typeof saObj.private_key === "string") {
-              mask(saObj.private_key);
-            }
+            mask(saObj.client_email);
+            mask(saObj.private_key);
 
             const projectId = (cfg.firebase && cfg.firebase.projectId) || saObj.project_id || "yuk-main";
 
@@ -84,12 +154,15 @@ jobs:
             const outFile = process.env.GITHUB_OUTPUT;
             fs.appendFileSync(outFile, `sa_json<<${delim}\n${saJson}\n${delim}\n`);
             fs.appendFileSync(outFile, `project_id<<${delim}\n${projectId}\n${delim}\n`);
+
+            console.log("Validated Firebase Service Account for project:", projectId);
           '
 
-      - name: Run Spyfall engine unit tests
+      - name: Run Yuk Main engine unit tests & Firestore rules lint
         run: |
           bun install --frozen-lockfile
           bun run test
+          bun run lint
 
       - name: Install & build Cloud Functions
         working-directory: functions
@@ -102,5 +175,5 @@ jobs:
         with:
           credentials_json: ${{ steps.secrets.outputs.sa_json }}
 
-      - name: Deploy Cloud Functions to Firebase
-        run: npx firebase-tools deploy --only functions --project "${{ steps.secrets.outputs.project_id }}" --non-interactive
+      - name: Deploy Cloud Functions & Firestore Rules to Firebase
+        run: npx firebase-tools deploy --only functions,firestore:rules --project "${{ steps.secrets.outputs.project_id }}" --non-interactive

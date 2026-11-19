@@ -170,7 +170,7 @@ jobs:
       - name: Install dependencies (Bun)
         run: bun install --frozen-lockfile
 
-      - name: Run Spyfall engine unit tests
+      - name: Run Yuk Main engine unit tests
         run: bun run test
 
       - name: Run ESLint & Firestore rules checks

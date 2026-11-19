@@ -12,6 +12,8 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import kataCover from '@/src/assets/images/yukmain_kata_cover_1795098826342.jpg';
+import kataEmblem from '@/src/assets/images/yukmain_kata_emblem_1795098826535.jpg';
 import spyEmblem from '@/src/assets/images/yukmain_spy_emblem_1795001425384.jpg';
 import spyfallCover from '@/src/assets/images/yukmain_spyfall_cover_1795001423851.jpg';
 import { useAuth } from '@/hooks/use-auth';
@@ -32,6 +34,7 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [rulesGame, setRulesGame] = useState<PartyGameDefinition | null>(null);
+  const [featuredGame, setFeaturedGame] = useState<GameType>('kata_kata');
 
   const handleCreateGame = async (gameType: GameType) => {
     setErrorMsg(null);
@@ -229,26 +232,72 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
 
           {/* Hero Artwork */}
           <div className="lg:col-span-6">
-            <div className="relative h-full min-h-[240px] sm:min-h-[320px] rounded-2xl overflow-hidden border border-slate-800 bg-[#131A24]">
+            <div className="relative h-full min-h-[260px] sm:min-h-[340px] rounded-2xl overflow-hidden border border-slate-800 bg-gradient-to-br from-[#131A24] via-[#0F172A] to-[#0B1018]">
               <Image
-                src={spyfallCover}
-                alt="Ilustrasi meja investigasi Yuk Main dengan peta Nusantara dan kartu rahasia"
+                src={featuredGame === 'kata_kata' ? kataCover : spyfallCover}
+                alt={
+                  featuredGame === 'kata_kata'
+                    ? 'Ilustrasi meja tongkrongan Kata-Kata Hari Ini dengan kartu kata rahasia dan kopi hangat'
+                    : 'Ilustrasi meja investigasi Yang Bener Yang Mana dengan peta Nusantara dan kartu rahasia'
+                }
                 fill
+                priority
                 referrerPolicy="no-referrer"
                 sizes="(max-width: 1024px) 100vw, 50vw"
                 className="object-cover"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0B1018]/90 via-[#0B1018]/20 to-transparent" />
-              <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-4">
-                <div>
-                  <p className="text-xs text-amber-300 font-medium">Yuk Main 2.0 · Rilis Terbaru</p>
-                  <p className="text-lg font-semibold text-white">
-                    Yang Bener Yang Mana & Kata-Kata Hari Ini
-                  </p>
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0B1018]/95 via-[#0B1018]/35 to-transparent" />
+              <div className="absolute bottom-4 left-4 right-4 space-y-3">
+                <div className="flex items-end justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-xs text-amber-300 font-medium">
+                      {featuredGame === 'kata_kata'
+                        ? 'Game #2 · Rilis Terbaru Yuk Main 2.0'
+                        : 'Game #1 · Favorit Tongkrongan'}
+                    </p>
+                    <p className="text-lg font-semibold text-white truncate">
+                      {featuredGame === 'kata_kata'
+                        ? 'Kata-Kata Hari Ini'
+                        : 'Yang Bener Yang Mana'}
+                    </p>
+                  </div>
+                  <span className="text-xs text-slate-300 font-mono-tabular shrink-0">
+                    3–12 Pemain
+                  </span>
                 </div>
-                <span className="text-xs text-slate-300 font-mono-tabular shrink-0">
-                  3–12 Pemain
-                </span>
+
+                <div
+                  className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#0B1018]/80 backdrop-blur-sm border border-slate-700/70"
+                  role="tablist"
+                  aria-label="Pratinjau sampul permainan"
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={featuredGame === 'kata_kata'}
+                    onClick={() => setFeaturedGame('kata_kata')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
+                      featuredGame === 'kata_kata'
+                        ? 'bg-amber-500 text-slate-950'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    Kata-Kata Hari Ini
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={featuredGame === 'spyfall'}
+                    onClick={() => setFeaturedGame('spyfall')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
+                      featuredGame === 'spyfall'
+                        ? 'bg-rose-600 text-white'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    Yang Bener Yang Mana
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -271,22 +320,34 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
             {PARTY_GAMES.map((game) => {
               const isKataKata = game.id === 'kata_kata';
               const isCreatingThis = busyAction === `create:${game.id}`;
+              const coverSrc = isKataKata ? kataCover : spyfallCover;
+              const emblemSrc = isKataKata ? kataEmblem : spyEmblem;
 
               return (
                 <article
                   key={game.id}
-                  className="bg-[#131A24] border border-slate-800 rounded-2xl p-5 flex flex-col justify-between gap-5"
+                  className="bg-[#131A24] border border-slate-800 rounded-2xl overflow-hidden flex flex-col justify-between"
                 >
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-4">
-                      {isKataKata ? (
-                        <div className="w-14 h-14 rounded-xl border border-amber-500/40 bg-amber-950/40 flex items-center justify-center shrink-0">
-                          <MessageSquareQuote className="w-7 h-7 text-amber-400" />
-                        </div>
-                      ) : (
-                        <div className="w-14 h-14 rounded-xl overflow-hidden border border-slate-800 bg-[#0B1018] shrink-0 relative">
+                  <div>
+                    {/* 16:9 Game Cover Banner */}
+                    <div className="relative aspect-video w-full bg-gradient-to-br from-[#131A24] to-[#0B1018] border-b border-slate-800/80 overflow-hidden">
+                      <Image
+                        src={coverSrc}
+                        alt={`Sampul permainan ${game.title}`}
+                        fill
+                        referrerPolicy="no-referrer"
+                        sizes="(max-width: 768px) 100vw, 50vw"
+                        className="object-cover"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-[#131A24] via-[#131A24]/25 to-transparent" />
+                    </div>
+
+                    {/* Card Content */}
+                    <div className="p-5 space-y-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-xl overflow-hidden border border-slate-700/80 bg-[#0B1018] shrink-0 relative">
                           <Image
-                            src={spyEmblem}
+                            src={emblemSrc}
                             alt={`Ikon permainan ${game.title}`}
                             fill
                             referrerPolicy="no-referrer"
@@ -294,35 +355,35 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
                             className="object-cover"
                           />
                         </div>
-                      )}
-                      <div className="min-w-0">
-                        <div className="text-xs text-slate-400">
-                          <span>Game #{game.number}</span>
-                          <span aria-hidden="true"> · </span>
-                          <span>{game.subtitle}</span>
+                        <div className="min-w-0">
+                          <div className="text-xs text-slate-400">
+                            <span>Game #{game.number}</span>
+                            <span aria-hidden="true"> · </span>
+                            <span>{game.subtitle}</span>
+                          </div>
+                          <h3 className="text-lg font-bold text-white truncate">{game.title}</h3>
                         </div>
-                        <h3 className="text-lg font-bold text-white truncate">{game.title}</h3>
                       </div>
-                    </div>
 
-                    <p className="text-sm text-slate-300 leading-relaxed">{game.description}</p>
+                      <p className="text-sm text-slate-300 leading-relaxed">{game.description}</p>
 
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
-                      <span className="inline-flex items-center gap-1">
-                        <Users className="w-3.5 h-3.5" />
-                        <span>
-                          {game.minPlayers}–{game.maxPlayers} Pemain
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
+                        <span className="inline-flex items-center gap-1">
+                          <Users className="w-3.5 h-3.5" />
+                          <span>
+                            {game.minPlayers}–{game.maxPlayers} Pemain
+                          </span>
                         </span>
-                      </span>
-                      <span aria-hidden="true">·</span>
-                      <span className="inline-flex items-center gap-1">
-                        <Compass className="w-3.5 h-3.5" />
-                        <span>{game.durationLabel}</span>
-                      </span>
+                        <span aria-hidden="true">·</span>
+                        <span className="inline-flex items-center gap-1">
+                          <Compass className="w-3.5 h-3.5" />
+                          <span>{game.durationLabel}</span>
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2.5">
+                  <div className="px-5 pb-5 flex items-center gap-2.5">
                     <button
                       type="button"
                       disabled={busyAction !== null}

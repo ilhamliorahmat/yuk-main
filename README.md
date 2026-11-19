@@ -132,13 +132,13 @@ Yuk Main splits persistent structured game state (**Cloud Firestore**) from high
 1. Copy `.env.example` to `.env.local` and fill in your Firebase Web SDK credentials.
 2. Run tests, lint, and dev server:
    ```bash
-   npm install
-   npm test       # Runs 9 Vitest Spyfall engine unit tests
-   npm run lint   # Runs ESLint + @firebase/eslint-plugin-security-rules on firestore.rules
-   npm run dev    # Starts Next.js on http://localhost:3000
+   bun install
+   bun run test   # Runs 18 Vitest engine unit tests (Yang Bener Yang Mana + Kata-Kata Hari Ini)
+   bun run lint   # Runs ESLint + @firebase/eslint-plugin-security-rules on firestore.rules
+   bun run dev    # Starts Next.js on http://localhost:3000
    ```
 
-#### Automated Deployment (InfinityFree + Firebase Cloud Functions v2)
+#### Automated Deployment (InfinityFree + Firebase Cloud Functions v2 & Firestore Rules)
 Create **one** GitHub Repository Secret named **`YUK_MAIN_DEPLOY_SECRETS`** (*Settings → Secrets and variables → Actions*):
 
 ```json
@@ -164,13 +164,19 @@ Create **one** GitHub Repository Secret named **`YUK_MAIN_DEPLOY_SECRETS`** (*Se
   },
   "firebaseServiceAccount": {
     "type": "service_account",
-    "project_id": "YOUR_PROJECT_ID"
+    "project_id": "YOUR_PROJECT_ID",
+    "private_key_id": "...",
+    "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
+    "client_email": "firebase-adminsdk-xxxxx@YOUR_PROJECT_ID.iam.gserviceaccount.com",
+    "client_id": "...",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token"
   }
 }
 ```
 - Leave `"basePath": ""` when hosted at a domain or subdomain root (set `"/folder"` only if hosted inside a URL subfolder).
-- Paste the complete Google Cloud Service Account JSON inside `"firebaseServiceAccount"` to auto-deploy Cloud Functions, or omit that key if deploying Functions manually via `npx firebase-tools deploy --only functions`.
-- Add your InfinityFree domain to **Firebase Console → Authentication → Settings → Authorized domains** and publish `firestore.rules` + `database.rules.json`.
+- Generate the **full** Service Account JSON from **Firebase Console → Project Settings → Service accounts → Generate new private key** and paste the entire object into `"firebaseServiceAccount"` (both `client_email` and `private_key` are required by Google Cloud Auth). The Firebase workflow automatically deploys **both Cloud Functions v2 and `firestore.rules`** (`--only functions,firestore:rules`).
+- Add your InfinityFree domain to **Firebase Console → Authentication → Settings → Authorized domains** and publish `database.rules.json` in Realtime Database Rules.
 
 ---
 
@@ -329,18 +335,18 @@ Yuk Main memisahkan status permainan terstruktur (**Cloud Firestore**) dari obro
 1. Salin `.env.example` menjadi `.env.local` lalu isi konfigurasi Firebase Web SDK milikmu.
 2. Jalankan pengujian, lint, dan server lokal:
    ```bash
-   npm install
-   npm test       # Menjalankan 9 unit test mesin Spyfall (Vitest)
-   npm run lint   # Menjalankan ESLint + validasi keamanan firestore.rules
-   npm run dev    # Menjalankan Next.js di http://localhost:3000
+   bun install
+   bun run test   # Menjalankan 18 unit test Vitest (Yang Bener Yang Mana + Kata-Kata Hari Ini)
+   bun run lint   # Menjalankan ESLint + validasi keamanan firestore.rules
+   bun run dev    # Menjalankan Next.js di http://localhost:3000
    ```
 
-#### Auto-Deployment (InfinityFree + Firebase Cloud Functions v2)
+#### Auto-Deployment (InfinityFree + Firebase Cloud Functions v2 & Firestore Rules)
 Buat **satu** GitHub Repository Secret bernama **`YUK_MAIN_DEPLOY_SECRETS`** (*Settings → Secrets and variables → Actions*) dengan format JSON yang sama seperti pada bagian Bahasa Inggris di atas:
 - Isi `ftp.serverDir` sesuai direktori tujuan di InfinityFree (misalnya `"/htdocs/"` atau `"/subdomain.rf.gd/htdocs/"`).
 - Biarkan `"site": { "basePath": "" }` jika di-host di root domain/subdomain; isi `"/subfolder"` hanya jika diakses melalui subfolder URL.
-- Sertakan objek JSON lengkap `firebaseServiceAccount` untuk auto-deploy Cloud Functions, atau hapus kunci tersebut jika ingin men-deploy Cloud Functions secara manual (`npx firebase-tools deploy --only functions`).
-- Pastikan domain InfinityFree sudah didaftarkan di **Firebase Console → Authentication → Settings → Authorized domains** dan aturan `firestore.rules` + `database.rules.json` telah dipublikasikan.
+- Unduh berkas JSON lengkap Service Account dari **Firebase Console → Project Settings → Service accounts → Generate new private key**, lalu tempel seluruh isinya ke `"firebaseServiceAccount"` (wajib memuat `client_email` dan `private_key`). Workflow Firebase otomatis men-deploy **Cloud Functions v2 sekaligus `firestore.rules`** (`--only functions,firestore:rules`).
+- Pastikan domain InfinityFree sudah didaftarkan di **Firebase Console → Authentication → Settings → Authorized domains** dan aturan `database.rules.json` telah dipublikasikan di Realtime Database Rules.
 
 ---
 
