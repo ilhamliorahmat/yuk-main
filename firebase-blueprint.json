@@ -1,0 +1,354 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public player profile for Yuk Main without sensitive PII.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "avatarColor": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 24
+        },
+        "isAnonymous": {
+          "type": "boolean"
+        },
+        "gamesPlayed": {
+          "type": "number"
+        },
+        "wins": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "avatarColor",
+        "isAnonymous",
+        "gamesPlayed",
+        "wins",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "RoomCodeLookup": {
+      "title": "RoomCodeLookup",
+      "description": "Maps an uppercase 6-character invite code to a roomId without exposing room lists.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 6,
+          "maxLength": 6,
+          "pattern": "^[A-Z0-9]{6}$"
+        },
+        "roomId": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "hostUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "gameType": {
+          "type": "string",
+          "enum": ["spyfall"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["code", "roomId", "hostUid", "gameType", "createdAt"]
+    },
+    "Room": {
+      "title": "Room",
+      "description": "Multiplayer Yuk Main room storing public state and game configuration. Never stores active secret location.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 6,
+          "maxLength": 6,
+          "pattern": "^[A-Z0-9]{6}$"
+        },
+        "gameType": {
+          "type": "string",
+          "enum": ["spyfall"]
+        },
+        "hostUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["lobby", "playing", "voting", "spy_guess", "round_end"]
+        },
+        "roundNumber": {
+          "type": "number"
+        },
+        "currentRoundId": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 64
+        },
+        "roundDurationSec": {
+          "type": "number"
+        },
+        "roundEndsAtMs": {
+          "type": "number"
+        },
+        "firstSpeakerUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "spyMode": {
+          "type": "string",
+          "enum": ["single", "double", "random"]
+        },
+        "enabledPacks": {
+          "type": "array",
+          "description": "Active built-in location pack IDs (max 10)."
+        },
+        "selectedLocationNames": {
+          "type": "array",
+          "description": "Public pool of possible locations for the active round (max 40)."
+        },
+        "customLocations": {
+          "type": "array",
+          "description": "Host-defined custom locations and role pools (max 20)."
+        },
+        "activeVote": {
+          "type": "object",
+          "description": "Current accusation vote state when status is voting or spy_guess."
+        },
+        "pendingSpyGuess": {
+          "type": "object",
+          "description": "Submitted location guess from a Spy awaiting Warga verification."
+        },
+        "lastRoundResult": {
+          "type": "object",
+          "description": "Revealed outcome of the most recently completed round."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "code",
+        "gameType",
+        "hostUid",
+        "status",
+        "roundNumber",
+        "currentRoundId",
+        "roundDurationSec",
+        "roundEndsAtMs",
+        "firstSpeakerUid",
+        "spyMode",
+        "enabledPacks",
+        "selectedLocationNames",
+        "customLocations",
+        "activeVote",
+        "pendingSpyGuess",
+        "lastRoundResult",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "RoomPlayer": {
+      "title": "RoomPlayer",
+      "description": "Player membership and cumulative score inside a Yuk Main room.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "roomId": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "avatarColor": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 24
+        },
+        "isHost": {
+          "type": "boolean"
+        },
+        "score": {
+          "type": "number"
+        },
+        "isReady": {
+          "type": "boolean"
+        },
+        "joinedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "roomId",
+        "displayName",
+        "avatarColor",
+        "isHost",
+        "score",
+        "isReady",
+        "joinedAt",
+        "updatedAt"
+      ]
+    },
+    "PlayerSecret": {
+      "title": "PlayerSecret",
+      "description": "Strictly private per-player secret role and location assignment for a single round.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "roundId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "gameType": {
+          "type": "string",
+          "enum": ["spyfall"]
+        },
+        "isSpy": {
+          "type": "boolean"
+        },
+        "locationName": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "roleName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "roundId",
+        "gameType",
+        "isSpy",
+        "roleName",
+        "createdAt"
+      ]
+    },
+    "ServerRoundState": {
+      "title": "ServerRoundState",
+      "description": "Server-only secret truth for the active round (inaccessible to all clients).",
+      "type": "object",
+      "properties": {
+        "roundId": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "roundNumber": {
+          "type": "number"
+        },
+        "locationName": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "spyUids": {
+          "type": "array"
+        },
+        "spyNames": {
+          "type": "array"
+        },
+        "createdAtMs": {
+          "type": "number"
+        }
+      },
+      "required": ["roundId", "roundNumber", "locationName", "spyUids", "spyNames", "createdAtMs"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Public player profiles keyed by Firebase Auth UID."
+    },
+    "/roomCodes/{code}": {
+      "schema": { "$ref": "#/entities/RoomCodeLookup" },
+      "description": "Invite code lookup documents (get by exact 6-char code only, no list)."
+    },
+    "/rooms/{roomId}": {
+      "schema": { "$ref": "#/entities/Room" },
+      "description": "Shared Yuk Main multiplayer rooms."
+    },
+    "/rooms/{roomId}/players/{playerId}": {
+      "schema": { "$ref": "#/entities/RoomPlayer" },
+      "description": "Players participating in a specific room."
+    },
+    "/rooms/{roomId}/rounds/{roundId}/secrets/{playerId}": {
+      "schema": { "$ref": "#/entities/PlayerSecret" },
+      "description": "Isolated per-player secret card written by server Admin SDK and readable only by the owning playerId."
+    },
+    "/rooms/{roomId}/serverState/{stateId}": {
+      "schema": { "$ref": "#/entities/ServerRoundState" },
+      "description": "Server-only secret round state written and read strictly by Admin SDK."
+    }
+  }
+}

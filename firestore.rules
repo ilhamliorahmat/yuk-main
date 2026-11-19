@@ -1,0 +1,151 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && (
+        request.auth.token.firebase.sign_in_provider == 'anonymous' ||
+        request.auth.token.email_verified == true
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidCode(code) {
+      return code is string && code.matches('^[A-Z0-9]{6}$');
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function getRoom(roomId) { return get(/databases/$(database)/documents/rooms/$(roomId)).data; }
+    function isMember(roomId) { return exists(/databases/$(database)/documents/rooms/$(roomId)/players/$(request.auth.uid)); }
+    function isHost(roomId) { return getRoom(roomId).hostUid == request.auth.uid; }
+
+    function isValidUser(d, uid) {
+      return d.keys().hasAll(['uid', 'displayName', 'avatarColor', 'isAnonymous', 'gamesPlayed', 'wins', 'createdAt', 'updatedAt']) &&
+        d.keys().hasOnly(['uid', 'displayName', 'avatarColor', 'isAnonymous', 'gamesPlayed', 'wins', 'createdAt', 'updatedAt']) &&
+        d.uid == uid &&
+        d.displayName is string && d.displayName.size() >= 1 && d.displayName.size() <= 40 &&
+        d.avatarColor is string && d.avatarColor.size() <= 24 &&
+        d.isAnonymous is bool &&
+        d.gamesPlayed is int && d.gamesPlayed >= 0 &&
+        d.wins is int && d.wins >= 0 &&
+        d.createdAt is timestamp && d.updatedAt is timestamp;
+    }
+
+    function isValidRoom(d, roomId) {
+      return d.keys().hasAll(['id', 'code', 'gameType', 'hostUid', 'status', 'roundNumber', 'currentRoundId', 'roundDurationSec', 'roundEndsAtMs', 'firstSpeakerUid', 'spyMode', 'enabledPacks', 'selectedLocationNames', 'customLocations', 'activeVote', 'pendingSpyGuess', 'lastRoundResult', 'createdAt', 'updatedAt']) &&
+        d.keys().hasOnly(['id', 'code', 'gameType', 'hostUid', 'status', 'roundNumber', 'currentRoundId', 'roundDurationSec', 'roundEndsAtMs', 'firstSpeakerUid', 'spyMode', 'enabledPacks', 'selectedLocationNames', 'customLocations', 'activeVote', 'pendingSpyGuess', 'lastRoundResult', 'createdAt', 'updatedAt']) &&
+        d.id == roomId && isValidCode(d.code) && d.gameType in ['spyfall'] &&
+        d.hostUid is string && d.hostUid.size() <= 128 &&
+        d.status in ['lobby', 'playing', 'voting', 'spy_guess', 'round_end'] &&
+        d.roundNumber is int && d.roundNumber >= 0 &&
+        d.currentRoundId is string && d.currentRoundId.size() <= 64 &&
+        d.roundDurationSec is int && d.roundDurationSec >= 120 && d.roundDurationSec <= 1200 &&
+        d.roundEndsAtMs is int && d.roundEndsAtMs >= 0 &&
+        d.firstSpeakerUid is string && d.firstSpeakerUid.size() <= 128 &&
+        d.spyMode in ['single', 'double', 'random'] &&
+        d.enabledPacks is list && d.enabledPacks.size() >= 1 && d.enabledPacks.size() <= 10 &&
+        d.selectedLocationNames is list && d.selectedLocationNames.size() <= 40 &&
+        d.customLocations is list && d.customLocations.size() <= 20 &&
+        (d.activeVote == null || d.activeVote is map) &&
+        (d.pendingSpyGuess == null || d.pendingSpyGuess is map) &&
+        (d.lastRoundResult == null || d.lastRoundResult is map) &&
+        d.createdAt is timestamp && d.updatedAt is timestamp;
+    }
+
+    function isValidPlayer(d, roomId, uid) {
+      return d.keys().hasAll(['uid', 'roomId', 'displayName', 'avatarColor', 'isHost', 'score', 'isReady', 'joinedAt', 'updatedAt']) &&
+        d.keys().hasOnly(['uid', 'roomId', 'displayName', 'avatarColor', 'isHost', 'score', 'isReady', 'joinedAt', 'updatedAt']) &&
+        d.uid == uid && d.roomId == roomId &&
+        d.displayName is string && d.displayName.size() >= 1 && d.displayName.size() <= 40 &&
+        d.avatarColor is string && d.avatarColor.size() <= 24 &&
+        d.isHost is bool && d.isReady is bool &&
+        d.score is int && d.score >= 0 &&
+        d.joinedAt is timestamp && d.updatedAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if false;
+      allow create: if isSignedIn() && isValidId(userId) && request.auth.uid == userId &&
+        isValidUser(incoming(), userId) && incoming().gamesPlayed == 0 && incoming().wins == 0 &&
+        incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isValidId(userId) && request.auth.uid == userId &&
+        isValidUser(incoming(), userId) && incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'avatarColor', 'gamesPlayed', 'wins', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /roomCodes/{code} {
+      allow get: if isSignedIn() && isValidCode(code);
+      allow list, update: if false;
+      allow create: if isSignedIn() && isValidCode(code) &&
+        incoming().keys().hasAll(['code', 'roomId', 'hostUid', 'gameType', 'createdAt']) &&
+        incoming().keys().hasOnly(['code', 'roomId', 'hostUid', 'gameType', 'createdAt']) &&
+        incoming().code == code && isValidId(incoming().roomId) &&
+        incoming().hostUid == request.auth.uid && incoming().gameType in ['spyfall'] &&
+        incoming().createdAt == request.time &&
+        existsAfter(/databases/$(database)/documents/rooms/$(incoming().roomId));
+      allow delete: if isSignedIn() && isValidCode(code) && existing().hostUid == request.auth.uid;
+    }
+
+    match /rooms/{roomId} {
+      allow get: if isSignedIn() && isValidId(roomId) &&
+        (existing().hostUid == request.auth.uid || existing().status == 'lobby' || isMember(roomId));
+      allow list: if isSignedIn() && existing().hostUid == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(roomId) && isValidRoom(incoming(), roomId) &&
+        incoming().hostUid == request.auth.uid && incoming().status == 'lobby' &&
+        incoming().roundNumber == 0 && incoming().createdAt == request.time && incoming().updatedAt == request.time &&
+        existsAfter(/databases/$(database)/documents/roomCodes/$(incoming().code));
+      // Clients can only update Host settings in lobby/round_end or transfer hostUid;
+      // All round starts, votes, guesses, and score mutations are executed server-side via Admin SDK.
+      allow update: if isSignedIn() && isValidId(roomId) && isValidRoom(incoming(), roomId) &&
+        existing().hostUid == request.auth.uid &&
+        incoming().id == existing().id && incoming().code == existing().code &&
+        incoming().gameType == existing().gameType && incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          (existing().status in ['lobby', 'round_end'] &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['roundDurationSec', 'spyMode', 'enabledPacks', 'customLocations', 'updatedAt'])) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['hostUid', 'updatedAt'])
+        );
+      allow delete: if isSignedIn() && isValidId(roomId) && existing().hostUid == request.auth.uid;
+
+      match /players/{playerId} {
+        allow get: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
+          (request.auth.uid == playerId || isMember(roomId) || isHost(roomId));
+        allow list: if isSignedIn() && existing().roomId == roomId;
+        allow create: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
+          request.auth.uid == playerId && isValidPlayer(incoming(), roomId, playerId) &&
+          incoming().score == 0 && incoming().joinedAt == request.time && incoming().updatedAt == request.time &&
+          existsAfter(/databases/$(database)/documents/rooms/$(roomId)) &&
+          incoming().isHost == (getAfter(/databases/$(database)/documents/rooms/$(roomId)).data.hostUid == request.auth.uid) &&
+          (getAfter(/databases/$(database)/documents/rooms/$(roomId)).data.status == 'lobby' || getAfter(/databases/$(database)/documents/rooms/$(roomId)).data.hostUid == request.auth.uid);
+        allow update: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
+          isValidPlayer(incoming(), roomId, playerId) &&
+          incoming().joinedAt == existing().joinedAt && incoming().updatedAt == request.time && (
+            (isHost(roomId) && incoming().diff(existing()).affectedKeys().hasOnly(['isHost', 'updatedAt'])) ||
+            (request.auth.uid == playerId && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'avatarColor', 'isReady', 'updatedAt']))
+          );
+        allow delete: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
+          (request.auth.uid == playerId || isHost(roomId));
+      }
+
+      match /rounds/{roundId}/secrets/{playerId} {
+        allow get: if isSignedIn() && isValidId(roomId) && isValidId(roundId) && isValidId(playerId) &&
+          isMember(roomId) && (request.auth.uid == playerId || getRoom(roomId).status == 'round_end');
+        allow list, write: if false;
+      }
+
+      match /serverState/{stateId} {
+        allow read, write: if false;
+      }
+    }
+  }
+}

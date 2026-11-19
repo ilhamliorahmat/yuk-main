@@ -1,0 +1,81 @@
+name: Deploy Yuk Main Static Frontend to InfinityFree
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'functions/**'
+      - '**.md'
+  workflow_dispatch:
+
+# Prevent overlapping uploads from hitting InfinityFree's concurrent FTP connection limit
+concurrency:
+  group: deploy-infinityfree
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    name: Test, Build Static Export & Upload to InfinityFree
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Spyfall engine unit tests
+        run: npm test
+
+      - name: Run ESLint & Firestore rules checks
+        run: npm run lint
+
+      - name: Prepare static export tree (exclude preview-only Next.js API routes)
+        run: rm -rf app/api
+
+      - name: Build static Next.js export for InfinityFree
+        env:
+          NODE_ENV: production
+          STATIC_EXPORT: 'true'
+          NEXT_PUBLIC_GAME_MASTER_MODE: functions
+          NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION: asia-southeast1
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+          NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}
+          NEXT_PUBLIC_FIREBASE_DATABASE_URL: ${{ secrets.NEXT_PUBLIC_FIREBASE_DATABASE_URL }}
+        run: npm run build
+
+      - name: Verify static output bundle
+        run: |
+          test -f out/index.html
+          test -f out/.htaccess
+          ls -la out/
+
+      - name: Upload ./out to InfinityFree via FTPS
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          security: loose
+          local-dir: ./out/
+          server-dir: /htdocs/
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.DS_Store

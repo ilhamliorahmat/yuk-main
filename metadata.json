@@ -1,0 +1,6 @@
+{
+  "name": "Yuk Main",
+  "description": "Platform permainan pesta multipemain berbahasa Indonesia dengan Game #1: Spyfall, obrolan waktu nyata, pengacakan lokasi dinamis, dan pembuat peran kustom.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
