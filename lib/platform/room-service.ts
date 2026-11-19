@@ -11,6 +11,7 @@ import {
   updateDoc,
   writeBatch,
 } from 'firebase/firestore';
+import { get, ref } from 'firebase/database';
 import { getFirebaseServices } from '@/lib/firebase/client';
 import { handleFirestoreError, OperationType } from '@/lib/firebase/errors';
 import { sanitizeCustomWordPair } from '@/lib/games/kata-kata/engine';
@@ -249,20 +250,39 @@ export async function leaveRoom(params: {
   displayName: string;
   players: RoomPlayerDoc[];
 }): Promise<void> {
-  const { auth, db } = getFirebaseServices();
+  const { auth, db, rtdb } = getFirebaseServices();
   if (!db) return;
 
   const { room, uid, displayName, players } = params;
-  const others = players.filter((p) => p.uid !== uid);
+
+  let onlineCount = 0;
+  if (rtdb) {
+    try {
+      const snap = await get(ref(rtdb, `presence/${room.id}`));
+      if (snap.exists()) {
+        const presenceMap = snap.val() as Record<string, { online?: boolean }>;
+        for (const [pUid, pVal] of Object.entries(presenceMap)) {
+          if (pUid !== uid && pVal && pVal.online === true) {
+            onlineCount++;
+          }
+        }
+      }
+    } catch {
+      onlineCount = players.filter((p) => p.uid !== uid).length;
+    }
+  } else {
+    onlineCount = players.filter((p) => p.uid !== uid).length;
+  }
 
   try {
-    if (others.length === 0) {
+    if (onlineCount === 0) {
       await deleteDoc(doc(db, 'rooms', room.id, 'players', uid));
       await deleteDoc(doc(db, 'roomCodes', room.code)).catch(() => {});
       await deleteDoc(doc(db, 'rooms', room.id)).catch(() => {});
       return;
     }
 
+    const others = players.filter((p) => p.uid !== uid);
     if (room.hostUid === uid) {
       const nextHost = others[0];
       const batch = writeBatch(db);
