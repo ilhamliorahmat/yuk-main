@@ -4,14 +4,12 @@ import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getDatabase, type Database } from 'firebase/database';
 import { doc, getDocFromServer, getFirestore, type Firestore } from 'firebase/firestore';
-import { getFunctions, type Functions } from 'firebase/functions';
 import { firebaseConfig, isFirebaseConfigured, isRtdbConfigured } from './config';
 
 let cachedApp: FirebaseApp | null = null;
 let cachedAuth: Auth | null = null;
 let cachedDb: Firestore | null = null;
 let cachedRtdb: Database | null = null;
-let cachedFunctions: Functions | null = null;
 let connectionTested = false;
 
 export function getFirebaseServices(): {
@@ -19,10 +17,9 @@ export function getFirebaseServices(): {
   auth: Auth | null;
   db: Firestore | null;
   rtdb: Database | null;
-  functions: Functions | null;
 } {
   if (typeof window === 'undefined' || !isFirebaseConfigured()) {
-    return { app: null, auth: null, db: null, rtdb: null, functions: null };
+    return { app: null, auth: null, db: null, rtdb: null };
   }
 
   if (!cachedApp) {
@@ -39,9 +36,6 @@ export function getFirebaseServices(): {
   if (!cachedRtdb && isRtdbConfigured()) {
     cachedRtdb = getDatabase(cachedApp, firebaseConfig.databaseURL);
   }
-  if (!cachedFunctions) {
-    cachedFunctions = getFunctions(cachedApp, firebaseConfig.functionsRegion);
-  }
 
   if (!connectionTested && cachedDb) {
     connectionTested = true;
@@ -53,7 +47,6 @@ export function getFirebaseServices(): {
     auth: cachedAuth,
     db: cachedDb,
     rtdb: cachedRtdb,
-    functions: cachedFunctions,
   };
 }
 

@@ -2,9 +2,6 @@ import type { NextConfig } from 'next';
 
 const isStaticExport = process.env.STATIC_EXPORT === 'true';
 
-const rawBasePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? '').trim().replace(/^\/+|\/+$/g, '');
-const normalizedBasePath = rawBasePath ? `/${rawBasePath}` : '';
-
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   eslint: {
@@ -31,11 +28,9 @@ const nextConfig: NextConfig = {
     ? {
         output: 'export' as const,
         trailingSlash: true,
-        ...(normalizedBasePath ? { basePath: normalizedBasePath } : {}),
       }
     : {
         output: 'standalone' as const,
-        serverExternalPackages: ['firebase-admin'],
       }),
   transpilePackages: ['motion'],
   webpack: (config, { dev }) => {

@@ -138,7 +138,7 @@ Yuk Main splits persistent structured game state (**Cloud Firestore**) from high
    bun run dev    # Starts Next.js on http://localhost:3000
    ```
 
-#### Automated Deployment (InfinityFree + Firebase Cloud Functions v2 & Firestore Rules)
+#### Automated Deployment (InfinityFree + Firebase Spark Free Plan)
 Create **one** GitHub Repository Secret named **`YUK_MAIN_DEPLOY_SECRETS`** (*Settings → Secrets and variables → Actions*):
 
 ```json
@@ -149,9 +149,6 @@ Create **one** GitHub Repository Secret named **`YUK_MAIN_DEPLOY_SECRETS`** (*Se
     "password": "YOUR_FTP_PASSWORD",
     "serverDir": "/htdocs/"
   },
-  "site": {
-    "basePath": ""
-  },
   "firebase": {
     "apiKey": "YOUR_FIREBASE_API_KEY",
     "authDomain": "YOUR_PROJECT.firebaseapp.com",
@@ -161,22 +158,11 @@ Create **one** GitHub Repository Secret named **`YUK_MAIN_DEPLOY_SECRETS`** (*Se
     "appId": "YOUR_APP_ID",
     "measurementId": "YOUR_MEASUREMENT_ID",
     "databaseURL": "https://YOUR_PROJECT-default-rtdb.asia-southeast1.firebasedatabase.app"
-  },
-  "firebaseServiceAccount": {
-    "type": "service_account",
-    "project_id": "YOUR_PROJECT_ID",
-    "private_key_id": "...",
-    "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
-    "client_email": "firebase-adminsdk-xxxxx@YOUR_PROJECT_ID.iam.gserviceaccount.com",
-    "client_id": "...",
-    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    "token_uri": "https://oauth2.googleapis.com/token"
   }
 }
 ```
-- Leave `"basePath": ""` when hosted at a domain or subdomain root (set `"/folder"` only if hosted inside a URL subfolder).
-- Generate the **full** Service Account JSON from **Firebase Console → Project Settings → Service accounts → Generate new private key** and paste the entire object into `"firebaseServiceAccount"` (both `client_email` and `private_key` are required by Google Cloud Auth). The Firebase workflow automatically deploys **both Cloud Functions v2 and `firestore.rules`** (`--only functions,firestore:rules`).
-- Add your InfinityFree domain to **Firebase Console → Authentication → Settings → Authorized domains** and publish `database.rules.json` in Realtime Database Rules.
+- **Zero Cloud Functions / Zero Billing Card Needed:** Yuk Main runs 100% on the Firebase Spark free plan using browser-side Firestore transactions and Realtime Database.
+- Add your InfinityFree domain to **Firebase Console → Authentication → Settings → Authorized domains** and publish `firestore.rules` (Firestore Rules) + `database.rules.json` (Realtime Database Rules).
 
 ---
 
@@ -341,12 +327,11 @@ Yuk Main memisahkan status permainan terstruktur (**Cloud Firestore**) dari obro
    bun run dev    # Menjalankan Next.js di http://localhost:3000
    ```
 
-#### Auto-Deployment (InfinityFree + Firebase Cloud Functions v2 & Firestore Rules)
-Buat **satu** GitHub Repository Secret bernama **`YUK_MAIN_DEPLOY_SECRETS`** (*Settings → Secrets and variables → Actions*) dengan format JSON yang sama seperti pada bagian Bahasa Inggris di atas:
+#### Auto-Deployment (InfinityFree + Firebase Spark Gratis)
+Buat **satu** GitHub Repository Secret bernama **`YUK_MAIN_DEPLOY_SECRETS`** (*Settings → Secrets and variables → Actions*) dengan format JSON `ftp` dan `firebase` seperti pada bagian Bahasa Inggris di atas:
 - Isi `ftp.serverDir` sesuai direktori tujuan di InfinityFree (misalnya `"/htdocs/"` atau `"/subdomain.rf.gd/htdocs/"`).
-- Biarkan `"site": { "basePath": "" }` jika di-host di root domain/subdomain; isi `"/subfolder"` hanya jika diakses melalui subfolder URL.
-- Unduh berkas JSON lengkap Service Account dari **Firebase Console → Project Settings → Service accounts → Generate new private key**, lalu tempel seluruh isinya ke `"firebaseServiceAccount"` (wajib memuat `client_email` dan `private_key`). Workflow Firebase otomatis men-deploy **Cloud Functions v2 sekaligus `firestore.rules`** (`--only functions,firestore:rules`).
-- Pastikan domain InfinityFree sudah didaftarkan di **Firebase Console → Authentication → Settings → Authorized domains** dan aturan `database.rules.json` telah dipublikasikan di Realtime Database Rules.
+- **Tanpa Cloud Functions & Tanpa Kartu Kredit:** Yuk Main berjalan 100% di paket gratis Firebase Spark menggunakan transaksi Firestore sisi klien dan Realtime Database.
+- Pastikan domain InfinityFree sudah didaftarkan di **Firebase Console → Authentication → Settings → Authorized domains**, lalu publikasikan `firestore.rules` (Firestore Rules) dan `database.rules.json` (Realtime Database Rules).
 
 ---
 

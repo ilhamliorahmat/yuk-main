@@ -11,9 +11,7 @@ import {
   updateDoc,
   writeBatch,
 } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
 import { getFirebaseServices } from '@/lib/firebase/client';
-import { firebaseConfig } from '@/lib/firebase/config';
 import { handleFirestoreError, OperationType } from '@/lib/firebase/errors';
 import { sanitizeCustomWordPair } from '@/lib/games/kata-kata/engine';
 import { generateRoomCode, sanitizeCustomLocation } from '@/lib/games/spyfall/engine';
@@ -43,93 +41,16 @@ interface SpyfallApiResponse {
 
 type GameMasterEndpoint = ClientGameMasterEndpoint;
 
-const ENDPOINT_TO_FUNCTION: Record<GameMasterEndpoint, string> = {
-  '/api/spyfall/start': 'spyfallStart',
-  '/api/spyfall/vote': 'spyfallVote',
-  '/api/spyfall/guess': 'spyfallGuess',
-  '/api/spyfall/resolve': 'spyfallResolve',
-  '/api/kata-kata/start': 'kataKataStart',
-  '/api/kata-kata/vote': 'kataKataVote',
-  '/api/kata-kata/guess': 'kataKataGuess',
-  '/api/kata-kata/resolve': 'kataKataResolve',
-};
-
 async function callGameMasterApi(
   endpoint: GameMasterEndpoint,
   payload: Record<string, unknown>,
 ): Promise<SpyfallApiResponse> {
-  const { auth, functions } = getFirebaseServices();
-  const currentUser = auth?.currentUser;
-  if (!currentUser) {
+  const { auth } = getFirebaseServices();
+  if (!auth?.currentUser) {
     throw new Error('Sesi pemain belum aktif. Silakan masuk terlebih dahulu.');
   }
 
-  // Firebase Spark (100% free, zero Cloud Functions): execute rules engine via client Firestore transactions
-  if (firebaseConfig.gameMasterMode === 'client_host') {
-    return executeClientGameMaster(endpoint, payload);
-  }
-
-  // Optional Firebase Blaze production mode using Cloud Functions v2 (httpsCallable)
-  if (firebaseConfig.gameMasterMode === 'functions') {
-    if (!functions) {
-      throw new Error('Layanan Firebase Cloud Functions belum terkonfigurasi.');
-    }
-    const fnName = ENDPOINT_TO_FUNCTION[endpoint];
-    try {
-      const callable = httpsCallable<Record<string, unknown>, SpyfallApiResponse>(
-        functions,
-        fnName,
-      );
-      const response = await callable(payload);
-      if (!response.data?.ok) {
-        throw new Error(response.data?.error || 'Permintaan Game Master gagal.');
-      }
-      return response.data;
-    } catch (err) {
-      const code = (err as { code?: unknown })?.code;
-      const message = err instanceof Error ? err.message : String(err);
-      if (code === 'functions/internal' || code === 'functions/not-found' || message === 'internal') {
-        throw new Error(
-          `Layanan Cloud Function "${fnName}" belum aktif di Firebase. Pastikan Cloud Functions sudah di-deploy atau gunakan mode client_host (Spark gratis).`,
-        );
-      }
-      throw new Error(message || 'Gagal menghubungi Firebase Cloud Functions.');
-    }
-  }
-
-  // AI Studio / Node server mode uses local Next.js App Router API routes
-  const sendPost = async (forceRefresh: boolean) => {
-    const idToken = await currentUser.getIdToken(forceRefresh);
-    return fetch(endpoint, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Firebase-Token': idToken,
-      },
-      body: JSON.stringify(payload),
-    });
-  };
-
-  let res = await sendPost(false);
-
-  // If the AI Studio / Cloud Run auth proxy refreshed the session via a 302 redirect,
-  // browsers downgrade POST -> GET on the redirect target, causing Next.js to return 405.
-  // Retrying the POST once immediately succeeds with the refreshed session cookie.
-  if (res.status === 405 || res.redirected) {
-    res = await sendPost(true);
-  }
-
-  const data = (await res.json().catch(() => null)) as SpyfallApiResponse | null;
-  if (!res.ok || !data?.ok) {
-    if (res.status === 405) {
-      throw new Error(
-        'Sesi pratinjau dialihkan (HTTP 405). Muat ulang halaman lalu coba kembali.',
-      );
-    }
-    throw new Error(data?.error || `Permintaan server gagal (HTTP ${res.status}).`);
-  }
-  return data;
+  return executeClientGameMaster(endpoint, payload);
 }
 
 export async function createRoom(params: {

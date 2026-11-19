@@ -8,15 +8,6 @@ export interface FirebaseWebConfig {
   measurementId?: string;
   databaseURL?: string;
   firestoreDatabaseId?: string;
-  functionsRegion: string;
-  gameMasterMode: 'api' | 'functions' | 'client_host';
-}
-
-function resolveGameMasterMode(): 'api' | 'functions' | 'client_host' {
-  const mode = (process.env.NEXT_PUBLIC_GAME_MASTER_MODE ?? '').trim().toLowerCase();
-  if (mode === 'client_host') return 'client_host';
-  if (mode === 'functions') return 'functions';
-  return 'api';
 }
 
 export const firebaseConfig: FirebaseWebConfig = {
@@ -29,8 +20,6 @@ export const firebaseConfig: FirebaseWebConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || undefined,
   databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || undefined,
   firestoreDatabaseId: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_ID || undefined,
-  functionsRegion: process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'asia-southeast1',
-  gameMasterMode: resolveGameMasterMode(),
 };
 
 export function isFirebaseConfigured(): boolean {

@@ -6,7 +6,6 @@ on:
       - main
       - master
     paths-ignore:
-      - 'functions/**'
       - '**.md'
   workflow_dispatch:
 
@@ -64,7 +63,6 @@ jobs:
 
             const ftp = cfg.ftp || {};
             const fb = cfg.firebase || {};
-            const site = cfg.site || {};
 
             const requiredFtp = ["server", "username", "password"];
             for (const key of requiredFtp) {
@@ -128,11 +126,6 @@ jobs:
               process.exit(1);
             }
 
-            // Normalize optional web basePath ("" for root/addon domain, "/subpath" for subfolder)
-            const rawBasePath = typeof site.basePath === "string" ? site.basePath.trim() : "";
-            const cleanBase = rawBasePath.replace(/^(?:\.\/|\/)+|\/+$/g, "");
-            const normalizedBasePath = cleanBase ? `/${cleanBase}` : "";
-
             const delim = "EOF_" + crypto.randomBytes(8).toString("hex");
             const writeKV = (filePath, key, value) => {
               fs.appendFileSync(filePath, `${key}<<${delim}\n${value}\n${delim}\n`);
@@ -149,7 +142,6 @@ jobs:
             writeKV(envFile, "NEXT_PUBLIC_FIREBASE_APP_ID", fb.appId.trim());
             writeKV(envFile, "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID", (fb.measurementId || "").trim());
             writeKV(envFile, "NEXT_PUBLIC_FIREBASE_DATABASE_URL", fb.databaseURL.trim());
-            writeKV(envFile, "NEXT_PUBLIC_BASE_PATH", normalizedBasePath);
 
             writeKV(outFile, "ftp_server", ftp.server.trim());
             writeKV(outFile, "ftp_username", ftp.username.trim());
@@ -161,9 +153,7 @@ jobs:
               "Validated deploy configuration. Protocol:",
               rawProtocol,
               "| Target FTP dir:",
-              normalizedServerDir,
-              "| basePath:",
-              normalizedBasePath || "(root)"
+              normalizedServerDir
             );
           '
 
@@ -176,24 +166,16 @@ jobs:
       - name: Run ESLint & Firestore rules checks
         run: bun run lint
 
-      - name: Prepare static export tree (exclude preview-only Next.js API routes)
-        run: rm -rf app/api
-
       - name: Build static Next.js export for InfinityFree
         env:
           NODE_ENV: production
           STATIC_EXPORT: 'true'
-          NEXT_PUBLIC_GAME_MASTER_MODE: client_host
-          NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION: asia-southeast1
         run: bun run build
 
-      - name: Verify static output bundle & sync .htaccess 404 path
+      - name: Verify static output bundle
         run: |
           test -f out/index.html
           test -f out/.htaccess
-          if [ -n "$NEXT_PUBLIC_BASE_PATH" ]; then
-            sed -i "s|ErrorDocument 404 /404.html|ErrorDocument 404 ${NEXT_PUBLIC_BASE_PATH}/404.html|g" out/.htaccess
-          fi
           ls -la out/
 
       - name: Upload ./out to InfinityFree via FTP
