@@ -140,7 +140,8 @@ export function SpyfallRoomView({
   };
 
   const handleCopyInviteLink = async () => {
-    const url = `${window.location.origin}/?room=${room.code}`;
+    const baseUrl = `${window.location.origin}${window.location.pathname}`;
+    const url = `${baseUrl}?room=${room.code}`;
     await navigator.clipboard?.writeText(url).catch(() => {});
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 1600);

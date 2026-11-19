@@ -29,6 +29,120 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
+      - name: Parse & validate YUK_MAIN_DEPLOY_SECRETS JSON
+        id: secrets
+        env:
+          DEPLOY_SECRETS: ${{ secrets.YUK_MAIN_DEPLOY_SECRETS }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const crypto = require("crypto");
+
+            const raw = process.env.DEPLOY_SECRETS;
+            if (!raw || !raw.trim()) {
+              console.error("Missing GitHub Secret: YUK_MAIN_DEPLOY_SECRETS");
+              process.exit(1);
+            }
+
+            let cfg;
+            try {
+              cfg = JSON.parse(raw);
+            } catch (err) {
+              console.error("Invalid JSON in YUK_MAIN_DEPLOY_SECRETS:", err.message);
+              process.exit(1);
+            }
+
+            const mask = (val) => {
+              if (!val || typeof val !== "string") return;
+              for (const line of val.split(/\r?\n/)) {
+                if (line.trim()) console.log("::add-mask::" + line);
+              }
+            };
+
+            const ftp = cfg.ftp || {};
+            const fb = cfg.firebase || {};
+            const site = cfg.site || {};
+
+            const requiredFtp = ["server", "username", "password"];
+            for (const key of requiredFtp) {
+              if (!ftp[key] || typeof ftp[key] !== "string" || !ftp[key].trim()) {
+                console.error("Missing required key in YUK_MAIN_DEPLOY_SECRETS: ftp." + key);
+                process.exit(1);
+              }
+            }
+
+            const requiredFb = [
+              "apiKey",
+              "authDomain",
+              "projectId",
+              "storageBucket",
+              "messagingSenderId",
+              "appId",
+              "databaseURL"
+            ];
+            for (const key of requiredFb) {
+              if (!fb[key] || typeof fb[key] !== "string" || !fb[key].trim()) {
+                console.error("Missing required key in YUK_MAIN_DEPLOY_SECRETS: firebase." + key);
+                process.exit(1);
+              }
+            }
+
+            // Mask sensitive values before exporting to GITHUB_ENV / GITHUB_OUTPUT
+            mask(ftp.username);
+            mask(ftp.password);
+            mask(fb.apiKey);
+            if (cfg.firebaseServiceAccount) {
+              const sa = typeof cfg.firebaseServiceAccount === "string"
+                ? cfg.firebaseServiceAccount
+                : JSON.stringify(cfg.firebaseServiceAccount);
+              mask(sa);
+              if (cfg.firebaseServiceAccount.private_key) {
+                mask(cfg.firebaseServiceAccount.private_key);
+              }
+            }
+
+            // Normalize remote FTP directory (must start & end with "/", reject path traversal)
+            const rawDir = typeof ftp.serverDir === "string" && ftp.serverDir.trim()
+              ? ftp.serverDir.trim()
+              : "/htdocs/";
+            if (rawDir.includes("..")) {
+              console.error("Invalid ftp.serverDir: path traversal (..) is not allowed.");
+              process.exit(1);
+            }
+            const cleanSegments = rawDir.replace(/^\/+|\/+$/g, "");
+            const normalizedServerDir = cleanSegments ? `/${cleanSegments}/` : "/htdocs/";
+
+            // Normalize optional web basePath ("" for root/addon domain, "/subpath" for subfolder)
+            const rawBasePath = typeof site.basePath === "string" ? site.basePath.trim() : "";
+            const cleanBase = rawBasePath.replace(/^\/+|\/+$/g, "");
+            const normalizedBasePath = cleanBase ? `/${cleanBase}` : "";
+
+            const delim = "EOF_" + crypto.randomBytes(8).toString("hex");
+            const writeKV = (filePath, key, value) => {
+              fs.appendFileSync(filePath, `${key}<<${delim}\n${value}\n${delim}\n`);
+            };
+
+            const envFile = process.env.GITHUB_ENV;
+            const outFile = process.env.GITHUB_OUTPUT;
+
+            writeKV(envFile, "NEXT_PUBLIC_FIREBASE_API_KEY", fb.apiKey.trim());
+            writeKV(envFile, "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN", fb.authDomain.trim());
+            writeKV(envFile, "NEXT_PUBLIC_FIREBASE_PROJECT_ID", fb.projectId.trim());
+            writeKV(envFile, "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET", fb.storageBucket.trim());
+            writeKV(envFile, "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID", fb.messagingSenderId.trim());
+            writeKV(envFile, "NEXT_PUBLIC_FIREBASE_APP_ID", fb.appId.trim());
+            writeKV(envFile, "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID", (fb.measurementId || "").trim());
+            writeKV(envFile, "NEXT_PUBLIC_FIREBASE_DATABASE_URL", fb.databaseURL.trim());
+            writeKV(envFile, "NEXT_PUBLIC_BASE_PATH", normalizedBasePath);
+
+            writeKV(outFile, "ftp_server", ftp.server.trim());
+            writeKV(outFile, "ftp_username", ftp.username.trim());
+            writeKV(outFile, "ftp_password", ftp.password);
+            writeKV(outFile, "ftp_server_dir", normalizedServerDir);
+
+            console.log("Validated deploy configuration. Target FTP dir:", normalizedServerDir, "| basePath:", normalizedBasePath || "(root)");
+          '
+
       - name: Install dependencies
         run: npm ci
 
@@ -47,33 +161,28 @@ jobs:
           STATIC_EXPORT: 'true'
           NEXT_PUBLIC_GAME_MASTER_MODE: functions
           NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION: asia-southeast1
-          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
-          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
-          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
-          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
-          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
-          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
-          NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}
-          NEXT_PUBLIC_FIREBASE_DATABASE_URL: ${{ secrets.NEXT_PUBLIC_FIREBASE_DATABASE_URL }}
         run: npm run build
 
-      - name: Verify static output bundle
+      - name: Verify static output bundle & sync .htaccess 404 path
         run: |
           test -f out/index.html
           test -f out/.htaccess
+          if [ -n "$NEXT_PUBLIC_BASE_PATH" ]; then
+            sed -i "s|ErrorDocument 404 /404.html|ErrorDocument 404 ${NEXT_PUBLIC_BASE_PATH}/404.html|g" out/.htaccess
+          fi
           ls -la out/
 
       - name: Upload ./out to InfinityFree via FTPS
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
+          server: ${{ steps.secrets.outputs.ftp_server }}
+          username: ${{ steps.secrets.outputs.ftp_username }}
+          password: ${{ steps.secrets.outputs.ftp_password }}
           protocol: ftps
           port: 21
           security: loose
           local-dir: ./out/
-          server-dir: /htdocs/
+          server-dir: ${{ steps.secrets.outputs.ftp_server_dir }}
           dangerous-clean-slate: false
           exclude: |
             **/.git*

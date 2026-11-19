@@ -29,6 +29,59 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Extract Firebase Service Account from YUK_MAIN_DEPLOY_SECRETS
+        id: secrets
+        env:
+          DEPLOY_SECRETS: ${{ secrets.YUK_MAIN_DEPLOY_SECRETS }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const crypto = require("crypto");
+
+            const raw = process.env.DEPLOY_SECRETS;
+            if (!raw || !raw.trim()) {
+              console.error("Missing GitHub Secret: YUK_MAIN_DEPLOY_SECRETS");
+              process.exit(1);
+            }
+
+            let cfg;
+            try {
+              cfg = JSON.parse(raw);
+            } catch (err) {
+              console.error("Invalid JSON in YUK_MAIN_DEPLOY_SECRETS:", err.message);
+              process.exit(1);
+            }
+
+            const mask = (val) => {
+              if (!val || typeof val !== "string") return;
+              for (const line of val.split(/\r?\n/)) {
+                if (line.trim()) console.log("::add-mask::" + line);
+              }
+            };
+
+            if (!cfg.firebaseServiceAccount) {
+              console.error("firebaseServiceAccount is not set inside YUK_MAIN_DEPLOY_SECRETS. Add it to auto-deploy Cloud Functions, or deploy manually with: npx firebase-tools deploy --only functions");
+              process.exit(1);
+            }
+
+            const saObj = typeof cfg.firebaseServiceAccount === "string"
+              ? JSON.parse(cfg.firebaseServiceAccount)
+              : cfg.firebaseServiceAccount;
+
+            const saJson = JSON.stringify(saObj);
+            mask(saJson);
+            if (typeof saObj.private_key === "string") {
+              mask(saObj.private_key);
+            }
+
+            const projectId = (cfg.firebase && cfg.firebase.projectId) || saObj.project_id || "yuk-main";
+
+            const delim = "EOF_" + crypto.randomBytes(8).toString("hex");
+            const outFile = process.env.GITHUB_OUTPUT;
+            fs.appendFileSync(outFile, `sa_json<<${delim}\n${saJson}\n${delim}\n`);
+            fs.appendFileSync(outFile, `project_id<<${delim}\n${projectId}\n${delim}\n`);
+          '
+
       - name: Run Spyfall engine unit tests
         run: |
           npm ci
@@ -43,7 +96,7 @@ jobs:
       - name: Authenticate with Google Cloud / Firebase
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_YUK_MAIN }}
+          credentials_json: ${{ steps.secrets.outputs.sa_json }}
 
-      - name: Deploy Cloud Functions to yuk-main
-        run: npx firebase-tools deploy --only functions --project yuk-main --non-interactive
+      - name: Deploy Cloud Functions to Firebase
+        run: npx firebase-tools deploy --only functions --project "${{ steps.secrets.outputs.project_id }}" --non-interactive

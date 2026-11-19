@@ -70,7 +70,7 @@ function YukMainAppContent() {
     if (typeof window !== 'undefined') {
       window.sessionStorage.removeItem('yukmain_room_id');
       if (window.location.search.includes('room=')) {
-        window.history.replaceState({}, '', '/');
+        window.history.replaceState({}, '', window.location.pathname || '/');
       }
     }
   };
