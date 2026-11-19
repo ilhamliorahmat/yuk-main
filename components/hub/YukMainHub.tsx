@@ -1,17 +1,21 @@
 'use client';
 
 import React, { useState } from 'react';
-import Image from 'next/image';
+import Image, { type StaticImageData } from 'next/image';
 import {
   ArrowRight,
   BookOpen,
+  BookOpenCheck,
   Compass,
-  MessageSquareQuote,
-  Plus,
+  Radio,
   ShieldAlert,
   Users,
   X,
 } from 'lucide-react';
+import faktaCover from '@/src/assets/images/yukmain_fakta_cover_1795115894333.jpg';
+import faktaEmblem from '@/src/assets/images/yukmain_fakta_emblem_1795115894196.jpg';
+import frekuensiCover from '@/src/assets/images/yukmain_frekuensi_cover_1795115894652.jpg';
+import frekuensiEmblem from '@/src/assets/images/yukmain_frekuensi_emblem_1795115893627.jpg';
 import kataCover from '@/src/assets/images/yukmain_kata_cover_1795098826342.jpg';
 import kataEmblem from '@/src/assets/images/yukmain_kata_emblem_1795098826535.jpg';
 import spyEmblem from '@/src/assets/images/yukmain_spy_emblem_1795001425384.jpg';
@@ -27,6 +31,59 @@ interface YukMainHubProps {
   onEnterRoom: (roomId: string) => void;
 }
 
+interface GameVisualMeta {
+  cover: StaticImageData;
+  emblem: StaticImageData;
+  coverAlt: string;
+  heroTagline: string;
+  ctaClass: string;
+  tabActiveClass: string;
+  accentTextClass: string;
+}
+
+const GAME_VISUALS: Record<GameType, GameVisualMeta> = {
+  spyfall: {
+    cover: spyfallCover,
+    emblem: spyEmblem,
+    coverAlt:
+      'Ilustrasi meja investigasi Yang Bener Yang Mana dengan peta Nusantara dan kartu rahasia',
+    heroTagline: 'Game #1 · Favorit Tongkrongan',
+    ctaClass: 'bg-rose-600 hover:bg-rose-500 text-white',
+    tabActiveClass: 'bg-rose-600 text-white',
+    accentTextClass: 'text-rose-400',
+  },
+  kata_kata: {
+    cover: kataCover,
+    emblem: kataEmblem,
+    coverAlt:
+      'Ilustrasi meja tongkrongan Kata-Kata Hari Ini dengan kartu kata rahasia dan kopi hangat',
+    heroTagline: 'Game #2 · Penyusup Kata Buta',
+    ctaClass: 'bg-amber-500 hover:bg-amber-400 text-slate-950',
+    tabActiveClass: 'bg-amber-500 text-slate-950',
+    accentTextClass: 'text-amber-300',
+  },
+  satu_frekuensi: {
+    cover: frekuensiCover,
+    emblem: frekuensiEmblem,
+    coverAlt:
+      'Ilustrasi meja kafe malam Satu Frekuensi dengan dial frekuensi analog bercahaya biru sian dan kopi hangat',
+    heroTagline: 'Game #3 · Baru · Santai Tanpa Timer',
+    ctaClass: 'bg-cyan-500 hover:bg-cyan-400 text-slate-950',
+    tabActiveClass: 'bg-cyan-500 text-slate-950',
+    accentTextClass: 'text-cyan-300',
+  },
+  fakta_hari_ini: {
+    cover: faktaCover,
+    emblem: faktaEmblem,
+    coverAlt:
+      'Ilustrasi meja kayu malam Fakta Hari Ini dengan kartu fakta ungu keemasan dan kaca pembesar kuningan',
+    heroTagline: 'Game #4 · Baru · Fakta vs Tim Bluffer',
+    ctaClass: 'bg-violet-600 hover:bg-violet-500 text-white',
+    tabActiveClass: 'bg-violet-600 text-white',
+    accentTextClass: 'text-violet-300',
+  },
+};
+
 export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProps) {
   const { user, profile, configured } = useAuth();
   const [joinCode, setJoinCode] = useState(initialRoomCode.toUpperCase());
@@ -34,7 +91,11 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [rulesGame, setRulesGame] = useState<PartyGameDefinition | null>(null);
-  const [featuredGame, setFeaturedGame] = useState<GameType>('kata_kata');
+  const [featuredGame, setFeaturedGame] = useState<GameType>('fakta_hari_ini');
+
+  const activeFeaturedDef =
+    PARTY_GAMES.find((g) => g.id === featuredGame) ?? PARTY_GAMES[0];
+  const activeFeaturedVisual = GAME_VISUALS[featuredGame];
 
   const handleCreateGame = async (gameType: GameType) => {
     setErrorMsg(null);
@@ -112,7 +173,7 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
             </a>
             <button
               type="button"
-              onClick={() => setRulesGame(PARTY_GAMES[0])}
+              onClick={() => setRulesGame(activeFeaturedDef)}
               className="hover:text-white transition-colors whitespace-nowrap shrink-0"
             >
               Cara Bermain
@@ -152,20 +213,23 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
           <div className="lg:col-span-6 flex flex-col justify-between space-y-6">
             <div className="space-y-4">
-              <div className="text-xs font-medium text-rose-400 flex flex-wrap items-center gap-2">
+              <div className="text-xs font-medium text-violet-300 flex flex-wrap items-center gap-2">
                 <span>Koleksi Game Pesta Indonesia</span>
                 <span aria-hidden="true">·</span>
-                <span>2 Permainan Aktif</span>
+                <span>{PARTY_GAMES.length} Permainan Aktif</span>
               </div>
 
               <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-white leading-[1.12] text-balance">
-                Adu insting & temukan penyamar di antara temanmu.
+                Adu insting, tebak frekuensi, &amp; bongkar karangan temanmu.
               </h1>
 
               <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-xl">
-                Mainkan <strong className="text-white">Yang Bener Yang Mana</strong> dan game baru{' '}
+                Nikmati 2 game santai terbaru{' '}
+                <strong className="text-cyan-300">Satu Frekuensi</strong> &amp;{' '}
+                <strong className="text-violet-300">Fakta Hari Ini</strong> bersama{' '}
+                <strong className="text-white">Yang Bener Yang Mana</strong> dan{' '}
                 <strong className="text-amber-300">Kata-Kata Hari Ini</strong> langsung dari
-                peramban ponsel atau desktop tanpa unduh aplikasi tambahan.
+                peramban tanpa unduh aplikasi.
               </p>
             </div>
 
@@ -180,28 +244,28 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
                 <button
                   type="button"
                   disabled={busyAction !== null}
-                  onClick={() => void handleCreateGame('spyfall')}
-                  className="min-h-[48px] px-5 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50"
+                  onClick={() => void handleCreateGame('fakta_hari_ini')}
+                  className="min-h-[48px] px-5 py-3 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50"
                 >
-                  <Plus className="w-4 h-4" />
+                  <BookOpenCheck className="w-4 h-4" />
                   <span>
-                    {busyAction === 'create:spyfall'
+                    {busyAction === 'create:fakta_hari_ini'
                       ? 'Membuat Ruang...'
-                      : 'Main Yang Bener Yang Mana'}
+                      : 'Main Fakta Hari Ini'}
                   </span>
                 </button>
 
                 <button
                   type="button"
                   disabled={busyAction !== null}
-                  onClick={() => void handleCreateGame('kata_kata')}
-                  className="min-h-[48px] px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50"
+                  onClick={() => void handleCreateGame('satu_frekuensi')}
+                  className="min-h-[48px] px-5 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50"
                 >
-                  <MessageSquareQuote className="w-4 h-4" />
+                  <Radio className="w-4 h-4" />
                   <span>
-                    {busyAction === 'create:kata_kata'
+                    {busyAction === 'create:satu_frekuensi'
                       ? 'Membuat Ruang...'
-                      : 'Main Kata-Kata Hari Ini'}
+                      : 'Main Satu Frekuensi'}
                   </span>
                 </button>
               </div>
@@ -216,7 +280,7 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
                   }
                   placeholder="KODE 6 HURUF"
                   aria-label="Kode Ruang"
-                  className="flex-1 min-h-[48px] px-4 rounded-xl bg-[#131A24] border border-slate-800 text-white font-mono-tabular text-sm tracking-widest uppercase placeholder:text-slate-500 placeholder:tracking-normal focus:outline-none focus:border-rose-500"
+                  className="flex-1 min-h-[48px] px-4 rounded-xl bg-[#131A24] border border-slate-800 text-white font-mono-tabular text-sm tracking-widest uppercase placeholder:text-slate-500 placeholder:tracking-normal focus:outline-none focus:border-violet-500"
                 />
                 <button
                   type="submit"
@@ -230,80 +294,65 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
             </div>
           </div>
 
-          {/* Hero Artwork */}
+          {/* Hero Artwork Showcase */}
           <div className="lg:col-span-6">
-            <div className="relative h-full min-h-[260px] sm:min-h-[340px] rounded-2xl overflow-hidden border border-slate-800 bg-gradient-to-br from-[#131A24] via-[#0F172A] to-[#0B1018]">
+            <div className="relative h-full min-h-[280px] sm:min-h-[360px] rounded-2xl overflow-hidden border border-slate-800 bg-gradient-to-br from-[#131A24] via-[#0F172A] to-[#0B1018]">
               <Image
-                src={featuredGame === 'kata_kata' ? kataCover : spyfallCover}
-                alt={
-                  featuredGame === 'kata_kata'
-                    ? 'Ilustrasi meja tongkrongan Kata-Kata Hari Ini dengan kartu kata rahasia dan kopi hangat'
-                    : 'Ilustrasi meja investigasi Yang Bener Yang Mana dengan peta Nusantara dan kartu rahasia'
-                }
+                src={activeFeaturedVisual.cover}
+                alt={activeFeaturedVisual.coverAlt}
                 fill
                 priority
                 referrerPolicy="no-referrer"
                 sizes="(max-width: 1024px) 100vw, 50vw"
                 className="object-cover"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0B1018]/95 via-[#0B1018]/35 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0B1018]/95 via-[#0B1018]/40 to-transparent" />
               <div className="absolute bottom-4 left-4 right-4 space-y-3">
                 <div className="flex items-end justify-between gap-4">
                   <div className="min-w-0">
-                    <p className="text-xs text-amber-300 font-medium">
-                      {featuredGame === 'kata_kata'
-                        ? 'Game #2 · Rilis Terbaru Yuk Main 2.0'
-                        : 'Game #1 · Favorit Tongkrongan'}
+                    <p className={`text-xs font-medium ${activeFeaturedVisual.accentTextClass}`}>
+                      {activeFeaturedVisual.heroTagline}
                     </p>
                     <p className="text-lg font-semibold text-white truncate">
-                      {featuredGame === 'kata_kata'
-                        ? 'Kata-Kata Hari Ini'
-                        : 'Yang Bener Yang Mana'}
+                      {activeFeaturedDef.title}
                     </p>
                   </div>
                   <span className="text-xs text-slate-300 font-mono-tabular shrink-0">
-                    3–12 Pemain
+                    {activeFeaturedDef.minPlayers}–{activeFeaturedDef.maxPlayers} Pemain
                   </span>
                 </div>
 
                 <div
-                  className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#0B1018]/80 backdrop-blur-sm border border-slate-700/70"
+                  className="flex flex-wrap items-center gap-1 p-1 rounded-xl bg-[#0B1018]/85 backdrop-blur-sm border border-slate-700/70"
                   role="tablist"
                   aria-label="Pratinjau sampul permainan"
                 >
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={featuredGame === 'kata_kata'}
-                    onClick={() => setFeaturedGame('kata_kata')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
-                      featuredGame === 'kata_kata'
-                        ? 'bg-amber-500 text-slate-950'
-                        : 'text-slate-300 hover:text-white'
-                    }`}
-                  >
-                    Kata-Kata Hari Ini
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={featuredGame === 'spyfall'}
-                    onClick={() => setFeaturedGame('spyfall')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
-                      featuredGame === 'spyfall'
-                        ? 'bg-rose-600 text-white'
-                        : 'text-slate-300 hover:text-white'
-                    }`}
-                  >
-                    Yang Bener Yang Mana
-                  </button>
+                  {PARTY_GAMES.map((g) => {
+                    const isSelected = featuredGame === g.id;
+                    return (
+                      <button
+                        key={g.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={isSelected}
+                        onClick={() => setFeaturedGame(g.id)}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
+                          isSelected
+                            ? GAME_VISUALS[g.id].tabActiveClass
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {g.title}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Game Catalog Section */}
+        {/* Game Catalog Section (2x2 Balanced Grid) */}
         <section id="katalog" className="space-y-5 pt-4 border-t border-slate-800/80">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
             <div>
@@ -318,10 +367,8 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {PARTY_GAMES.map((game) => {
-              const isKataKata = game.id === 'kata_kata';
               const isCreatingThis = busyAction === `create:${game.id}`;
-              const coverSrc = isKataKata ? kataCover : spyfallCover;
-              const emblemSrc = isKataKata ? kataEmblem : spyEmblem;
+              const visual = GAME_VISUALS[game.id];
 
               return (
                 <article
@@ -332,7 +379,7 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
                     {/* 16:9 Game Cover Banner */}
                     <div className="relative aspect-video w-full bg-gradient-to-br from-[#131A24] to-[#0B1018] border-b border-slate-800/80 overflow-hidden">
                       <Image
-                        src={coverSrc}
+                        src={visual.cover}
                         alt={`Sampul permainan ${game.title}`}
                         fill
                         referrerPolicy="no-referrer"
@@ -347,7 +394,7 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
                       <div className="flex items-center gap-4">
                         <div className="w-14 h-14 rounded-xl overflow-hidden border border-slate-700/80 bg-[#0B1018] shrink-0 relative">
                           <Image
-                            src={emblemSrc}
+                            src={visual.emblem}
                             alt={`Ikon permainan ${game.title}`}
                             fill
                             referrerPolicy="no-referrer"
@@ -388,11 +435,7 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
                       type="button"
                       disabled={busyAction !== null}
                       onClick={() => void handleCreateGame(game.id)}
-                      className={`flex-1 min-h-[44px] px-4 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${
-                        isKataKata
-                          ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
-                          : 'bg-rose-600 hover:bg-rose-500 text-white'
-                      }`}
+                      className={`flex-1 min-h-[44px] px-4 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${visual.ctaClass}`}
                     >
                       {isCreatingThis ? 'Membuat Ruang...' : `Mainkan ${game.title}`}
                     </button>

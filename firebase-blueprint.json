@@ -75,7 +75,7 @@
         },
         "gameType": {
           "type": "string",
-          "enum": ["spyfall", "kata_kata"]
+          "enum": ["spyfall", "kata_kata", "satu_frekuensi", "fakta_hari_ini"]
         },
         "createdAt": {
           "type": "string",
@@ -86,7 +86,7 @@
     },
     "Room": {
       "title": "Room",
-      "description": "Multiplayer Yuk Main room storing public state and game configuration. Never stores active secret location.",
+      "description": "Multiplayer Yuk Main room storing public state and game configuration. Never stores active secret target, word, or hidden fun fact.",
       "type": "object",
       "properties": {
         "id": {
@@ -103,7 +103,7 @@
         },
         "gameType": {
           "type": "string",
-          "enum": ["spyfall", "kata_kata"]
+          "enum": ["spyfall", "kata_kata", "satu_frekuensi", "fakta_hari_ini"]
         },
         "hostUid": {
           "type": "string",
@@ -139,11 +139,11 @@
         },
         "enabledPacks": {
           "type": "array",
-          "description": "Active built-in location pack IDs (max 10)."
+          "description": "Active built-in content pack IDs (max 10)."
         },
         "selectedLocationNames": {
           "type": "array",
-          "description": "Public pool of possible locations for the active round (max 40)."
+          "description": "Public pool of possible locations for the active Spyfall round (max 40)."
         },
         "customLocations": {
           "type": "array",
@@ -153,13 +153,29 @@
           "type": "array",
           "description": "Host-defined custom word pairs for Kata-Kata Hari Ini (max 30)."
         },
+        "customSpectrums": {
+          "type": "array",
+          "description": "Host-defined custom left/right spectrum pairs for Satu Frekuensi (max 25)."
+        },
+        "customFacts": {
+          "type": "array",
+          "description": "Host-defined custom parenthetical fun facts for Fakta Hari Ini (max 30)."
+        },
         "eliminatedUids": {
           "type": "array",
-          "description": "Server-managed list of eliminated player UIDs during an active Kata-Kata Hari Ini round."
+          "description": "List of eliminated player UIDs during an active Kata-Kata Hari Ini round."
         },
         "eliminationLog": {
           "type": "array",
-          "description": "Server-managed public elimination timeline revealing whether eliminated players were Warga or Penyusup."
+          "description": "Public elimination timeline revealing whether eliminated players were Warga or Penyusup."
+        },
+        "frequencyState": {
+          "type": "object",
+          "description": "Public state for Satu Frekuensi (spectrum labels, psychicUid, clueText, lockedUids, reveal summary)."
+        },
+        "faktaState": {
+          "type": "object",
+          "description": "Public state for Fakta Hari Ini (ordered guesserUid, phaseControllerUid, phase, pick & post-round reveal)."
         },
         "activeVote": {
           "type": "object",
@@ -167,7 +183,7 @@
         },
         "pendingSpyGuess": {
           "type": "object",
-          "description": "Submitted location guess from a Spy awaiting Warga verification."
+          "description": "Submitted location/word guess from a Spy."
         },
         "lastRoundResult": {
           "type": "object",
@@ -263,7 +279,7 @@
     },
     "PlayerSecret": {
       "title": "PlayerSecret",
-      "description": "Strictly private per-player secret role and location assignment for a single round.",
+      "description": "Strictly private per-player secret role, target, word, or fact card for a single round.",
       "type": "object",
       "properties": {
         "uid": {
@@ -280,11 +296,10 @@
         },
         "gameType": {
           "type": "string",
-          "enum": ["spyfall", "kata_kata"]
+          "enum": ["spyfall", "kata_kata", "satu_frekuensi", "fakta_hari_ini"]
         },
         "isSpy": {
-          "type": "boolean",
-          "description": "Present only for Game #1 (spyfall). Strictly omitted for Game #2 (kata_kata) to enforce Blind-Spy secrecy."
+          "type": "boolean"
         },
         "locationName": {
           "type": "string",
@@ -298,24 +313,85 @@
         "secretWord": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 60,
-          "description": "Blind secret word assigned to each player in Game #2 (Kata-Kata Hari Ini)."
+          "maxLength": 60
+        },
+        "isPsychic": {
+          "type": "boolean"
+        },
+        "targetValue": {
+          "type": "number"
+        },
+        "isGuesser": {
+          "type": "boolean"
+        },
+        "isTruthTeller": {
+          "type": "boolean"
+        },
+        "truthTellerUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "truthTellerName": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "factPrefix": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "factTwist": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "factSuffix": {
+          "type": "string",
+          "maxLength": 140
+        },
+        "factCategory": {
+          "type": "string",
+          "maxLength": 40
         },
         "createdAt": {
           "type": "string",
           "format": "date-time"
         }
       },
-      "required": [
-        "uid",
-        "roundId",
-        "gameType",
-        "createdAt"
-      ]
+      "required": ["uid", "roundId", "gameType", "createdAt"]
+    },
+    "PlayerSubmission": {
+      "title": "PlayerSubmission",
+      "description": "Isolated per-player hidden guess submission for Satu Frekuensi dial values.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "roundId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "gameType": {
+          "type": "string",
+          "enum": ["satu_frekuensi"]
+        },
+        "guessValue": {
+          "type": "number"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "roundId", "gameType", "guessValue", "updatedAt"]
     },
     "ServerRoundState": {
       "title": "ServerRoundState",
-      "description": "Server-only secret truth for the active round (inaccessible to all clients).",
+      "description": "Round truth document read strictly inside resolution transactions.",
       "type": "object",
       "properties": {
         "roundId": {
@@ -343,6 +419,33 @@
         "spyNames": {
           "type": "array"
         },
+        "targetValue": {
+          "type": "number"
+        },
+        "factPrefix": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "factTwist": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "factSuffix": {
+          "type": "string",
+          "maxLength": 140
+        },
+        "factCategory": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "truthTellerUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "truthTellerName": {
+          "type": "string",
+          "maxLength": 40
+        },
         "createdAtMs": {
           "type": "number"
         }
@@ -369,11 +472,15 @@
     },
     "/rooms/{roomId}/rounds/{roundId}/secrets/{playerId}": {
       "schema": { "$ref": "#/entities/PlayerSecret" },
-      "description": "Isolated per-player secret card written by server Admin SDK and readable only by the owning playerId."
+      "description": "Isolated per-player secret card readable only by the owning playerId until round_end."
+    },
+    "/rooms/{roomId}/rounds/{roundId}/submissions/{playerId}": {
+      "schema": { "$ref": "#/entities/PlayerSubmission" },
+      "description": "Isolated per-player dial submission for Satu Frekuensi."
     },
     "/rooms/{roomId}/serverState/{stateId}": {
       "schema": { "$ref": "#/entities/ServerRoundState" },
-      "description": "Server-only secret round state written and read strictly by Admin SDK."
+      "description": "Round secret truth document resolved atomically in Firestore transactions."
     }
   }
 }

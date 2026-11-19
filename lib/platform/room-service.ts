@@ -14,10 +14,14 @@ import {
 import { get, ref } from 'firebase/database';
 import { getFirebaseServices } from '@/lib/firebase/client';
 import { handleFirestoreError, OperationType } from '@/lib/firebase/errors';
+import { sanitizeCustomFact } from '@/lib/games/fakta-hari-ini/engine';
 import { sanitizeCustomWordPair } from '@/lib/games/kata-kata/engine';
+import { sanitizeCustomSpectrum } from '@/lib/games/satu-frekuensi/engine';
 import { generateRoomCode, sanitizeCustomLocation } from '@/lib/games/spyfall/engine';
 import type {
+  CustomFactItem,
   CustomLocation,
+  CustomSpectrum,
   CustomWordPair,
   GameType,
   PlayerSecretDoc,
@@ -80,7 +84,13 @@ export async function createRoom(params: {
   const playerRef = doc(db, 'rooms', roomId, 'players', params.hostUid);
 
   const defaultPacks =
-    gameType === 'kata_kata' ? ['kuliner', 'keseharian'] : ['nusantara', 'klasik'];
+    gameType === 'kata_kata'
+      ? ['kuliner', 'keseharian']
+      : gameType === 'satu_frekuensi'
+        ? ['tongkrongan', 'kuliner']
+        : gameType === 'fakta_hari_ini'
+          ? ['hukum_sejarah', 'nusantara']
+          : ['nusantara', 'klasik'];
 
   const batch = writeBatch(db);
   batch.set(roomRef, {
@@ -99,8 +109,12 @@ export async function createRoom(params: {
     selectedLocationNames: [],
     customLocations: [],
     customWordPairs: [],
+    customSpectrums: [],
+    customFacts: [],
     eliminatedUids: [],
     eliminationLog: [],
+    frequencyState: null,
+    faktaState: null,
     activeVote: null,
     pendingSpyGuess: null,
     lastRoundResult: null,
@@ -283,14 +297,45 @@ export async function leaveRoom(params: {
     }
 
     const others = players.filter((p) => p.uid !== uid);
+    const needsFaktaControllerFailover =
+      room.gameType === 'fakta_hari_ini' &&
+      room.status === 'playing' &&
+      room.faktaState &&
+      room.faktaState.phaseControllerUid === uid;
+
+    const pickFailoverController = (nextHostUid: string) => {
+      if (!room.faktaState) return null;
+      const nonGuessers = others.filter((p) => p.uid !== room.faktaState?.guesserUid);
+      if (nonGuessers.length === 0) return others[0] ?? null;
+      const hostCandidate = nonGuessers.find((p) => p.uid === nextHostUid);
+      return hostCandidate ?? nonGuessers[0];
+    };
+
     if (room.hostUid === uid) {
       const nextHost = others[0];
       const batch = writeBatch(db);
       batch.delete(doc(db, 'rooms', room.id, 'players', uid));
-      batch.update(doc(db, 'rooms', room.id), {
-        hostUid: nextHost.uid,
-        updatedAt: serverTimestamp(),
-      });
+      if (needsFaktaControllerFailover && room.faktaState) {
+        const nextCtrl = pickFailoverController(nextHost.uid);
+        batch.update(doc(db, 'rooms', room.id), {
+          hostUid: nextHost.uid,
+          ...(nextCtrl
+            ? {
+                faktaState: {
+                  ...room.faktaState,
+                  phaseControllerUid: nextCtrl.uid,
+                  phaseControllerName: nextCtrl.displayName.slice(0, 40),
+                },
+              }
+            : {}),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        batch.update(doc(db, 'rooms', room.id), {
+          hostUid: nextHost.uid,
+          updatedAt: serverTimestamp(),
+        });
+      }
       batch.update(doc(db, 'rooms', room.id, 'players', nextHost.uid), {
         isHost: true,
         updatedAt: serverTimestamp(),
@@ -301,6 +346,30 @@ export async function leaveRoom(params: {
         senderUid: uid,
         senderName: displayName,
         text: `${displayName} keluar. ${nextHost.displayName} kini menjadi Host.`,
+        type: 'system',
+      }).catch(() => {});
+    } else if (needsFaktaControllerFailover && room.faktaState) {
+      const nextCtrl = pickFailoverController(room.hostUid);
+      const batch = writeBatch(db);
+      if (nextCtrl) {
+        batch.update(doc(db, 'rooms', room.id), {
+          faktaState: {
+            ...room.faktaState,
+            phaseControllerUid: nextCtrl.uid,
+            phaseControllerName: nextCtrl.displayName.slice(0, 40),
+          },
+          updatedAt: serverTimestamp(),
+        });
+      }
+      batch.delete(doc(db, 'rooms', room.id, 'players', uid));
+      await batch.commit();
+      void sendRoomChatMessage({
+        roomId: room.id,
+        senderUid: uid,
+        senderName: displayName,
+        text: nextCtrl
+          ? `${displayName} meninggalkan ruang. ${nextCtrl.displayName} kini menjadi Pengendali Fase.`
+          : `${displayName} meninggalkan ruang.`,
         type: 'system',
       }).catch(() => {});
     } else {
@@ -709,6 +778,248 @@ export async function returnKataKataToLobby(params: {
   const data = await callGameMasterApi('/api/kata-kata/resolve', {
     roomId: params.roomId,
     action: 'return_lobby',
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.hostUid,
+      senderName: params.hostName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+// --- Settings & Actions: Game #3 (Satu Frekuensi / satu_frekuensi) ---
+
+export async function updateSatuFrekuensiSettings(params: {
+  roomId: string;
+  enabledPacks: string[];
+  customSpectrums: CustomSpectrum[];
+}): Promise<void> {
+  const { auth, db } = getFirebaseServices();
+  if (!db) throw new Error('Firebase belum terkonfigurasi.');
+
+  const cleanPacks = params.enabledPacks.slice(0, 10);
+  const cleanCustom = params.customSpectrums
+    .map((item) => sanitizeCustomSpectrum(item))
+    .filter((item): item is CustomSpectrum => item !== null)
+    .slice(0, 25);
+
+  if (cleanPacks.length === 0 && cleanCustom.length === 0) {
+    throw new Error('Pilih minimal 1 paket spektrum atau buat spektrum kustom.');
+  }
+
+  const effectivePacks = cleanPacks.length > 0 ? cleanPacks : ['tongkrongan'];
+
+  try {
+    await updateDoc(doc(db, 'rooms', params.roomId), {
+      enabledPacks: effectivePacks,
+      customSpectrums: cleanCustom,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `rooms/${params.roomId}`, auth);
+  }
+}
+
+export async function startSatuFrekuensiRound(params: {
+  roomId: string;
+  actorUid: string;
+  actorName: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/satu-frekuensi/start', {
+    roomId: params.roomId,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.actorUid,
+      senderName: params.actorName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function submitSatuFrekuensiClue(params: {
+  roomId: string;
+  psychicUid: string;
+  psychicName: string;
+  clueText: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/satu-frekuensi/clue', {
+    roomId: params.roomId,
+    clueText: params.clueText,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.psychicUid,
+      senderName: params.psychicName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function submitSatuFrekuensiGuess(params: {
+  roomId: string;
+  guessValue: number;
+}): Promise<void> {
+  await callGameMasterApi('/api/satu-frekuensi/guess', {
+    roomId: params.roomId,
+    guessValue: params.guessValue,
+  });
+}
+
+export async function advanceSatuFrekuensiPhase(params: {
+  roomId: string;
+  hostUid: string;
+  hostName: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/satu-frekuensi/next-phase', {
+    roomId: params.roomId,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.hostUid,
+      senderName: params.hostName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function returnSatuFrekuensiToLobby(params: {
+  roomId: string;
+  hostUid: string;
+  hostName: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/satu-frekuensi/return-lobby', {
+    roomId: params.roomId,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.hostUid,
+      senderName: params.hostName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+// --- Settings & Actions: Game #4 (Fakta Hari Ini / fakta_hari_ini) ---
+
+export async function updateFaktaHariIniSettings(params: {
+  roomId: string;
+  enabledPacks: string[];
+  customFacts: CustomFactItem[];
+}): Promise<void> {
+  const { auth, db } = getFirebaseServices();
+  if (!db) throw new Error('Firebase belum terkonfigurasi.');
+
+  const cleanPacks = params.enabledPacks.slice(0, 10);
+  const cleanCustom = params.customFacts
+    .map((item) => sanitizeCustomFact(item))
+    .filter((item): item is CustomFactItem => item !== null)
+    .slice(0, 30);
+
+  if (cleanPacks.length === 0 && cleanCustom.length === 0) {
+    throw new Error('Pilih minimal 1 paket fakta atau buat fakta kustom.');
+  }
+
+  const effectivePacks = cleanPacks.length > 0 ? cleanPacks : ['hukum_sejarah'];
+
+  try {
+    await updateDoc(doc(db, 'rooms', params.roomId), {
+      enabledPacks: effectivePacks,
+      customFacts: cleanCustom,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `rooms/${params.roomId}`, auth);
+  }
+}
+
+export async function startFaktaHariIniRound(params: {
+  roomId: string;
+  actorUid: string;
+  actorName: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/fakta-hari-ini/start', {
+    roomId: params.roomId,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.actorUid,
+      senderName: params.actorName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function advanceFaktaHariIniPhase(params: {
+  roomId: string;
+  actorUid: string;
+  actorName: string;
+  direction?: 'advance' | 'back';
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/fakta-hari-ini/next-phase', {
+    roomId: params.roomId,
+    direction: params.direction ?? 'advance',
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.actorUid,
+      senderName: params.actorName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function submitFaktaHariIniGuess(params: {
+  roomId: string;
+  guesserUid: string;
+  guesserName: string;
+  pickedUid: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/fakta-hari-ini/guess', {
+    roomId: params.roomId,
+    pickedUid: params.pickedUid,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.guesserUid,
+      senderName: params.guesserName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function returnFaktaHariIniToLobby(params: {
+  roomId: string;
+  hostUid: string;
+  hostName: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/fakta-hari-ini/return-lobby', {
+    roomId: params.roomId,
   });
 
   if (data.systemMessage) {

@@ -2,7 +2,9 @@
 
 import React, { useState } from 'react';
 import { useRoomSession } from '@/hooks/use-room-session';
+import { FaktaHariIniRoomView } from './fakta-hari-ini/FaktaHariIniRoomView';
 import { KataKataRoomView } from './kata-kata/KataKataRoomView';
+import { SatuFrekuensiRoomView } from './satu-frekuensi/SatuFrekuensiRoomView';
 import { SpyfallRoomView } from './spyfall/SpyfallRoomView';
 
 interface ActiveRoomContainerProps {
@@ -78,6 +80,38 @@ export function ActiveRoomContainer({
         players={players}
         mySecret={mySecret}
         revealedSecrets={revealedSecrets}
+        messages={messages}
+        presence={presence}
+        myUid={myUid}
+        myName={myName}
+        onBeforeLeave={() => setIsLeaving(true)}
+        onExitToHub={onExitToHub}
+      />
+    );
+  }
+
+  if (room.gameType === 'satu_frekuensi') {
+    return (
+      <SatuFrekuensiRoomView
+        room={room}
+        players={players}
+        mySecret={mySecret}
+        messages={messages}
+        presence={presence}
+        myUid={myUid}
+        myName={myName}
+        onBeforeLeave={() => setIsLeaving(true)}
+        onExitToHub={onExitToHub}
+      />
+    );
+  }
+
+  if (room.gameType === 'fakta_hari_ini') {
+    return (
+      <FaktaHariIniRoomView
+        room={room}
+        players={players}
+        mySecret={mySecret}
         messages={messages}
         presence={presence}
         myUid={myUid}

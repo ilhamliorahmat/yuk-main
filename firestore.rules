@@ -20,6 +20,10 @@ service cloud.firestore {
       return code is string && code.matches('^[A-Z0-9]{6}$');
     }
 
+    function isValidGameType(gameType) {
+      return gameType in ['spyfall', 'kata_kata', 'satu_frekuensi', 'fakta_hari_ini'];
+    }
+
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
     function getRoom(roomId) { return get(/databases/$(database)/documents/rooms/$(roomId)).data; }
@@ -40,8 +44,8 @@ service cloud.firestore {
 
     function isValidRoom(d, roomId) {
       return d.keys().hasAll(['id', 'code', 'gameType', 'hostUid', 'status', 'roundNumber', 'currentRoundId', 'roundDurationSec', 'roundEndsAtMs', 'firstSpeakerUid', 'spyMode', 'enabledPacks', 'selectedLocationNames', 'customLocations', 'activeVote', 'pendingSpyGuess', 'lastRoundResult', 'createdAt', 'updatedAt']) &&
-        d.keys().hasOnly(['id', 'code', 'gameType', 'hostUid', 'status', 'roundNumber', 'currentRoundId', 'roundDurationSec', 'roundEndsAtMs', 'firstSpeakerUid', 'spyMode', 'enabledPacks', 'selectedLocationNames', 'customLocations', 'customWordPairs', 'eliminatedUids', 'eliminationLog', 'activeVote', 'pendingSpyGuess', 'lastRoundResult', 'createdAt', 'updatedAt']) &&
-        d.id == roomId && isValidCode(d.code) && d.gameType in ['spyfall', 'kata_kata'] &&
+        d.keys().hasOnly(['id', 'code', 'gameType', 'hostUid', 'status', 'roundNumber', 'currentRoundId', 'roundDurationSec', 'roundEndsAtMs', 'firstSpeakerUid', 'spyMode', 'enabledPacks', 'selectedLocationNames', 'customLocations', 'customWordPairs', 'customSpectrums', 'customFacts', 'eliminatedUids', 'eliminationLog', 'frequencyState', 'faktaState', 'activeVote', 'pendingSpyGuess', 'lastRoundResult', 'createdAt', 'updatedAt']) &&
+        d.id == roomId && isValidCode(d.code) && isValidGameType(d.gameType) &&
         d.hostUid is string && d.hostUid.size() <= 128 &&
         d.status in ['lobby', 'playing', 'voting', 'spy_guess', 'round_end'] &&
         d.roundNumber is int && d.roundNumber >= 0 &&
@@ -54,8 +58,12 @@ service cloud.firestore {
         d.selectedLocationNames is list && d.selectedLocationNames.size() <= 40 &&
         d.customLocations is list && d.customLocations.size() <= 20 &&
         (!('customWordPairs' in d) || (d.customWordPairs is list && d.customWordPairs.size() <= 30)) &&
+        (!('customSpectrums' in d) || (d.customSpectrums is list && d.customSpectrums.size() <= 25)) &&
+        (!('customFacts' in d) || (d.customFacts is list && d.customFacts.size() <= 30)) &&
         (!('eliminatedUids' in d) || (d.eliminatedUids is list && d.eliminatedUids.size() <= 20)) &&
         (!('eliminationLog' in d) || (d.eliminationLog is list && d.eliminationLog.size() <= 20)) &&
+        (!('frequencyState' in d) || d.frequencyState == null || d.frequencyState is map) &&
+        (!('faktaState' in d) || d.faktaState == null || d.faktaState is map) &&
         (d.activeVote == null || d.activeVote is map) &&
         (d.pendingSpyGuess == null || d.pendingSpyGuess is map) &&
         (d.lastRoundResult == null || d.lastRoundResult is map) &&
@@ -71,6 +79,50 @@ service cloud.firestore {
         d.isHost is bool && d.isReady is bool &&
         d.score is int && d.score >= 0 &&
         d.joinedAt is timestamp && d.updatedAt is timestamp;
+    }
+
+    function isValidSubmission(d, uid, roundId) {
+      return d.keys().hasAll(['uid', 'roundId', 'gameType', 'guessValue', 'updatedAt']) &&
+        d.keys().hasOnly(['uid', 'roundId', 'gameType', 'guessValue', 'updatedAt']) &&
+        d.uid == uid && d.roundId == roundId &&
+        d.gameType == 'satu_frekuensi' &&
+        d.guessValue is int && d.guessValue >= 0 && d.guessValue <= 100 &&
+        d.updatedAt == request.time;
+    }
+
+    function isAuthorizedFaktaUpdate() {
+      return existing().gameType != 'fakta_hari_ini' || (
+        existing().faktaState is map &&
+        incoming().faktaState is map && (
+          // Phase controller advances or reverts discussion <-> guessing (or hands off on leave)
+          (request.auth.uid == existing().faktaState.phaseControllerUid &&
+            incoming().status == 'playing') ||
+          // Guesser submits pick to resolve round_end
+          (request.auth.uid == existing().faktaState.guesserUid &&
+            existing().faktaState.phase == 'guessing' &&
+            incoming().status == 'round_end')
+        )
+      );
+    }
+
+    function isAuthorizedFrequencyUpdate() {
+      return existing().gameType != 'satu_frekuensi' || (
+        existing().frequencyState is map &&
+        incoming().frequencyState is map && (
+          // Host controls endless phase transitions and reveal
+          (request.auth.uid == existing().hostUid) ||
+          // Psychic submits clue to move clue -> dialing
+          (request.auth.uid == existing().frequencyState.psychicUid &&
+            existing().frequencyState.phase == 'clue' &&
+            incoming().frequencyState.phase == 'dialing' &&
+            incoming().status == 'playing') ||
+          // Non-psychic member locks dial guess without changing phase or status
+          (request.auth.uid != existing().frequencyState.psychicUid &&
+            existing().frequencyState.phase == 'dialing' &&
+            incoming().frequencyState.phase == 'dialing' &&
+            incoming().status == 'playing')
+        )
+      );
     }
 
     match /users/{userId} {
@@ -93,7 +145,7 @@ service cloud.firestore {
         incoming().keys().hasAll(['code', 'roomId', 'hostUid', 'gameType', 'createdAt']) &&
         incoming().keys().hasOnly(['code', 'roomId', 'hostUid', 'gameType', 'createdAt']) &&
         incoming().code == code && isValidId(incoming().roomId) &&
-        incoming().hostUid == request.auth.uid && incoming().gameType in ['spyfall', 'kata_kata'] &&
+        incoming().hostUid == request.auth.uid && isValidGameType(incoming().gameType) &&
         incoming().createdAt == request.time &&
         existsAfter(/databases/$(database)/documents/rooms/$(incoming().roomId));
       allow delete: if isSignedIn() && isValidCode(code) && existing().hostUid == request.auth.uid;
@@ -109,21 +161,19 @@ service cloud.firestore {
         (!('eliminatedUids' in incoming()) || incoming().eliminatedUids.size() == 0) &&
         (!('eliminationLog' in incoming()) || incoming().eliminationLog.size() == 0) &&
         existsAfter(/databases/$(database)/documents/roomCodes/$(incoming().code));
-      // Host updates lobby settings, transfers hostUid, starts rounds, cancels votes, or returns to lobby;
-      // Room members can progress active rounds (voting, eliminations, guesses, round_end) in Firebase Spark client_host mode.
       allow update: if isSignedIn() && isValidId(roomId) && isValidRoom(incoming(), roomId) &&
         incoming().id == existing().id && incoming().code == existing().code &&
         incoming().gameType == existing().gameType && incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time && (
           (existing().hostUid == request.auth.uid && (
             (existing().status in ['lobby', 'round_end'] &&
-              incoming().diff(existing()).affectedKeys().hasOnly(['roundDurationSec', 'spyMode', 'enabledPacks', 'customLocations', 'customWordPairs', 'updatedAt'])) ||
-            incoming().diff(existing()).affectedKeys().hasOnly(['hostUid', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['roundDurationSec', 'spyMode', 'enabledPacks', 'customLocations', 'customWordPairs', 'customSpectrums', 'customFacts', 'updatedAt'])) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['hostUid', 'faktaState', 'updatedAt']) ||
             (existing().status in ['lobby', 'round_end'] && incoming().status == 'playing' &&
               incoming().roundNumber == existing().roundNumber + 1 &&
-              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'roundNumber', 'currentRoundId', 'roundEndsAtMs', 'firstSpeakerUid', 'selectedLocationNames', 'eliminatedUids', 'eliminationLog', 'activeVote', 'pendingSpyGuess', 'updatedAt'])) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'roundNumber', 'currentRoundId', 'roundEndsAtMs', 'firstSpeakerUid', 'selectedLocationNames', 'eliminatedUids', 'eliminationLog', 'frequencyState', 'faktaState', 'activeVote', 'pendingSpyGuess', 'updatedAt'])) ||
             (incoming().status == 'lobby' &&
-              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'activeVote', 'pendingSpyGuess', 'eliminatedUids', 'eliminationLog', 'updatedAt'])) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'activeVote', 'pendingSpyGuess', 'eliminatedUids', 'eliminationLog', 'frequencyState', 'faktaState', 'updatedAt'])) ||
             (existing().status in ['voting', 'spy_guess'] && incoming().status == 'playing' &&
               incoming().diff(existing()).affectedKeys().hasOnly(['status', 'activeVote', 'pendingSpyGuess', 'updatedAt']))
           )) ||
@@ -131,7 +181,9 @@ service cloud.firestore {
             incoming().hostUid == existing().hostUid &&
             incoming().roundNumber == existing().roundNumber &&
             incoming().currentRoundId == existing().currentRoundId &&
-            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'activeVote', 'pendingSpyGuess', 'eliminatedUids', 'eliminationLog', 'lastRoundResult', 'updatedAt']))
+            isAuthorizedFaktaUpdate() &&
+            isAuthorizedFrequencyUpdate() &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'activeVote', 'pendingSpyGuess', 'eliminatedUids', 'eliminationLog', 'frequencyState', 'faktaState', 'lastRoundResult', 'updatedAt']))
         );
       allow delete: if isSignedIn() && isValidId(roomId) && existing().hostUid == request.auth.uid;
 
@@ -153,7 +205,7 @@ service cloud.firestore {
             (isMember(roomId) &&
               incoming().diff(existing()).affectedKeys().hasOnly(['score', 'updatedAt']) &&
               incoming().score > existing().score &&
-              incoming().score <= existing().score + 6)
+              incoming().score <= existing().score + (getRoom(roomId).gameType == 'fakta_hari_ini' ? 11 : 6))
           );
         allow delete: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
           (request.auth.uid == playerId || isHost(roomId));
@@ -166,9 +218,20 @@ service cloud.firestore {
           isHost(roomId) &&
           incoming().uid == playerId &&
           incoming().roundId == roundId &&
-          incoming().gameType in ['spyfall', 'kata_kata'] &&
+          isValidGameType(incoming().gameType) &&
           incoming().createdAt == request.time;
         allow list, update, delete: if false;
+      }
+
+      match /rounds/{roundId}/submissions/{playerId} {
+        allow get: if isSignedIn() && isValidId(roomId) && isValidId(roundId) && isValidId(playerId) &&
+          isMember(roomId) && (request.auth.uid == playerId || isHost(roomId) || getRoom(roomId).status == 'round_end');
+        allow create, update: if isSignedIn() && isValidId(roomId) && isValidId(roundId) && isValidId(playerId) &&
+          request.auth.uid == playerId &&
+          isMember(roomId) &&
+          getRoom(roomId).status == 'playing' &&
+          isValidSubmission(incoming(), playerId, roundId);
+        allow list, delete: if false;
       }
 
       match /serverState/{stateId} {
@@ -176,12 +239,19 @@ service cloud.firestore {
         allow create, update: if isSignedIn() && isValidId(roomId) && stateId == 'current' &&
           isHost(roomId) &&
           incoming().keys().hasAll(['roundId', 'roundNumber', 'locationName', 'spyUids', 'spyNames', 'createdAtMs']) &&
-          incoming().keys().hasOnly(['roundId', 'roundNumber', 'locationName', 'citizenWord', 'spyWord', 'spyUids', 'spyNames', 'createdAtMs']) &&
+          incoming().keys().hasOnly(['roundId', 'roundNumber', 'locationName', 'citizenWord', 'spyWord', 'spyUids', 'spyNames', 'targetValue', 'factPrefix', 'factTwist', 'factSuffix', 'factCategory', 'truthTellerUid', 'truthTellerName', 'createdAtMs']) &&
           incoming().roundId is string && incoming().roundId.size() <= 64 &&
           incoming().roundNumber is int && incoming().roundNumber >= 1 &&
           incoming().locationName is string && incoming().locationName.size() <= 80 &&
-          incoming().spyUids is list && incoming().spyUids.size() >= 1 && incoming().spyUids.size() <= 4 &&
-          incoming().spyNames is list && incoming().spyNames.size() >= 1 && incoming().spyNames.size() <= 4 &&
+          incoming().spyUids is list && incoming().spyUids.size() <= 4 &&
+          incoming().spyNames is list && incoming().spyNames.size() <= 4 &&
+          (!('targetValue' in incoming()) || (incoming().targetValue is int && incoming().targetValue >= 0 && incoming().targetValue <= 100)) &&
+          (!('factPrefix' in incoming()) || (incoming().factPrefix is string && incoming().factPrefix.size() <= 240)) &&
+          (!('factTwist' in incoming()) || (incoming().factTwist is string && incoming().factTwist.size() <= 240)) &&
+          (!('factSuffix' in incoming()) || (incoming().factSuffix is string && incoming().factSuffix.size() <= 140)) &&
+          (!('factCategory' in incoming()) || (incoming().factCategory is string && incoming().factCategory.size() <= 40)) &&
+          (!('truthTellerUid' in incoming()) || (incoming().truthTellerUid is string && incoming().truthTellerUid.size() <= 128)) &&
+          (!('truthTellerName' in incoming()) || (incoming().truthTellerName is string && incoming().truthTellerName.size() <= 40)) &&
           incoming().createdAtMs is int && incoming().createdAtMs > 0;
         allow list, delete: if false;
       }
