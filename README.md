@@ -27,7 +27,7 @@ It includes **Game #1: Yang Bener Yang Mana** (location & role deduction) and **
   - 36 curated Indonesian word pairs across 3 packs (*Kuliner & Jajanan*, *Keseharian & Tongkrongan*, *Hiburan, Alam & Budaya*) plus a Host **Custom Word-Pair Builder**.
 - **Blind-Host Server Game Master & Real-Time Chat:** Round dealing, voting, eliminations, last-chance guesses, and atomic score increments run server-side via Firebase Admin SDK (`serverState/current` is blocked from all browsers), paired with RTDB instant chat & `onDisconnect()` presence.
 - **Dual Deployment Architecture:**
-  - **Production (InfinityFree + Firebase Cloud Functions v2):** Static Next.js export (`output: 'export'` → `./out/`) built with Bun and auto-deployed to InfinityFree via FTP, calling Firebase Cloud Functions v2 (`asia-southeast1`) via `httpsCallable`.
+  - **Production (InfinityFree + Firebase Spark Free Plan):** Static Next.js export (`output: 'export'` → `./out/`) built with Bun and auto-deployed to InfinityFree via FTP using **`client_host` mode** (100% pure browser Firebase Client SDK transactions—zero Cloud Functions and zero billing card required; optional Firebase Blaze Cloud Functions v2 `functions` mode also included).
   - **Local / Dev Preview:** Standard Next.js server mode (`output: 'standalone'`) using local `/api/{spyfall,kata-kata}/*` routes.
 
 ---
@@ -230,7 +230,7 @@ Platform ini menghadirkan **Game #1: Yang Bener Yang Mana** (deduksi lokasi & pe
   - 36 pasangan kata Indonesia dalam 3 paket (*Kuliner & Jajanan*, *Keseharian & Tongkrongan*, *Hiburan, Alam & Budaya*) ditambah **Pembuat Pasangan Kata Kustom**.
 - **Game Master Sisi Server & Obrolan Waktu Nyata:** Pengacakan ronde, voting, eliminasi, validasi tebakan, dan penambahan skor diproses atomik di server via Firebase Admin SDK (`serverState/current` tertutup total dari browser), dipadukan chat & kehadiran `onDisconnect()` RTDB.
 - **Arsitektur Deployment Ganda:**
-  - **Produksi (InfinityFree + Firebase Cloud Functions v2):** Ekspor statis Next.js (`output: 'export'` → `./out/`) dibangun dengan Bun dan diunggah otomatis ke InfinityFree via FTP, memanggil Firebase Cloud Functions v2 (`asia-southeast1`) via `httpsCallable`.
+  - **Produksi (InfinityFree + Firebase Spark Gratis):** Ekspor statis Next.js (`output: 'export'` → `./out/`) dibangun dengan Bun dan diunggah otomatis ke InfinityFree via FTP menggunakan **mode `client_host`** (100% transaksi Firebase Client SDK di browser—tanpa Cloud Functions dan tanpa kartu kredit; mode opsional Firebase Blaze Cloud Functions v2 tetap tersedia).
   - **Pratinjau / Pengembangan Lokal:** Mode server Next.js (`output: 'standalone'`) menggunakan rute lokal `/api/{spyfall,kata-kata}/*`.
 
 ---

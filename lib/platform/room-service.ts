@@ -27,6 +27,10 @@ import type {
   SpyMode,
 } from '@/lib/games/types';
 import { sendRoomChatMessage } from './chat-presence';
+import {
+  executeClientGameMaster,
+  type ClientGameMasterEndpoint,
+} from './client-game-master';
 import { pickAvatarColor, upsertUserProfile } from './user-profile';
 
 export { pickAvatarColor, upsertUserProfile };
@@ -37,15 +41,7 @@ interface SpyfallApiResponse {
   systemMessage?: string | null;
 }
 
-type GameMasterEndpoint =
-  | '/api/spyfall/start'
-  | '/api/spyfall/vote'
-  | '/api/spyfall/guess'
-  | '/api/spyfall/resolve'
-  | '/api/kata-kata/start'
-  | '/api/kata-kata/vote'
-  | '/api/kata-kata/guess'
-  | '/api/kata-kata/resolve';
+type GameMasterEndpoint = ClientGameMasterEndpoint;
 
 const ENDPOINT_TO_FUNCTION: Record<GameMasterEndpoint, string> = {
   '/api/spyfall/start': 'spyfallStart',
@@ -68,7 +64,12 @@ async function callGameMasterApi(
     throw new Error('Sesi pemain belum aktif. Silakan masuk terlebih dahulu.');
   }
 
-  // Production InfinityFree static build uses Firebase Cloud Functions v2 (httpsCallable)
+  // Firebase Spark (100% free, zero Cloud Functions): execute rules engine via client Firestore transactions
+  if (firebaseConfig.gameMasterMode === 'client_host') {
+    return executeClientGameMaster(endpoint, payload);
+  }
+
+  // Optional Firebase Blaze production mode using Cloud Functions v2 (httpsCallable)
   if (firebaseConfig.gameMasterMode === 'functions') {
     if (!functions) {
       throw new Error('Layanan Firebase Cloud Functions belum terkonfigurasi.');
@@ -85,7 +86,13 @@ async function callGameMasterApi(
       }
       return response.data;
     } catch (err) {
+      const code = (err as { code?: unknown })?.code;
       const message = err instanceof Error ? err.message : String(err);
+      if (code === 'functions/internal' || code === 'functions/not-found' || message === 'internal') {
+        throw new Error(
+          `Layanan Cloud Function "${fnName}" belum aktif di Firebase. Pastikan Cloud Functions sudah di-deploy atau gunakan mode client_host (Spark gratis).`,
+        );
+      }
       throw new Error(message || 'Gagal menghubungi Firebase Cloud Functions.');
     }
   }

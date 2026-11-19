@@ -183,7 +183,7 @@ jobs:
         env:
           NODE_ENV: production
           STATIC_EXPORT: 'true'
-          NEXT_PUBLIC_GAME_MASTER_MODE: functions
+          NEXT_PUBLIC_GAME_MASTER_MODE: client_host
           NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION: asia-southeast1
         run: bun run build
 

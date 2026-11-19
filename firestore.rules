@@ -109,16 +109,29 @@ service cloud.firestore {
         (!('eliminatedUids' in incoming()) || incoming().eliminatedUids.size() == 0) &&
         (!('eliminationLog' in incoming()) || incoming().eliminationLog.size() == 0) &&
         existsAfter(/databases/$(database)/documents/roomCodes/$(incoming().code));
-      // Clients can only update Host settings in lobby/round_end or transfer hostUid;
-      // All round starts, votes, eliminations, guesses, and score mutations are executed server-side via Admin SDK.
+      // Host updates lobby settings, transfers hostUid, starts rounds, cancels votes, or returns to lobby;
+      // Room members can progress active rounds (voting, eliminations, guesses, round_end) in Firebase Spark client_host mode.
       allow update: if isSignedIn() && isValidId(roomId) && isValidRoom(incoming(), roomId) &&
-        existing().hostUid == request.auth.uid &&
         incoming().id == existing().id && incoming().code == existing().code &&
         incoming().gameType == existing().gameType && incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time && (
-          (existing().status in ['lobby', 'round_end'] &&
-            incoming().diff(existing()).affectedKeys().hasOnly(['roundDurationSec', 'spyMode', 'enabledPacks', 'customLocations', 'customWordPairs', 'updatedAt'])) ||
-          incoming().diff(existing()).affectedKeys().hasOnly(['hostUid', 'updatedAt'])
+          (existing().hostUid == request.auth.uid && (
+            (existing().status in ['lobby', 'round_end'] &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['roundDurationSec', 'spyMode', 'enabledPacks', 'customLocations', 'customWordPairs', 'updatedAt'])) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['hostUid', 'updatedAt']) ||
+            (existing().status in ['lobby', 'round_end'] && incoming().status == 'playing' &&
+              incoming().roundNumber == existing().roundNumber + 1 &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'roundNumber', 'currentRoundId', 'roundEndsAtMs', 'firstSpeakerUid', 'selectedLocationNames', 'eliminatedUids', 'eliminationLog', 'activeVote', 'pendingSpyGuess', 'updatedAt'])) ||
+            (incoming().status == 'lobby' &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'activeVote', 'pendingSpyGuess', 'eliminatedUids', 'eliminationLog', 'updatedAt'])) ||
+            (existing().status in ['voting', 'spy_guess'] && incoming().status == 'playing' &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'activeVote', 'pendingSpyGuess', 'updatedAt']))
+          )) ||
+          (isMember(roomId) && existing().status in ['playing', 'voting', 'spy_guess'] &&
+            incoming().hostUid == existing().hostUid &&
+            incoming().roundNumber == existing().roundNumber &&
+            incoming().currentRoundId == existing().currentRoundId &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'activeVote', 'pendingSpyGuess', 'eliminatedUids', 'eliminationLog', 'lastRoundResult', 'updatedAt']))
         );
       allow delete: if isSignedIn() && isValidId(roomId) && existing().hostUid == request.auth.uid;
 
@@ -136,7 +149,11 @@ service cloud.firestore {
           isValidPlayer(incoming(), roomId, playerId) &&
           incoming().joinedAt == existing().joinedAt && incoming().updatedAt == request.time && (
             (isHost(roomId) && incoming().diff(existing()).affectedKeys().hasOnly(['isHost', 'updatedAt'])) ||
-            (request.auth.uid == playerId && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'avatarColor', 'isReady', 'updatedAt']))
+            (request.auth.uid == playerId && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'avatarColor', 'isReady', 'updatedAt'])) ||
+            (isMember(roomId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['score', 'updatedAt']) &&
+              incoming().score > existing().score &&
+              incoming().score <= existing().score + 6)
           );
         allow delete: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
           (request.auth.uid == playerId || isHost(roomId));
@@ -145,11 +162,28 @@ service cloud.firestore {
       match /rounds/{roundId}/secrets/{playerId} {
         allow get: if isSignedIn() && isValidId(roomId) && isValidId(roundId) && isValidId(playerId) &&
           isMember(roomId) && (request.auth.uid == playerId || getRoom(roomId).status == 'round_end');
-        allow list, write: if false;
+        allow create: if isSignedIn() && isValidId(roomId) && isValidId(roundId) && isValidId(playerId) &&
+          isHost(roomId) &&
+          incoming().uid == playerId &&
+          incoming().roundId == roundId &&
+          incoming().gameType in ['spyfall', 'kata_kata'] &&
+          incoming().createdAt == request.time;
+        allow list, update, delete: if false;
       }
 
       match /serverState/{stateId} {
-        allow read, write: if false;
+        allow get: if isSignedIn() && isValidId(roomId) && stateId == 'current' && isMember(roomId);
+        allow create, update: if isSignedIn() && isValidId(roomId) && stateId == 'current' &&
+          isHost(roomId) &&
+          incoming().keys().hasAll(['roundId', 'roundNumber', 'locationName', 'spyUids', 'spyNames', 'createdAtMs']) &&
+          incoming().keys().hasOnly(['roundId', 'roundNumber', 'locationName', 'citizenWord', 'spyWord', 'spyUids', 'spyNames', 'createdAtMs']) &&
+          incoming().roundId is string && incoming().roundId.size() <= 64 &&
+          incoming().roundNumber is int && incoming().roundNumber >= 1 &&
+          incoming().locationName is string && incoming().locationName.size() <= 80 &&
+          incoming().spyUids is list && incoming().spyUids.size() >= 1 && incoming().spyUids.size() <= 4 &&
+          incoming().spyNames is list && incoming().spyNames.size() >= 1 && incoming().spyNames.size() <= 4 &&
+          incoming().createdAtMs is int && incoming().createdAtMs > 0;
+        allow list, delete: if false;
       }
     }
   }
