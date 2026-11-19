@@ -1,6 +1,6 @@
 {
   "name": "Yuk Main",
-  "description": "Platform permainan pesta multipemain berbahasa Indonesia dengan Game #1: Spyfall, obrolan waktu nyata, pengacakan lokasi dinamis, dan pembuat peran kustom.",
+  "description": "Platform permainan pesta multipemain berbahasa Indonesia: Game #1 Yang Bener Yang Mana & Game #2 Kata-Kata Hari Ini dengan obrolan waktu nyata dan pembuat konten kustom.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

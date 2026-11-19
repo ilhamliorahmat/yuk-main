@@ -11,6 +11,9 @@ interface RoomChatPanelProps {
   myUid: string;
   myName: string;
   messages: ChatMessage[];
+  quickPrompts?: string[];
+  promptLabel?: string;
+  emptyPlaceholder?: string;
 }
 
 export function RoomChatPanel({
@@ -18,6 +21,9 @@ export function RoomChatPanel({
   myUid,
   myName,
   messages,
+  quickPrompts = QUICK_QUESTIONS_ID,
+  promptLabel = 'Ide Tanya',
+  emptyPlaceholder = 'Belum ada pesan. Mulailah bertanya atau berdiskusi untuk membongkar penyamar!',
 }: RoomChatPanelProps) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -65,17 +71,17 @@ export function RoomChatPanel({
           className="min-h-[36px] px-2.5 rounded-lg bg-[#0B1018] border border-slate-800 hover:border-slate-700 text-xs text-slate-300 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
         >
           <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
-          <span>Ide Tanya</span>
+          <span>{promptLabel}</span>
         </button>
       </div>
 
       {showPrompts && (
         <div className="p-3 bg-[#0B1018] border-b border-slate-800 space-y-2 max-h-44 overflow-y-auto shrink-0">
           <p className="text-[11px] font-medium text-slate-400">
-            Ketuk pertanyaan untuk langsung dimasukkan ke kolom ketik:
+            Ketuk contoh kalimat untuk langsung dimasukkan ke kolom ketik:
           </p>
           <div className="space-y-1.5">
-            {QUICK_QUESTIONS_ID.map((q, idx) => (
+            {quickPrompts.map((q, idx) => (
               <button
                 key={idx}
                 type="button"
@@ -95,7 +101,7 @@ export function RoomChatPanel({
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.length === 0 ? (
           <div className="h-full flex items-center justify-center text-center text-xs text-slate-500 px-6">
-            Belum ada pesan. Mulailah bertanya atau berdiskusi untuk menjebak Mata-Mata!
+            {emptyPlaceholder}
           </div>
         ) : (
           messages.map((msg) => {

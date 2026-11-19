@@ -2,7 +2,7 @@
 
 import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { SpyfallRoomView } from '@/components/games/spyfall/SpyfallRoomView';
+import { ActiveRoomContainer } from '@/components/games/ActiveRoomContainer';
 import { AuthDialog } from '@/components/hub/AuthDialog';
 import { YukMainHub } from '@/components/hub/YukMainHub';
 import { useAuth } from '@/hooks/use-auth';
@@ -85,7 +85,7 @@ function YukMainAppContent() {
 
   if (activeRoomId && user && profile) {
     return (
-      <SpyfallRoomView
+      <ActiveRoomContainer
         roomId={activeRoomId}
         myUid={user.uid}
         myName={profile.displayName}

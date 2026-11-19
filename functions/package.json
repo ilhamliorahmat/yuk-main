@@ -1,13 +1,13 @@
 {
   "name": "yuk-main-functions",
-  "description": "Firebase Cloud Functions v2 Backend Game Master for Yuk Main (Spyfall Indonesia)",
+  "description": "Firebase Cloud Functions v2 Backend Game Master for Yuk Main (Yang Bener Yang Mana & Kata-Kata Hari Ini)",
   "private": true,
   "main": "lib/index.js",
   "engines": {
     "node": "22"
   },
   "scripts": {
-    "sync": "node -e \"const fs=require('fs');const path=require('path');const srcRoot=path.resolve(__dirname,'..','lib','games');const dstRoot=path.resolve(__dirname,'src','shared');if(fs.existsSync(srcRoot)){fs.mkdirSync(path.join(dstRoot,'spyfall'),{recursive:true});fs.copyFileSync(path.join(srcRoot,'types.ts'),path.join(dstRoot,'types.ts'));fs.copyFileSync(path.join(srcRoot,'spyfall','locations-id.ts'),path.join(dstRoot,'spyfall','locations-id.ts'));fs.copyFileSync(path.join(srcRoot,'spyfall','engine.ts'),path.join(dstRoot,'spyfall','engine.ts'));}\"",
+    "sync": "node -e \"const fs=require('fs');const path=require('path');const srcRoot=path.resolve(__dirname,'..','lib','games');const dstRoot=path.resolve(__dirname,'src','shared');if(fs.existsSync(srcRoot)){fs.mkdirSync(path.join(dstRoot,'spyfall'),{recursive:true});fs.mkdirSync(path.join(dstRoot,'kata-kata'),{recursive:true});fs.copyFileSync(path.join(srcRoot,'types.ts'),path.join(dstRoot,'types.ts'));fs.copyFileSync(path.join(srcRoot,'spyfall','locations-id.ts'),path.join(dstRoot,'spyfall','locations-id.ts'));fs.copyFileSync(path.join(srcRoot,'spyfall','engine.ts'),path.join(dstRoot,'spyfall','engine.ts'));fs.copyFileSync(path.join(srcRoot,'kata-kata','words-id.ts'),path.join(dstRoot,'kata-kata','words-id.ts'));fs.copyFileSync(path.join(srcRoot,'kata-kata','engine.ts'),path.join(dstRoot,'kata-kata','engine.ts'));}\"",
     "build": "npm run sync && tsc",
     "deploy": "firebase deploy --only functions"
   },

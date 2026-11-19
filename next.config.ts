@@ -39,6 +39,11 @@ const nextConfig: NextConfig = {
       }),
   transpilePackages: ['motion'],
   webpack: (config, { dev }) => {
+    if (dev) {
+      // Prevent Next.js 15 Webpack dev cache from serving mismatched module factory IDs
+      // across clean restarts (Cannot read properties of undefined reading 'call').
+      config.cache = false;
+    }
     // HMR is disabled in AI Studio via DISABLE_HMR env var.
     // Do not modify—file watching is disabled to prevent flickering during agent edits.
     if (dev && process.env.DISABLE_HMR === 'true') {

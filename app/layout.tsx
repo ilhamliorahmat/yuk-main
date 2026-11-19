@@ -4,20 +4,20 @@ import { AuthProvider } from '@/hooks/use-auth';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Yuk Main — Platform Game Pesta & Spyfall Indonesia',
+  title: 'Yuk Main — Platform Game Pesta Indonesia',
   description:
-    'Platform permainan pesta multipemain berbahasa Indonesia dengan Game #1: Spyfall, obrolan waktu nyata, pengacakan lokasi dinamis, dan pembuat peran kustom.',
+    'Platform permainan pesta multipemain berbahasa Indonesia: Game #1 Yang Bener Yang Mana & Game #2 Kata-Kata Hari Ini, lengkap dengan obrolan waktu nyata dan pembuat konten kustom.',
   openGraph: {
-    title: 'Yuk Main — Platform Game Pesta & Spyfall Indonesia',
+    title: 'Yuk Main — Platform Game Pesta Indonesia',
     description:
-      'Mainkan Spyfall Indonesia bersama teman secara waktu nyata langsung dari peramban ponsel atau desktop.',
+      'Mainkan Yang Bener Yang Mana dan Kata-Kata Hari Ini bersama teman secara waktu nyata langsung dari ponsel atau desktop.',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Yuk Main — Platform Game Pesta & Spyfall Indonesia',
+    title: 'Yuk Main — Platform Game Pesta Indonesia',
     description:
-      'Mainkan Spyfall Indonesia bersama teman secara waktu nyata langsung dari peramban ponsel atau desktop.',
+      'Mainkan Yang Bener Yang Mana dan Kata-Kata Hari Ini bersama teman secara waktu nyata langsung dari ponsel atau desktop.',
   },
 };
 

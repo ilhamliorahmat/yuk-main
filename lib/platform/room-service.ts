@@ -1,6 +1,5 @@
 'use client';
 
-import type { User } from 'firebase/auth';
 import {
   collection,
   deleteDoc,
@@ -13,39 +12,24 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { getFirebaseServices } from '../firebase/client';
-import { firebaseConfig } from '../firebase/config';
-import { handleFirestoreError, OperationType } from '../firebase/errors';
-import { generateRoomCode, sanitizeCustomLocation } from '../games/spyfall/engine';
+import { getFirebaseServices } from '@/lib/firebase/client';
+import { firebaseConfig } from '@/lib/firebase/config';
+import { handleFirestoreError, OperationType } from '@/lib/firebase/errors';
+import { sanitizeCustomWordPair } from '@/lib/games/kata-kata/engine';
+import { generateRoomCode, sanitizeCustomLocation } from '@/lib/games/spyfall/engine';
 import type {
   CustomLocation,
+  CustomWordPair,
   GameType,
   PlayerSecretDoc,
   RoomDoc,
   RoomPlayerDoc,
   SpyMode,
-  UserProfileDoc,
-} from '../games/types';
+} from '@/lib/games/types';
 import { sendRoomChatMessage } from './chat-presence';
+import { pickAvatarColor, upsertUserProfile } from './user-profile';
 
-const AVATAR_COLORS = [
-  '#DC2626',
-  '#D97706',
-  '#059669',
-  '#0284C7',
-  '#4F46E5',
-  '#9333EA',
-  '#DB2777',
-  '#0D9488',
-];
-
-export function pickAvatarColor(seed: string): string {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) {
-    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-  }
-  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
-}
+export { pickAvatarColor, upsertUserProfile };
 
 interface SpyfallApiResponse {
   ok: boolean;
@@ -53,21 +37,29 @@ interface SpyfallApiResponse {
   systemMessage?: string | null;
 }
 
-type SpyfallEndpoint =
+type GameMasterEndpoint =
   | '/api/spyfall/start'
   | '/api/spyfall/vote'
   | '/api/spyfall/guess'
-  | '/api/spyfall/resolve';
+  | '/api/spyfall/resolve'
+  | '/api/kata-kata/start'
+  | '/api/kata-kata/vote'
+  | '/api/kata-kata/guess'
+  | '/api/kata-kata/resolve';
 
-const ENDPOINT_TO_FUNCTION: Record<SpyfallEndpoint, string> = {
+const ENDPOINT_TO_FUNCTION: Record<GameMasterEndpoint, string> = {
   '/api/spyfall/start': 'spyfallStart',
   '/api/spyfall/vote': 'spyfallVote',
   '/api/spyfall/guess': 'spyfallGuess',
   '/api/spyfall/resolve': 'spyfallResolve',
+  '/api/kata-kata/start': 'kataKataStart',
+  '/api/kata-kata/vote': 'kataKataVote',
+  '/api/kata-kata/guess': 'kataKataGuess',
+  '/api/kata-kata/resolve': 'kataKataResolve',
 };
 
-async function callSpyfallApi(
-  endpoint: SpyfallEndpoint,
+async function callGameMasterApi(
+  endpoint: GameMasterEndpoint,
   payload: Record<string, unknown>,
 ): Promise<SpyfallApiResponse> {
   const { auth, functions } = getFirebaseServices();
@@ -133,56 +125,6 @@ async function callSpyfallApi(
   return data;
 }
 
-export async function upsertUserProfile(
-  user: User,
-  preferredName?: string,
-): Promise<UserProfileDoc> {
-  const { auth, db } = getFirebaseServices();
-  if (!db) throw new Error('Firebase belum terkonfigurasi.');
-
-  const userRef = doc(db, 'users', user.uid);
-  const path = `users/${user.uid}`;
-  const cleanName =
-    (preferredName ?? user.displayName ?? 'Pemain').trim().slice(0, 40) || 'Pemain';
-  const avatarColor = pickAvatarColor(user.uid);
-
-  try {
-    return await runTransaction(db, async (tx) => {
-      const snap = await tx.get(userRef);
-      if (!snap.exists()) {
-        const payload: UserProfileDoc = {
-          uid: user.uid,
-          displayName: cleanName,
-          avatarColor,
-          isAnonymous: user.isAnonymous,
-          gamesPlayed: 0,
-          wins: 0,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        };
-        tx.set(userRef, payload);
-        return payload;
-      }
-
-      const existing = snap.data() as UserProfileDoc;
-      if (
-        preferredName &&
-        preferredName.trim() &&
-        preferredName.trim() !== existing.displayName
-      ) {
-        tx.update(userRef, {
-          displayName: cleanName,
-          updatedAt: serverTimestamp(),
-        });
-        return { ...existing, displayName: cleanName };
-      }
-      return existing;
-    });
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path, auth);
-  }
-}
-
 export async function createRoom(params: {
   hostUid: string;
   hostName: string;
@@ -208,6 +150,9 @@ export async function createRoom(params: {
   const codeRef = doc(db, 'roomCodes', code);
   const playerRef = doc(db, 'rooms', roomId, 'players', params.hostUid);
 
+  const defaultPacks =
+    gameType === 'kata_kata' ? ['kuliner', 'keseharian'] : ['nusantara', 'klasik'];
+
   const batch = writeBatch(db);
   batch.set(roomRef, {
     id: roomId,
@@ -221,9 +166,12 @@ export async function createRoom(params: {
     roundEndsAtMs: 0,
     firstSpeakerUid: '',
     spyMode: 'single',
-    enabledPacks: ['nusantara', 'klasik'],
+    enabledPacks: defaultPacks,
     selectedLocationNames: [],
     customLocations: [],
+    customWordPairs: [],
+    eliminatedUids: [],
+    eliminationLog: [],
     activeVote: null,
     pendingSpyGuess: null,
     lastRoundResult: null,
@@ -458,6 +406,42 @@ export async function updateSpyfallSettings(params: {
   }
 }
 
+export async function updateKataKataSettings(params: {
+  roomId: string;
+  roundDurationSec: number;
+  spyMode: SpyMode;
+  enabledPacks: string[];
+  customWordPairs: CustomWordPair[];
+}): Promise<void> {
+  const { auth, db } = getFirebaseServices();
+  if (!db) throw new Error('Firebase belum terkonfigurasi.');
+
+  const clampedDuration = Math.min(1200, Math.max(120, Math.round(params.roundDurationSec)));
+  const cleanPacks = params.enabledPacks.slice(0, 10);
+  const cleanCustom = params.customWordPairs
+    .map((pair) => sanitizeCustomWordPair(pair))
+    .filter((pair): pair is CustomWordPair => pair !== null)
+    .slice(0, 30);
+
+  if (cleanPacks.length === 0 && cleanCustom.length === 0) {
+    throw new Error('Pilih minimal 1 paket kata atau buat pasangan kata kustom.');
+  }
+
+  const effectivePacks = cleanPacks.length > 0 ? cleanPacks : ['kuliner'];
+
+  try {
+    await updateDoc(doc(db, 'rooms', params.roomId), {
+      roundDurationSec: clampedDuration,
+      spyMode: params.spyMode,
+      enabledPacks: effectivePacks,
+      customWordPairs: cleanCustom,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `rooms/${params.roomId}`, auth);
+  }
+}
+
 export async function togglePlayerReady(params: {
   roomId: string;
   uid: string;
@@ -481,14 +465,14 @@ export async function togglePlayerReady(params: {
   }
 }
 
-// --- Server Game Master Actions (Next.js Backend API + Firebase Admin SDK) ---
+// --- Server Game Master Actions: Game #1 (Yang Bener Yang Mana / spyfall) ---
 
 export async function startSpyfallRound(params: {
   roomId: string;
   actorUid: string;
   actorName: string;
 }): Promise<void> {
-  const data = await callSpyfallApi('/api/spyfall/start', {
+  const data = await callGameMasterApi('/api/spyfall/start', {
     roomId: params.roomId,
   });
 
@@ -510,7 +494,7 @@ export async function initiateAccusationVote(params: {
   targetUid: string;
   targetName?: string;
 }): Promise<void> {
-  const data = await callSpyfallApi('/api/spyfall/vote', {
+  const data = await callGameMasterApi('/api/spyfall/vote', {
     roomId: params.roomId,
     action: 'initiate',
     targetUid: params.targetUid,
@@ -533,7 +517,7 @@ export async function castAccusationVote(params: {
   voterName: string;
   choice: 'yes' | 'no';
 }): Promise<void> {
-  const data = await callSpyfallApi('/api/spyfall/vote', {
+  const data = await callGameMasterApi('/api/spyfall/vote', {
     roomId: params.roomId,
     action: 'cast',
     choice: params.choice,
@@ -555,7 +539,7 @@ export async function cancelActiveVoteOrSpyGuess(params: {
   hostUid: string;
   hostName: string;
 }): Promise<void> {
-  const data = await callSpyfallApi('/api/spyfall/vote', {
+  const data = await callGameMasterApi('/api/spyfall/vote', {
     roomId: params.roomId,
     action: 'cancel',
   });
@@ -577,7 +561,7 @@ export async function submitSpyLocationGuess(params: {
   spyName: string;
   guessedLocation: string;
 }): Promise<void> {
-  const data = await callSpyfallApi('/api/spyfall/guess', {
+  const data = await callGameMasterApi('/api/spyfall/guess', {
     roomId: params.roomId,
     guessedLocation: params.guessedLocation,
   });
@@ -598,7 +582,7 @@ export async function resolveRoundTimeout(params: {
   actorUid: string;
   actorName: string;
 }): Promise<void> {
-  const data = await callSpyfallApi('/api/spyfall/resolve', {
+  const data = await callGameMasterApi('/api/spyfall/resolve', {
     roomId: params.roomId,
     action: 'timeout',
   });
@@ -619,7 +603,162 @@ export async function returnRoomToLobby(params: {
   hostUid: string;
   hostName: string;
 }): Promise<void> {
-  const data = await callSpyfallApi('/api/spyfall/resolve', {
+  const data = await callGameMasterApi('/api/spyfall/resolve', {
+    roomId: params.roomId,
+    action: 'return_lobby',
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.hostUid,
+      senderName: params.hostName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+// --- Server Game Master Actions: Game #2 (Kata-Kata Hari Ini / kata_kata) ---
+
+export async function startKataKataRound(params: {
+  roomId: string;
+  actorUid: string;
+  actorName: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/kata-kata/start', {
+    roomId: params.roomId,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.actorUid,
+      senderName: params.actorName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function initiateKataKataVote(params: {
+  roomId: string;
+  initiatorUid: string;
+  initiatorName: string;
+  targetUid: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/kata-kata/vote', {
+    roomId: params.roomId,
+    action: 'initiate',
+    targetUid: params.targetUid,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.initiatorUid,
+      senderName: params.initiatorName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function castKataKataVote(params: {
+  roomId: string;
+  voterUid: string;
+  voterName: string;
+  choice: 'yes' | 'no';
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/kata-kata/vote', {
+    roomId: params.roomId,
+    action: 'cast',
+    choice: params.choice,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.voterUid,
+      senderName: params.voterName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function cancelKataKataVote(params: {
+  roomId: string;
+  hostUid: string;
+  hostName: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/kata-kata/vote', {
+    roomId: params.roomId,
+    action: 'cancel',
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.hostUid,
+      senderName: params.hostName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function submitKataKataLastChanceGuess(params: {
+  roomId: string;
+  spyUid: string;
+  spyName: string;
+  guessedWord?: string;
+  surrender?: boolean;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/kata-kata/guess', {
+    roomId: params.roomId,
+    guessedWord: params.guessedWord ?? '',
+    surrender: Boolean(params.surrender),
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.spyUid,
+      senderName: params.spyName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function resolveKataKataTimeout(params: {
+  roomId: string;
+  actorUid: string;
+  actorName: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/kata-kata/resolve', {
+    roomId: params.roomId,
+    action: 'timeout',
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.actorUid,
+      senderName: params.actorName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function returnKataKataToLobby(params: {
+  roomId: string;
+  hostUid: string;
+  hostName: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/kata-kata/resolve', {
     roomId: params.roomId,
     action: 'return_lobby',
   });

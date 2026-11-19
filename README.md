@@ -1,6 +1,6 @@
 # Yuk Main — Indonesian Multiplayer Party Game Hub
 
-> **Current Release:** `1.2.1` (`Version.Iteration.build`)  
+> **Current Release:** `2.0.0` (`Version.Iteration.build`)  
 > **License:** PolyForm Noncommercial License 1.0.0 — Copyright © 2026 **Ilham Liorahmat**
 
 [Read in English](#english) · [Baca dalam Bahasa Indonesia](#bahasa-indonesia)
@@ -13,18 +13,22 @@
 
 **Yuk Main** is an Indonesian-localized, mobile-first multiplayer party game hub built with **Next.js 15 (App Router)**, **React 19**, **Tailwind CSS v4**, and **Firebase** (Authentication, Cloud Firestore, Realtime Database, and Cloud Functions v2).
 
-It launches with **Game #1: Spyfall Indonesia**, featuring a **Server-Side Blind-Host Game Master** (so even the room host plays blindly like any other player), real-time room chat, automatic online/offline presence, 26+ Indonesian locations across 3 packs, a custom location & role builder, and automated static deployment to **InfinityFree**.
+It includes **Game #1: Yang Bener Yang Mana** (location & role deduction) and **Game #2: Kata-Kata Hari Ini** (true Blind-Spy word deduction with Multi-Spy & Last-Chance Guess), powered by a **Server-Side Blind-Host Game Master**, real-time RTDB chat & presence, custom content builders, and automated static deployment to **InfinityFree**.
 
 ### Key Features
-- **Modular Party Game Registry:** Clean game registry (`lib/games/registry.ts`) ready to expand with Game #2, Game #3, and beyond.
-- **Game #1 — Spyfall Indonesia:**
-  - 26 curated Indonesian locations across 3 packs (*Nusantara & Kota*, *Klasik & Profesi*, *Seru & Fantasi*) plus a Host custom location & role creator.
-  - **Privacy Shield Role Card** (tap to peek/hide on mobile).
-  - **Blind-Host Server Game Master:** Round dealing, accusation voting, Spy guess validation, timer resolution, and score increments execute atomically on the server via Firebase Admin SDK (`serverState/current` is completely blocked from all browsers).
-  - **Real-Time Chat & Presence:** Instant chat and `onDisconnect()` online indicators via Firebase Realtime Database (RTDB).
+- **Modular Party Game Registry:** Clean game registry (`lib/games/registry.ts`) and single-subscription `ActiveRoomContainer` routing rooms by `gameType`.
+- **Game #1 — Yang Bener Yang Mana** *(internal ID: `spyfall`)*:
+  - 26 curated Indonesian locations across 3 packs (*Nusantara & Kota*, *Klasik & Profesi*, *Seru & Fantasi*) plus Host custom location & role creator.
+  - **Privacy Shield Role Card** (tap to peek/hide on mobile) and interactive location deduction checklist.
+- **Game #2 — Kata-Kata Hari Ini** *(internal ID: `kata_kata`)*:
+  - **True Blind-Spy Secrecy:** Even the Penyusup does not know they are a Penyusup—every player receives a secret word on an identical card, and `/secrets/{playerId}` strictly omits `isSpy` so even browser DevTools inspection reveals zero role hints.
+  - **Multi-Spy Mechanism:** Supports `1 Penyusup`, `2 Penyusup` (auto-enabled at ≥5 players), or `Acak (1–2)` with server-side fairness clamping.
+  - **Multi-Round Elimination & Last-Chance Guess:** Accusation voting eliminates players one by one (revealing Warga/Penyusup status); when the final Penyusup is caught, they get **1 Last-Chance Guess** to type **Kata Warga** and steal the win!
+  - 36 curated Indonesian word pairs across 3 packs (*Kuliner & Jajanan*, *Keseharian & Tongkrongan*, *Hiburan, Alam & Budaya*) plus a Host **Custom Word-Pair Builder**.
+- **Blind-Host Server Game Master & Real-Time Chat:** Round dealing, voting, eliminations, last-chance guesses, and atomic score increments run server-side via Firebase Admin SDK (`serverState/current` is blocked from all browsers), paired with RTDB instant chat & `onDisconnect()` presence.
 - **Dual Deployment Architecture:**
-  - **Production (InfinityFree + Firebase Cloud Functions v2):** Static Next.js export (`output: 'export'` → `./out/`) auto-deployed to InfinityFree via FTPS, calling Firebase Cloud Functions v2 (`asia-southeast1`) via `httpsCallable`.
-  - **Local / Dev Preview:** Standard Next.js server mode (`output: 'standalone'`) using local `/api/spyfall/*` routes.
+  - **Production (InfinityFree + Firebase Cloud Functions v2):** Static Next.js export (`output: 'export'` → `./out/`) built with Bun and auto-deployed to InfinityFree via FTP, calling Firebase Cloud Functions v2 (`asia-southeast1`) via `httpsCallable`.
+  - **Local / Dev Preview:** Standard Next.js server mode (`output: 'standalone'`) using local `/api/{spyfall,kata-kata}/*` routes.
 
 ---
 
@@ -108,10 +112,10 @@ Yuk Main splits persistent structured game state (**Cloud Firestore**) from high
 | :--- | :--- | :--- | :--- |
 | `/users/{userId}` | `uid`, `displayName`, `avatarColor`, `isAnonymous`, `gamesPlayed`, `wins`, `createdAt`, `updatedAt` | Owner `get`, `create`, `update` (no `list` / `delete`) | Full access |
 | `/roomCodes/{code}` | `code` (6-char uppercase), `roomId`, `hostUid`, `gameType`, `createdAt` | Signed-in exact `get`; Host `create`/`delete` (no `list`) | Full access |
-| `/rooms/{roomId}` | `id`, `code`, `gameType`, `hostUid`, `status` (`lobby \| playing \| voting \| spy_guess \| round_end`), `roundNumber`, `currentRoundId`, `roundDurationSec`, `roundEndsAtMs`, `firstSpeakerUid`, `spyMode`, `enabledPacks`, `selectedLocationNames`, `customLocations`, `activeVote`, `pendingSpyGuess`, `lastRoundResult`, `createdAt`, `updatedAt` | Members/lobby `get`; Host `create`, lobby-settings `update`, `hostUid` transfer, `delete` | Transitions round status, votes, timers & `lastRoundResult` |
+| `/rooms/{roomId}` | `id`, `code`, `gameType` (`spyfall \| kata_kata`), `hostUid`, `status` (`lobby \| playing \| voting \| spy_guess \| round_end`), `roundNumber`, `currentRoundId`, `roundDurationSec`, `roundEndsAtMs`, `firstSpeakerUid`, `spyMode`, `enabledPacks`, `selectedLocationNames`, `customLocations`, `customWordPairs`, `eliminatedUids`, `eliminationLog`, `activeVote`, `pendingSpyGuess`, `lastRoundResult`, `createdAt`, `updatedAt` | Members/lobby `get`; Host `create`, lobby-settings `update`, `hostUid` transfer, `delete` | Transitions round status, votes, eliminations, timers & `lastRoundResult` |
 | `/rooms/{roomId}/players/{playerId}` | `uid`, `roomId`, `displayName`, `avatarColor`, `isHost`, `score`, `isReady`, `joinedAt`, `updatedAt` | Members `get`/`list` (scoped by `roomId`); self `create` (`score: 0`) & profile `update`; **client `score` writes blocked** | Atomic `FieldValue.increment` score updates |
-| `/rooms/{roomId}/rounds/{roundId}/secrets/{playerId}` | `uid`, `roundId`, `gameType`, `isSpy`, `locationName` (`null` for Spy), `roleName`, `createdAt` | Owning player `get` while active; room members `get` when `status == 'round_end'`; **`list` & `write` blocked** | Writes all per-player secret cards during deal |
-| `/rooms/{roomId}/serverState/current` | `roundId`, `roundNumber`, `locationName`, `spyUids[]`, `spyNames[]`, `createdAtMs` | **Completely blocked (`allow read, write: if false`)** | Stores true location & Spy identities for blind-Host verification |
+| `/rooms/{roomId}/rounds/{roundId}/secrets/{playerId}` | `uid`, `roundId`, `gameType`, (`isSpy`, `locationName`, `roleName` for Game #1) OR (`secretWord` only for Game #2 — **`isSpy` omitted**), `createdAt` | Owning player `get` while active; room members `get` when `status == 'round_end'`; **`list` & `write` blocked** | Writes all per-player secret cards during deal |
+| `/rooms/{roomId}/serverState/current` | `roundId`, `roundNumber`, `locationName`, `citizenWord`, `spyWord`, `spyUids[]`, `spyNames[]`, `createdAtMs` | **Completely blocked (`allow read, write: if false`)** | Stores true location/words & Spy identities for blind-Host verification |
 
 #### 2. Firebase Realtime Database (RTDB) Paths
 
@@ -182,12 +186,13 @@ Yuk Main uses a 3-segment versioning format: **`Version.Iteration.build`**
 
 #### Changelog
 
+- **`2.0.0`** — Major platform expansion: rebranded Game #1 to **Yang Bener Yang Mana**, launched **Game #2: Kata-Kata Hari Ini** (true Blind-Spy word deduction with zero `isSpy` leakage, Multi-Spy `1 / 2 / Acak` mode, 36 Indonesian word pairs across 3 packs + custom pair builder, multi-round elimination voting, and final-Penyusup Last-Chance Guess), added `kataKataStart`/`Vote`/`Guess`/`Resolve` Cloud Functions v2 & preview routes, updated `firestore.rules`, and switched CI workflows to Bun (`bun.lock`) + InfinityFree FTP defaults.
 - **`1.2.1`** — Unified GitHub Actions secret (`YUK_MAIN_DEPLOY_SECRETS`) with automatic `::add-mask::` protection, configurable `ftp.serverDir`, optional `site.basePath` subfolder support, bilingual `README.md`, `CONTRIBUTING.md`, and PolyForm Noncommercial `LICENSE`.
 - **`1.2.0`** — Added InfinityFree static export pipeline (`STATIC_EXPORT=true`, `public/.htaccess`), GitHub Actions FTPS auto-deployment, and Firebase Cloud Functions v2 Game Master (`asia-southeast1`: `spyfallStart`, `spyfallVote`, `spyfallGuess`, `spyfallResolve`) with `httpsCallable` client routing.
 - **`1.1.2`** — Hardened Next.js standalone production builds (`app/not-found.tsx`, `serverExternalPackages: ['firebase-admin']`) and fixed proxy `HTTP 405` vote errors via `X-Firebase-Token` header + automatic redirect retry.
 - **`1.1.1`** — Fixed Firestore `players` list query rule compliance (`where('roomId', '==', roomId)`), clean listener teardown on room leave, Anonymous/Google Auth error reporting, and `AuthDialog` auto-close.
 - **`1.1.0`** — Upgraded to **Server-Side Blind-Host Game Master** (`firebase-admin`, server-only `/serverState/current`, write-locked `secrets` and `score` fields in `firestore.rules`).
-- **`1.0.0`** — Initial launch of **Yuk Main** hub and **Game #1: Spyfall Indonesia** with 26 Indonesian locations across 3 packs, custom location/role builder, 9 Vitest engine specs, Privacy Shield role card, and Hybrid Cloud Firestore + RTDB chat & presence.
+- **`1.0.0`** — Initial launch of **Yuk Main** hub and Game #1 (now **Yang Bener Yang Mana**) with 26 Indonesian locations across 3 packs, custom location/role builder, 9 Vitest engine specs, Privacy Shield role card, and Hybrid Cloud Firestore + RTDB chat & presence.
 
 ---
 
@@ -205,18 +210,22 @@ Yuk Main uses a 3-segment versioning format: **`Version.Iteration.build`**
 
 **Yuk Main** adalah platform hub permainan pesta multipemain berbahasa Indonesia (*mobile-first*) yang dibangun dengan **Next.js 15 (App Router)**, **React 19**, **Tailwind CSS v4**, dan **Firebase** (Authentication, Cloud Firestore, Realtime Database, dan Cloud Functions v2).
 
-Platform ini dibuka dengan **Game #1: Spyfall Indonesia**, lengkap dengan **Server-Side Blind-Host Game Master** (Host ruang bermain sepenuhnya buta layaknya pemain biasa), obrolan ruang waktu nyata, status kehadiran online/offline otomatis, 26+ lokasi khas Indonesia dalam 3 paket, pembuat lokasi & peran kustom, serta *auto-deployment* statis ke **InfinityFree**.
+Platform ini menghadirkan **Game #1: Yang Bener Yang Mana** (deduksi lokasi & peran) serta **Game #2: Kata-Kata Hari Ini** (penyusup kata buta dengan Multi-Spy & Kesempatan Terakhir), didukung **Server-Side Blind-Host Game Master**, obrolan & kehadiran RTDB waktu nyata, pembuat konten kustom, serta *auto-deployment* statis ke **InfinityFree**.
 
 ### Fitur Utama
-- **Registri Game Modular:** Struktur katalog game (`lib/games/registry.ts`) yang siap dikembangkan untuk Game #2, Game #3, dan seterusnya.
-- **Game #1 — Spyfall Indonesia:**
+- **Registri Game Modular:** Katalog game (`lib/games/registry.ts`) dan `ActiveRoomContainer` berlangganan tunggal untuk merutekan ruang berdasarkan `gameType`.
+- **Game #1 — Yang Bener Yang Mana** *(ID internal: `spyfall`)*:
   - 26 lokasi Indonesia pilihan dalam 3 paket (*Nusantara & Kota*, *Klasik & Profesi*, *Seru & Fantasi*) ditambah pembuat lokasi & peran kustom oleh Host.
-  - **Kartu Identitas Privasi (*Privacy Shield*):** Ketuk untuk mengintip atau menyembunyikan peran di layar ponsel.
-  - **Game Master Sisi Server (Host Buta):** Pengacakan ronde, voting tuduhan, pengecekan tebakan Mata-Mata, penyelesaian waktu habis, dan penambahan skor diproses secara atomik oleh server via Firebase Admin SDK (`serverState/current` tertutup total dari semua browser).
-  - **Obrolan & Kehadiran Waktu Nyata:** Chat instan dan indikator online `onDisconnect()` menggunakan Firebase Realtime Database (RTDB).
+  - **Kartu Identitas Privasi (*Privacy Shield*)** dan daftar centang deduksi lokasi interaktif.
+- **Game #2 — Kata-Kata Hari Ini** *(ID internal: `kata_kata`)*:
+  - **Penyusup Buta Sejati:** Bahkan Penyusup tidak tahu dirinya adalah Penyusup—semua pemain menerima satu kata rahasia di kartu identik, dan `/secrets/{playerId}` sama sekali tidak memuat field `isSpy` sehingga inspeksi DevTools pun tidak membocorkan peran.
+  - **Mekanisme Multi-Spy:** Mendukung `1 Penyusup`, `2 Penyusup` (otomatis aktif saat ≥5 pemain), atau `Acak (1–2)` dengan penjaga keseimbangan sisi server.
+  - **Eliminasi Bertahap & Kesempatan Terakhir:** Voting tuduhan mengeliminasi pemain satu per satu (status Warga/Penyusup langsung dibuka); saat Penyusup terakhir tertangkap, ia mendapat **1 Kesempatan Terakhir** menebak **Kata Warga** untuk membalikkan kemenangan!
+  - 36 pasangan kata Indonesia dalam 3 paket (*Kuliner & Jajanan*, *Keseharian & Tongkrongan*, *Hiburan, Alam & Budaya*) ditambah **Pembuat Pasangan Kata Kustom**.
+- **Game Master Sisi Server & Obrolan Waktu Nyata:** Pengacakan ronde, voting, eliminasi, validasi tebakan, dan penambahan skor diproses atomik di server via Firebase Admin SDK (`serverState/current` tertutup total dari browser), dipadukan chat & kehadiran `onDisconnect()` RTDB.
 - **Arsitektur Deployment Ganda:**
-  - **Produksi (InfinityFree + Firebase Cloud Functions v2):** Ekspor statis Next.js (`output: 'export'` → `./out/`) diunggah otomatis ke InfinityFree melalui FTPS, lalu memanggil Firebase Cloud Functions v2 (`asia-southeast1`) melalui `httpsCallable`.
-  - **Pratinjau / Pengembangan Lokal:** Mode server Next.js (`output: 'standalone'`) menggunakan rute lokal `/api/spyfall/*`.
+  - **Produksi (InfinityFree + Firebase Cloud Functions v2):** Ekspor statis Next.js (`output: 'export'` → `./out/`) dibangun dengan Bun dan diunggah otomatis ke InfinityFree via FTP, memanggil Firebase Cloud Functions v2 (`asia-southeast1`) via `httpsCallable`.
+  - **Pratinjau / Pengembangan Lokal:** Mode server Next.js (`output: 'standalone'`) menggunakan rute lokal `/api/{spyfall,kata-kata}/*`.
 
 ---
 
@@ -300,10 +309,10 @@ Yuk Main memisahkan status permainan terstruktur (**Cloud Firestore**) dari obro
 | :--- | :--- | :--- | :--- |
 | `/users/{userId}` | `uid`, `displayName`, `avatarColor`, `isAnonymous`, `gamesPlayed`, `wins`, `createdAt`, `updatedAt` | Hanya pemilik: `get`, `create`, `update` (tanpa `list`/`delete`) | Akses penuh |
 | `/roomCodes/{code}` | `code` (6 karakter kapital), `roomId`, `hostUid`, `gameType`, `createdAt` | Pengguna masuk: `get` kode persis; Host: `create`/`delete` | Akses penuh |
-| `/rooms/{roomId}` | `id`, `code`, `gameType`, `hostUid`, `status` (`lobby \| playing \| voting \| spy_guess \| round_end`), `roundNumber`, `currentRoundId`, `roundDurationSec`, `roundEndsAtMs`, `firstSpeakerUid`, `spyMode`, `enabledPacks`, `selectedLocationNames`, `customLocations`, `activeVote`, `pendingSpyGuess`, `lastRoundResult`, `createdAt`, `updatedAt` | Anggota/lobi: `get`; Host: `create`, pengaturan lobi, transfer `hostUid`, `delete` | Mengubah status ronde, voting, timer & `lastRoundResult` |
+| `/rooms/{roomId}` | `id`, `code`, `gameType` (`spyfall \| kata_kata`), `hostUid`, `status` (`lobby \| playing \| voting \| spy_guess \| round_end`), `roundNumber`, `currentRoundId`, `roundDurationSec`, `roundEndsAtMs`, `firstSpeakerUid`, `spyMode`, `enabledPacks`, `selectedLocationNames`, `customLocations`, `customWordPairs`, `eliminatedUids`, `eliminationLog`, `activeVote`, `pendingSpyGuess`, `lastRoundResult`, `createdAt`, `updatedAt` | Anggota/lobi: `get`; Host: `create`, pengaturan lobi, transfer `hostUid`, `delete` | Mengubah status ronde, voting, eliminasi, timer & `lastRoundResult` |
 | `/rooms/{roomId}/players/{playerId}` | `uid`, `roomId`, `displayName`, `avatarColor`, `isHost`, `score`, `isReady`, `joinedAt`, `updatedAt` | Anggota: `get`/`list` (wajib filter `roomId`); pemain sendiri: `create` (`score: 0`) & ubah profil; **ubah `score` diblokir** | Menambah `score` secara atomik (`FieldValue.increment`) |
-| `/rooms/{roomId}/rounds/{roundId}/secrets/{playerId}` | `uid`, `roundId`, `gameType`, `isSpy`, `locationName` (`null` untuk Mata-Mata), `roleName`, `createdAt` | Hanya pemilik kartu saat ronde berjalan; semua anggota ruang saat `round_end`; **`list` & `write` diblokir** | Menulis kartu rahasia seluruh pemain saat ronde dimulai |
-| `/rooms/{roomId}/serverState/current` | `roundId`, `roundNumber`, `locationName`, `spyUids[]`, `spyNames[]`, `createdAtMs` | **Diblokir total (`allow read, write: if false`)** | Menyimpan lokasi asli & identitas Mata-Mata untuk verifikasi server |
+| `/rooms/{roomId}/rounds/{roundId}/secrets/{playerId}` | `uid`, `roundId`, `gameType`, (`isSpy`, `locationName`, `roleName` untuk Game #1) ATAU (`secretWord` saja untuk Game #2 — **tanpa `isSpy`**), `createdAt` | Hanya pemilik kartu saat ronde berjalan; semua anggota ruang saat `round_end`; **`list` & `write` diblokir** | Menulis kartu rahasia seluruh pemain saat ronde dimulai |
+| `/rooms/{roomId}/serverState/current` | `roundId`, `roundNumber`, `locationName`, `citizenWord`, `spyWord`, `spyUids[]`, `spyNames[]`, `createdAtMs` | **Diblokir total (`allow read, write: if false`)** | Menyimpan lokasi/kata asli & identitas Penyusup untuk verifikasi server |
 
 #### 2. Path Firebase Realtime Database (RTDB)
 
@@ -347,12 +356,13 @@ Yuk Main menggunakan format penomoran 3 bagian: **`Version.Iteration.build`**
 
 #### Riwayat Pembaruan (Changelog)
 
+- **`2.0.0`** — Ekspansi besar platform: rebranding Game #1 menjadi **Yang Bener Yang Mana**, peluncuran **Game #2: Kata-Kata Hari Ini** (penyusup kata buta tanpa kebocoran `isSpy`, Multi-Spy `1 / 2 / Acak`, 36 pasangan kata Indonesia dalam 3 paket + pembuat pasangan kustom, eliminasi bertahap, dan Kesempatan Terakhir menebak Kata Warga), penambahan Cloud Functions v2 `kataKataStart`/`Vote`/`Guess`/`Resolve` & rute preview, pembaruan `firestore.rules`, serta migrasi CI ke Bun (`bun.lock`) + FTP InfinityFree.
 - **`1.2.1`** — Konsolidasi seluruh kredensial ke satu GitHub Secret JSON (`YUK_MAIN_DEPLOY_SECRETS`) dengan masking otomatis `::add-mask::`, dukungan `ftp.serverDir` kustom, opsi `site.basePath`, `README.md` dwibahasa, `CONTRIBUTING.md`, dan lisensi PolyForm Noncommercial 1.0.0.
 - **`1.2.0`** — Penambahan jalur build statis InfinityFree (`STATIC_EXPORT=true`, `public/.htaccess`), workflow auto-deploy FTPS GitHub Actions, serta backend Firebase Cloud Functions v2 (`asia-southeast1`: `spyfallStart`, `spyfallVote`, `spyfallGuess`, `spyfallResolve`) via `httpsCallable`.
 - **`1.1.2`** — Penguatan build standalone Next.js (`app/not-found.tsx`, `serverExternalPackages: ['firebase-admin']`) dan perbaikan error `HTTP 405` saat voting melalui header `X-Firebase-Token` + mekanisme *retry* otomatis.
 - **`1.1.1`** — Perbaikan query daftar pemain (`where('roomId', '==', roomId)`) agar sesuai aturan keamanan Firestore, pembersihan listener saat keluar ruang, pelaporan kode error Auth, dan penutupan otomatis `AuthDialog`.
 - **`1.1.0`** — Peningkatan ke arsitektur **Server-Side Blind-Host Game Master** (`firebase-admin`, dokumen `serverState/current` khusus server, serta penguncian penulisan `secrets` dan `score` di `firestore.rules`).
-- **`1.0.0`** — Peluncuran perdana hub **Yuk Main** dan **Game #1: Spyfall Indonesia** dengan 26 lokasi Indonesia dalam 3 paket, pembuat lokasi/peran kustom, 9 unit test Vitest, Kartu Privasi, serta arsitektur hibrida Cloud Firestore + RTDB.
+- **`1.0.0`** — Peluncuran perdana hub **Yuk Main** dan Game #1 (kini **Yang Bener Yang Mana**) dengan 26 lokasi Indonesia dalam 3 paket, pembuat lokasi/peran kustom, 9 unit test Vitest, Kartu Privasi, serta arsitektur hibrida Cloud Firestore + RTDB.
 
 ---
 

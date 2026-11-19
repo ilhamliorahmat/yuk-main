@@ -40,8 +40,8 @@ service cloud.firestore {
 
     function isValidRoom(d, roomId) {
       return d.keys().hasAll(['id', 'code', 'gameType', 'hostUid', 'status', 'roundNumber', 'currentRoundId', 'roundDurationSec', 'roundEndsAtMs', 'firstSpeakerUid', 'spyMode', 'enabledPacks', 'selectedLocationNames', 'customLocations', 'activeVote', 'pendingSpyGuess', 'lastRoundResult', 'createdAt', 'updatedAt']) &&
-        d.keys().hasOnly(['id', 'code', 'gameType', 'hostUid', 'status', 'roundNumber', 'currentRoundId', 'roundDurationSec', 'roundEndsAtMs', 'firstSpeakerUid', 'spyMode', 'enabledPacks', 'selectedLocationNames', 'customLocations', 'activeVote', 'pendingSpyGuess', 'lastRoundResult', 'createdAt', 'updatedAt']) &&
-        d.id == roomId && isValidCode(d.code) && d.gameType in ['spyfall'] &&
+        d.keys().hasOnly(['id', 'code', 'gameType', 'hostUid', 'status', 'roundNumber', 'currentRoundId', 'roundDurationSec', 'roundEndsAtMs', 'firstSpeakerUid', 'spyMode', 'enabledPacks', 'selectedLocationNames', 'customLocations', 'customWordPairs', 'eliminatedUids', 'eliminationLog', 'activeVote', 'pendingSpyGuess', 'lastRoundResult', 'createdAt', 'updatedAt']) &&
+        d.id == roomId && isValidCode(d.code) && d.gameType in ['spyfall', 'kata_kata'] &&
         d.hostUid is string && d.hostUid.size() <= 128 &&
         d.status in ['lobby', 'playing', 'voting', 'spy_guess', 'round_end'] &&
         d.roundNumber is int && d.roundNumber >= 0 &&
@@ -53,6 +53,9 @@ service cloud.firestore {
         d.enabledPacks is list && d.enabledPacks.size() >= 1 && d.enabledPacks.size() <= 10 &&
         d.selectedLocationNames is list && d.selectedLocationNames.size() <= 40 &&
         d.customLocations is list && d.customLocations.size() <= 20 &&
+        (!('customWordPairs' in d) || (d.customWordPairs is list && d.customWordPairs.size() <= 30)) &&
+        (!('eliminatedUids' in d) || (d.eliminatedUids is list && d.eliminatedUids.size() <= 20)) &&
+        (!('eliminationLog' in d) || (d.eliminationLog is list && d.eliminationLog.size() <= 20)) &&
         (d.activeVote == null || d.activeVote is map) &&
         (d.pendingSpyGuess == null || d.pendingSpyGuess is map) &&
         (d.lastRoundResult == null || d.lastRoundResult is map) &&
@@ -90,7 +93,7 @@ service cloud.firestore {
         incoming().keys().hasAll(['code', 'roomId', 'hostUid', 'gameType', 'createdAt']) &&
         incoming().keys().hasOnly(['code', 'roomId', 'hostUid', 'gameType', 'createdAt']) &&
         incoming().code == code && isValidId(incoming().roomId) &&
-        incoming().hostUid == request.auth.uid && incoming().gameType in ['spyfall'] &&
+        incoming().hostUid == request.auth.uid && incoming().gameType in ['spyfall', 'kata_kata'] &&
         incoming().createdAt == request.time &&
         existsAfter(/databases/$(database)/documents/rooms/$(incoming().roomId));
       allow delete: if isSignedIn() && isValidCode(code) && existing().hostUid == request.auth.uid;
@@ -103,16 +106,18 @@ service cloud.firestore {
       allow create: if isSignedIn() && isValidId(roomId) && isValidRoom(incoming(), roomId) &&
         incoming().hostUid == request.auth.uid && incoming().status == 'lobby' &&
         incoming().roundNumber == 0 && incoming().createdAt == request.time && incoming().updatedAt == request.time &&
+        (!('eliminatedUids' in incoming()) || incoming().eliminatedUids.size() == 0) &&
+        (!('eliminationLog' in incoming()) || incoming().eliminationLog.size() == 0) &&
         existsAfter(/databases/$(database)/documents/roomCodes/$(incoming().code));
       // Clients can only update Host settings in lobby/round_end or transfer hostUid;
-      // All round starts, votes, guesses, and score mutations are executed server-side via Admin SDK.
+      // All round starts, votes, eliminations, guesses, and score mutations are executed server-side via Admin SDK.
       allow update: if isSignedIn() && isValidId(roomId) && isValidRoom(incoming(), roomId) &&
         existing().hostUid == request.auth.uid &&
         incoming().id == existing().id && incoming().code == existing().code &&
         incoming().gameType == existing().gameType && incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time && (
           (existing().status in ['lobby', 'round_end'] &&
-            incoming().diff(existing()).affectedKeys().hasOnly(['roundDurationSec', 'spyMode', 'enabledPacks', 'customLocations', 'updatedAt'])) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['roundDurationSec', 'spyMode', 'enabledPacks', 'customLocations', 'customWordPairs', 'updatedAt'])) ||
           incoming().diff(existing()).affectedKeys().hasOnly(['hostUid', 'updatedAt'])
         );
       allow delete: if isSignedIn() && isValidId(roomId) && existing().hostUid == request.auth.uid;

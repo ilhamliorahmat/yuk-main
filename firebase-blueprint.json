@@ -75,7 +75,7 @@
         },
         "gameType": {
           "type": "string",
-          "enum": ["spyfall"]
+          "enum": ["spyfall", "kata_kata"]
         },
         "createdAt": {
           "type": "string",
@@ -103,7 +103,7 @@
         },
         "gameType": {
           "type": "string",
-          "enum": ["spyfall"]
+          "enum": ["spyfall", "kata_kata"]
         },
         "hostUid": {
           "type": "string",
@@ -147,7 +147,19 @@
         },
         "customLocations": {
           "type": "array",
-          "description": "Host-defined custom locations and role pools (max 20)."
+          "description": "Host-defined custom locations and role pools for Yang Bener Yang Mana (max 20)."
+        },
+        "customWordPairs": {
+          "type": "array",
+          "description": "Host-defined custom word pairs for Kata-Kata Hari Ini (max 30)."
+        },
+        "eliminatedUids": {
+          "type": "array",
+          "description": "Server-managed list of eliminated player UIDs during an active Kata-Kata Hari Ini round."
+        },
+        "eliminationLog": {
+          "type": "array",
+          "description": "Server-managed public elimination timeline revealing whether eliminated players were Warga or Penyusup."
         },
         "activeVote": {
           "type": "object",
@@ -268,10 +280,11 @@
         },
         "gameType": {
           "type": "string",
-          "enum": ["spyfall"]
+          "enum": ["spyfall", "kata_kata"]
         },
         "isSpy": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Present only for Game #1 (spyfall). Strictly omitted for Game #2 (kata_kata) to enforce Blind-Spy secrecy."
         },
         "locationName": {
           "type": "string",
@@ -282,6 +295,12 @@
           "minLength": 1,
           "maxLength": 80
         },
+        "secretWord": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "description": "Blind secret word assigned to each player in Game #2 (Kata-Kata Hari Ini)."
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time"
@@ -291,8 +310,6 @@
         "uid",
         "roundId",
         "gameType",
-        "isSpy",
-        "roleName",
         "createdAt"
       ]
     },
@@ -311,6 +328,14 @@
         "locationName": {
           "type": "string",
           "maxLength": 80
+        },
+        "citizenWord": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "spyWord": {
+          "type": "string",
+          "maxLength": 60
         },
         "spyUids": {
           "type": "array"

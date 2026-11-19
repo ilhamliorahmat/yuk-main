@@ -19,8 +19,14 @@ import {
   Users,
   Vote,
 } from 'lucide-react';
-import { useRoomSession } from '@/hooks/use-room-session';
-import type { RoundResult } from '@/lib/games/types';
+import type {
+  ChatMessage,
+  PlayerSecretDoc,
+  PresenceEntry,
+  RoomDoc,
+  RoomPlayerDoc,
+  RoundResult,
+} from '@/lib/games/types';
 import {
   cancelActiveVoteOrSpyGuess,
   castAccusationVote,
@@ -35,33 +41,32 @@ import { PlayersAndVotePanel } from './PlayersAndVotePanel';
 import { RoomChatPanel } from './RoomChatPanel';
 
 interface SpyfallRoomViewProps {
-  roomId: string;
+  room: RoomDoc;
+  players: RoomPlayerDoc[];
+  mySecret: PlayerSecretDoc | null;
+  revealedSecrets: Record<string, PlayerSecretDoc>;
+  messages: ChatMessage[];
+  presence: Record<string, PresenceEntry>;
   myUid: string;
   myName: string;
+  onBeforeLeave: () => void;
   onExitToHub: () => void;
 }
 
 type MobileTab = 'kartu' | 'obrolan' | 'pemain';
 
 export function SpyfallRoomView({
-  roomId,
+  room,
+  players,
+  mySecret,
+  revealedSecrets,
+  messages,
+  presence,
   myUid,
   myName,
+  onBeforeLeave,
   onExitToHub,
 }: SpyfallRoomViewProps) {
-  const [isLeaving, setIsLeaving] = useState(false);
-
-  const {
-    room,
-    players,
-    mySecret,
-    revealedSecrets,
-    messages,
-    presence,
-    loadingRoom,
-    roomMissing,
-  } = useRoomSession({ roomId: isLeaving ? null : roomId, uid: myUid, displayName: myName });
-
   const [mobileTab, setMobileTab] = useState<MobileTab>('kartu');
   const [revealedRoundKey, setRevealedRoundKey] = useState<string | null>(null);
   const [crossedByRound, setCrossedByRound] = useState<Record<string, Record<string, boolean>>>({});
@@ -72,63 +77,27 @@ export function SpyfallRoomView({
   const [actionError, setActionError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
-  const roundStateKey = room ? `${room.id}:${room.roundNumber}:${room.status}` : '';
+  const roundStateKey = `${room.id}:${room.roundNumber}:${room.status}`;
   const cardRevealed = revealedRoundKey === roundStateKey;
   const crossedLocations = crossedByRound[roundStateKey] ?? {};
 
   // Countdown tick while playing/voting/spy_guess
   useEffect(() => {
-    if (!room || room.status === 'lobby' || room.status === 'round_end') return;
+    if (room.status === 'lobby' || room.status === 'round_end') return;
     const id = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, [room]);
+  }, [room.status]);
 
   const remainingSec = useMemo(() => {
-    if (!room || !room.roundEndsAtMs) return 0;
+    if (!room.roundEndsAtMs) return 0;
     return Math.max(0, Math.ceil((room.roundEndsAtMs - nowMs) / 1000));
-  }, [room, nowMs]);
+  }, [room.roundEndsAtMs, nowMs]);
 
   const formattedTime = useMemo(() => {
     const mins = Math.floor(remainingSec / 60);
     const secs = remainingSec % 60;
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   }, [remainingSec]);
-
-  if (isLeaving) {
-    return (
-      <div className="min-h-screen bg-[#0B1018] text-slate-100 flex items-center justify-center p-6">
-        <p className="text-sm text-slate-300">Keluar dari ruang permainan...</p>
-      </div>
-    );
-  }
-
-  if (loadingRoom) {
-    return (
-      <div className="min-h-screen bg-[#0B1018] text-slate-100 flex items-center justify-center p-6">
-        <p className="text-sm text-slate-300">Memuat ruang permainan Yuk Main...</p>
-      </div>
-    );
-  }
-
-  if (roomMissing || !room) {
-    return (
-      <div className="min-h-screen bg-[#0B1018] text-slate-100 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-[#131A24] border border-slate-800 rounded-2xl p-6 text-center space-y-4">
-          <h2 className="text-lg font-bold text-white">Ruang Tidak Ditemukan</h2>
-          <p className="text-sm text-slate-400">
-            Ruang permainan ini telah ditutup atau kode undangan sudah kedaluwarsa.
-          </p>
-          <button
-            type="button"
-            onClick={onExitToHub}
-            className="w-full min-h-[44px] rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold transition-colors"
-          >
-            Kembali ke Beranda Yuk Main
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   const isHost = room.hostUid === myUid;
   const isTimerExpired = room.status === 'playing' && remainingSec === 0 && room.roundEndsAtMs > 0;
@@ -148,7 +117,7 @@ export function SpyfallRoomView({
   };
 
   const handleLeave = async () => {
-    setIsLeaving(true);
+    onBeforeLeave();
     setActionBusy(true);
     try {
       await leaveRoom({ room, uid: myUid, displayName: myName, players });
@@ -301,7 +270,7 @@ export function SpyfallRoomView({
             </button>
 
             <span className="hidden sm:inline text-xs text-slate-400 whitespace-nowrap">
-              Yuk Main · Spyfall · Ronde #{room.roundNumber}
+              Yuk Main · Yang Bener Yang Mana · Ronde #{room.roundNumber}
             </span>
           </div>
 
@@ -485,7 +454,7 @@ export function SpyfallRoomView({
               <>
                 <section className="bg-[#131A24] border border-slate-800 rounded-2xl p-5 space-y-4">
                   <div className="space-y-1">
-                    <h1 className="text-lg font-bold text-white">Lobi Ruang Spyfall</h1>
+                    <h1 className="text-lg font-bold text-white">Lobi Yang Bener Yang Mana</h1>
                     <p className="text-xs text-slate-400">
                       Bagikan kode <span className="font-mono-tabular text-white font-semibold">{room.code}</span> kepada teman. Minimal 3 pemain untuk memulai.
                     </p>
@@ -504,7 +473,7 @@ export function SpyfallRoomView({
                           ? 'Menyiapkan Ronde...'
                           : players.length < 3
                             ? `Menunggu Pemain (${players.length}/3 Minimal)`
-                            : 'Mulai Ronde Spyfall'}
+                            : 'Mulai Yang Bener Yang Mana'}
                       </span>
                     </button>
                   ) : (

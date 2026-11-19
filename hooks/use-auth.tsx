@@ -10,10 +10,10 @@ import {
   updateProfile,
   type User,
 } from 'firebase/auth';
-import { getFirebaseServices } from '../lib/firebase/client';
-import { isFirebaseConfigured } from '../lib/firebase/config';
-import type { UserProfileDoc } from '../lib/games/types';
-import { pickAvatarColor, upsertUserProfile } from '../lib/platform/room-service';
+import { getFirebaseServices } from '@/lib/firebase/client';
+import { isFirebaseConfigured } from '@/lib/firebase/config';
+import type { UserProfileDoc } from '@/lib/games/types';
+import { pickAvatarColor, upsertUserProfile } from '@/lib/platform/user-profile';
 
 interface AuthContextValue {
   user: User | null;

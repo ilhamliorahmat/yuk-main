@@ -1,4 +1,4 @@
-export type GameType = 'spyfall';
+export type GameType = 'spyfall' | 'kata_kata';
 
 export type RoomStatus = 'lobby' | 'playing' | 'voting' | 'spy_guess' | 'round_end';
 
@@ -14,6 +14,25 @@ export interface CustomLocation {
 export interface SpyfallLocation extends CustomLocation {
   packId: string;
   packLabel: string;
+}
+
+export interface CustomWordPair {
+  id: string;
+  citizenWord: string;
+  spyWord: string;
+  category: string;
+}
+
+export interface WordPairItem extends CustomWordPair {
+  packId: string;
+  packLabel: string;
+}
+
+export interface EliminationEntry {
+  uid: string;
+  displayName: string;
+  wasSpy: boolean;
+  eliminatedAtMs: number;
 }
 
 export interface VoteState {
@@ -38,6 +57,9 @@ export interface RoundResult {
   reason: string;
   locationName: string;
   guessedLocation: string | null;
+  citizenWord?: string;
+  spyWord?: string;
+  guessedWord?: string | null;
   spyUids: string[];
   spyNames: string[];
   resolvedAtMs: number;
@@ -48,6 +70,8 @@ export interface ServerRoundStateDoc {
   roundId: string;
   roundNumber: number;
   locationName: string;
+  citizenWord?: string;
+  spyWord?: string;
   spyUids: string[];
   spyNames: string[];
   createdAtMs: number;
@@ -68,6 +92,9 @@ export interface RoomDoc {
   enabledPacks: string[];
   selectedLocationNames: string[];
   customLocations: CustomLocation[];
+  customWordPairs?: CustomWordPair[];
+  eliminatedUids?: string[];
+  eliminationLog?: EliminationEntry[];
   activeVote: VoteState | null;
   pendingSpyGuess: PendingSpyGuess | null;
   lastRoundResult: RoundResult | null;
@@ -87,13 +114,20 @@ export interface RoomPlayerDoc {
   updatedAt?: unknown;
 }
 
+/**
+ * Isolated per-player secret document.
+ * - For Game #1 (`spyfall` / Yang Bener Yang Mana): includes `isSpy`, `locationName`, `roleName`.
+ * - For Game #2 (`kata_kata` / Kata-Kata Hari Ini): strictly omits `isSpy` and only includes `secretWord`
+ *   so even inspecting DevTools cannot reveal whether a player is a Penyusup.
+ */
 export interface PlayerSecretDoc {
   uid: string;
   roundId: string;
   gameType: GameType;
-  isSpy: boolean;
-  locationName: string | null;
-  roleName: string;
+  isSpy?: boolean;
+  locationName?: string | null;
+  roleName?: string;
+  secretWord?: string;
   createdAt?: unknown;
 }
 

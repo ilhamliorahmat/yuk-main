@@ -6,6 +6,7 @@ import {
   ArrowRight,
   BookOpen,
   Compass,
+  MessageSquareQuote,
   Plus,
   ShieldAlert,
   Users,
@@ -15,6 +16,7 @@ import spyEmblem from '@/src/assets/images/yukmain_spy_emblem_1795001425384.jpg'
 import spyfallCover from '@/src/assets/images/yukmain_spyfall_cover_1795001423851.jpg';
 import { useAuth } from '@/hooks/use-auth';
 import { PARTY_GAMES } from '@/lib/games/registry';
+import type { GameType, PartyGameDefinition } from '@/lib/games/types';
 import { createRoom, joinRoomByCode } from '@/lib/platform/room-service';
 import { AuthDialog } from './AuthDialog';
 
@@ -26,14 +28,12 @@ interface YukMainHubProps {
 export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProps) {
   const { user, profile, configured } = useAuth();
   const [joinCode, setJoinCode] = useState(initialRoomCode.toUpperCase());
-  const [busyAction, setBusyAction] = useState<'create' | 'join' | null>(null);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
-  const [rulesOpen, setRulesOpen] = useState(false);
+  const [rulesGame, setRulesGame] = useState<PartyGameDefinition | null>(null);
 
-  const spyfall = PARTY_GAMES[0];
-
-  const handleCreateSpyfall = async () => {
+  const handleCreateGame = async (gameType: GameType) => {
     setErrorMsg(null);
     if (!configured) {
       setErrorMsg('Konfigurasi Firebase belum tersedia di environment.');
@@ -44,13 +44,13 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
       return;
     }
 
-    setBusyAction('create');
+    setBusyAction(`create:${gameType}`);
     try {
       const { roomId } = await createRoom({
         hostUid: user.uid,
         hostName: profile.displayName,
         avatarColor: profile.avatarColor,
-        gameType: 'spyfall',
+        gameType,
       });
       onEnterRoom(roomId);
     } catch (err) {
@@ -105,11 +105,11 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
               href="#katalog"
               className="hover:text-white transition-colors whitespace-nowrap shrink-0"
             >
-              Katalog Game
+              Katalog Game ({PARTY_GAMES.length})
             </a>
             <button
               type="button"
-              onClick={() => setRulesOpen(true)}
+              onClick={() => setRulesGame(PARTY_GAMES[0])}
               className="hover:text-white transition-colors whitespace-nowrap shrink-0"
             >
               Cara Bermain
@@ -128,14 +128,18 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
         </div>
       </header>
 
-      <main id="beranda" className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-12">
+      <main
+        id="beranda"
+        className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-12"
+      >
         {!configured && (
           <div className="rounded-2xl bg-amber-950/40 border border-amber-700/60 p-4 flex items-start gap-3 text-sm text-amber-200">
             <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5 text-amber-400" />
             <div>
               <p className="font-semibold">Konfigurasi Firebase Belum Terdeteksi</p>
               <p className="text-xs text-amber-200/80 mt-1">
-                Pastikan variabel <code className="font-mono-tabular">NEXT_PUBLIC_FIREBASE_*</code> telah diisi di <code className="font-mono-tabular">.env.local</code>.
+                Pastikan variabel <code className="font-mono-tabular">NEXT_PUBLIC_FIREBASE_*</code>{' '}
+                telah diisi di <code className="font-mono-tabular">.env.local</code>.
               </p>
             </div>
           </div>
@@ -145,18 +149,20 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
           <div className="lg:col-span-6 flex flex-col justify-between space-y-6">
             <div className="space-y-4">
-              <div className="text-xs font-medium text-rose-400 flex items-center gap-2">
+              <div className="text-xs font-medium text-rose-400 flex flex-wrap items-center gap-2">
                 <span>Koleksi Game Pesta Indonesia</span>
                 <span aria-hidden="true">·</span>
-                <span>Permainan #1: Spyfall</span>
+                <span>2 Permainan Aktif</span>
               </div>
 
               <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-white leading-[1.12] text-balance">
-                Temukan penyamar di antara temanmu malam ini.
+                Adu insting & temukan penyamar di antara temanmu.
               </h1>
 
               <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-xl">
-                {spyfall.description} Langsung bermain dari peramban ponsel atau desktop tanpa unduh aplikasi tambahan.
+                Mainkan <strong className="text-white">Yang Bener Yang Mana</strong> dan game baru{' '}
+                <strong className="text-amber-300">Kata-Kata Hari Ini</strong> langsung dari
+                peramban ponsel atau desktop tanpa unduh aplikasi tambahan.
               </p>
             </div>
 
@@ -171,20 +177,29 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
                 <button
                   type="button"
                   disabled={busyAction !== null}
-                  onClick={handleCreateSpyfall}
-                  className="min-h-[48px] px-6 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50"
+                  onClick={() => void handleCreateGame('spyfall')}
+                  className="min-h-[48px] px-5 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>{busyAction === 'create' ? 'Membuat Ruang...' : 'Buat Ruang Spyfall'}</span>
+                  <span>
+                    {busyAction === 'create:spyfall'
+                      ? 'Membuat Ruang...'
+                      : 'Main Yang Bener Yang Mana'}
+                  </span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setRulesOpen(true)}
-                  className="min-h-[48px] px-5 py-3 rounded-xl bg-[#131A24] border border-slate-800 hover:border-slate-700 text-slate-200 font-medium text-sm inline-flex items-center justify-center gap-2 transition-colors whitespace-nowrap shrink-0"
+                  disabled={busyAction !== null}
+                  onClick={() => void handleCreateGame('kata_kata')}
+                  className="min-h-[48px] px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50"
                 >
-                  <BookOpen className="w-4 h-4" />
-                  <span>Cara Bermain</span>
+                  <MessageSquareQuote className="w-4 h-4" />
+                  <span>
+                    {busyAction === 'create:kata_kata'
+                      ? 'Membuat Ruang...'
+                      : 'Main Kata-Kata Hari Ini'}
+                  </span>
                 </button>
               </div>
 
@@ -193,7 +208,9 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
                   type="text"
                   maxLength={6}
                   value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                  onChange={(e) =>
+                    setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))
+                  }
                   placeholder="KODE 6 HURUF"
                   aria-label="Kode Ruang"
                   className="flex-1 min-h-[48px] px-4 rounded-xl bg-[#131A24] border border-slate-800 text-white font-mono-tabular text-sm tracking-widest uppercase placeholder:text-slate-500 placeholder:tracking-normal focus:outline-none focus:border-rose-500"
@@ -215,19 +232,23 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
             <div className="relative h-full min-h-[240px] sm:min-h-[320px] rounded-2xl overflow-hidden border border-slate-800 bg-[#131A24]">
               <Image
                 src={spyfallCover}
-                alt="Ilustrasi meja investigasi Spyfall Indonesia dengan tiket Kereta Api Jakarta dan peta Nusantara"
+                alt="Ilustrasi meja investigasi Yuk Main dengan peta Nusantara dan kartu rahasia"
                 fill
-                unoptimized
+                referrerPolicy="no-referrer"
                 sizes="(max-width: 1024px) 100vw, 50vw"
                 className="object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#0B1018]/90 via-[#0B1018]/20 to-transparent" />
               <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-4">
                 <div>
-                  <p className="text-xs text-amber-300 font-medium">Game #01 · Aktif Sekarang</p>
-                  <p className="text-lg font-semibold text-white">Spyfall Edisi Nusantara</p>
+                  <p className="text-xs text-amber-300 font-medium">Yuk Main 2.0 · Rilis Terbaru</p>
+                  <p className="text-lg font-semibold text-white">
+                    Yang Bener Yang Mana & Kata-Kata Hari Ini
+                  </p>
                 </div>
-                <span className="text-xs text-slate-300 font-mono-tabular">26+ Lokasi</span>
+                <span className="text-xs text-slate-300 font-mono-tabular shrink-0">
+                  3–12 Pemain
+                </span>
               </div>
             </div>
           </div>
@@ -237,68 +258,96 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
         <section id="katalog" className="space-y-5 pt-4 border-t border-slate-800/80">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
             <div>
-              <h2 className="text-xl sm:text-2xl font-bold text-white">Katalog Permainan Yuk Main</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-white">
+                Katalog Permainan Yuk Main
+              </h2>
               <p className="text-sm text-slate-400 mt-1">
-                Dibangun modular agar mudah menambah permainan pesta baru di masa mendatang.
+                Pilih permainan untuk membuat ruang baru, lalu bagikan kode 6 huruf ke temanmu.
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {PARTY_GAMES.map((game) => (
-              <article
-                key={game.id}
-                className="bg-[#131A24] border border-slate-800 rounded-2xl p-5 flex flex-col justify-between gap-5"
-              >
-                <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-xl overflow-hidden border border-slate-800 bg-[#0B1018] shrink-0 relative">
-                      <Image
-                        src={spyEmblem}
-                        alt={`Ikon permainan ${game.title}`}
-                        fill
-                        unoptimized
-                        sizes="56px"
-                        className="object-cover"
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-xs text-slate-400">
-                        <span>Game #{game.number}</span>
-                        <span aria-hidden="true"> · </span>
-                        <span>{game.subtitle}</span>
-                      </div>
-                      <h3 className="text-lg font-bold text-white truncate">{game.title}</h3>
-                    </div>
-                  </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {PARTY_GAMES.map((game) => {
+              const isKataKata = game.id === 'kata_kata';
+              const isCreatingThis = busyAction === `create:${game.id}`;
 
-                  <p className="text-sm text-slate-300 leading-relaxed">{game.description}</p>
-
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
-                    <span className="inline-flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5" />
-                      <span>
-                        {game.minPlayers}–{game.maxPlayers} Pemain
-                      </span>
-                    </span>
-                    <span aria-hidden="true">·</span>
-                    <span className="inline-flex items-center gap-1">
-                      <Compass className="w-3.5 h-3.5" />
-                      <span>{game.durationLabel}</span>
-                    </span>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  disabled={busyAction !== null}
-                  onClick={handleCreateSpyfall}
-                  className="w-full min-h-[44px] rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+              return (
+                <article
+                  key={game.id}
+                  className="bg-[#131A24] border border-slate-800 rounded-2xl p-5 flex flex-col justify-between gap-5"
                 >
-                  Mainkan Spyfall
-                </button>
-              </article>
-            ))}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4">
+                      {isKataKata ? (
+                        <div className="w-14 h-14 rounded-xl border border-amber-500/40 bg-amber-950/40 flex items-center justify-center shrink-0">
+                          <MessageSquareQuote className="w-7 h-7 text-amber-400" />
+                        </div>
+                      ) : (
+                        <div className="w-14 h-14 rounded-xl overflow-hidden border border-slate-800 bg-[#0B1018] shrink-0 relative">
+                          <Image
+                            src={spyEmblem}
+                            alt={`Ikon permainan ${game.title}`}
+                            fill
+                            referrerPolicy="no-referrer"
+                            sizes="56px"
+                            className="object-cover"
+                          />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="text-xs text-slate-400">
+                          <span>Game #{game.number}</span>
+                          <span aria-hidden="true"> · </span>
+                          <span>{game.subtitle}</span>
+                        </div>
+                        <h3 className="text-lg font-bold text-white truncate">{game.title}</h3>
+                      </div>
+                    </div>
+
+                    <p className="text-sm text-slate-300 leading-relaxed">{game.description}</p>
+
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
+                      <span className="inline-flex items-center gap-1">
+                        <Users className="w-3.5 h-3.5" />
+                        <span>
+                          {game.minPlayers}–{game.maxPlayers} Pemain
+                        </span>
+                      </span>
+                      <span aria-hidden="true">·</span>
+                      <span className="inline-flex items-center gap-1">
+                        <Compass className="w-3.5 h-3.5" />
+                        <span>{game.durationLabel}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      disabled={busyAction !== null}
+                      onClick={() => void handleCreateGame(game.id)}
+                      className={`flex-1 min-h-[44px] px-4 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${
+                        isKataKata
+                          ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                          : 'bg-rose-600 hover:bg-rose-500 text-white'
+                      }`}
+                    >
+                      {isCreatingThis ? 'Membuat Ruang...' : `Mainkan ${game.title}`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRulesGame(game)}
+                      aria-label={`Aturan main ${game.title}`}
+                      className="min-h-[44px] px-3.5 rounded-xl bg-[#0B1018] border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      <span>Aturan</span>
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </section>
       </main>
@@ -310,7 +359,7 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
       <AuthDialog open={authOpen} onClose={() => setAuthOpen(false)} />
 
       {/* Rules Modal */}
-      {rulesOpen && (
+      {rulesGame && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4"
           role="dialog"
@@ -319,12 +368,15 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
         >
           <div className="w-full sm:max-w-lg bg-[#131A24] border border-slate-800 rounded-t-3xl sm:rounded-2xl p-6 space-y-4 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between gap-4">
-              <h2 id="rules-modal-title" className="text-lg font-bold text-white">
-                Aturan Main Spyfall
-              </h2>
+              <div>
+                <p className="text-xs text-slate-400">Game #{rulesGame.number}</p>
+                <h2 id="rules-modal-title" className="text-lg font-bold text-white">
+                  Aturan Main {rulesGame.title}
+                </h2>
+              </div>
               <button
                 type="button"
-                onClick={() => setRulesOpen(false)}
+                onClick={() => setRulesGame(null)}
                 aria-label="Tutup panduan"
                 className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
               >
@@ -332,13 +384,13 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
               </button>
             </div>
             <ol className="space-y-3 text-sm text-slate-300 leading-relaxed list-decimal pl-5">
-              {spyfall.rulesSummary.map((rule, idx) => (
+              {rulesGame.rulesSummary.map((rule, idx) => (
                 <li key={idx}>{rule}</li>
               ))}
             </ol>
             <button
               type="button"
-              onClick={() => setRulesOpen(false)}
+              onClick={() => setRulesGame(null)}
               className="w-full min-h-[44px] rounded-xl bg-slate-100 hover:bg-white text-slate-900 font-semibold text-sm transition-colors"
             >
               Mengerti
