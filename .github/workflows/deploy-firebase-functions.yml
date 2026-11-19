@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - master
     paths:
       - 'functions/**'
       - 'lib/games/**'
@@ -28,6 +29,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Extract Firebase Service Account from YUK_MAIN_DEPLOY_SECRETS
         id: secrets
@@ -84,8 +88,8 @@ jobs:
 
       - name: Run Spyfall engine unit tests
         run: |
-          npm ci
-          npm test
+          bun install --frozen-lockfile
+          bun run test
 
       - name: Install & build Cloud Functions
         working-directory: functions

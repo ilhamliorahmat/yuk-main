@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - master
     paths-ignore:
       - 'functions/**'
       - '**.md'
@@ -27,7 +28,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Parse & validate YUK_MAIN_DEPLOY_SECRETS JSON
         id: secrets
@@ -101,20 +104,33 @@ jobs:
               }
             }
 
-            // Normalize remote FTP directory (must start & end with "/", reject path traversal)
-            const rawDir = typeof ftp.serverDir === "string" && ftp.serverDir.trim()
-              ? ftp.serverDir.trim()
-              : "/htdocs/";
-            if (rawDir.includes("..")) {
+            // Normalize remote FTP directory (accepts serverDir or server_dir, strips leading ./ or /, rejects ..)
+            const rawDirInput =
+              typeof ftp.serverDir === "string" && ftp.serverDir.trim()
+                ? ftp.serverDir.trim()
+                : typeof ftp.server_dir === "string" && ftp.server_dir.trim()
+                  ? ftp.server_dir.trim()
+                  : "/htdocs/";
+            if (rawDirInput.includes("..")) {
               console.error("Invalid ftp.serverDir: path traversal (..) is not allowed.");
               process.exit(1);
             }
-            const cleanSegments = rawDir.replace(/^\/+|\/+$/g, "");
+            const cleanSegments = rawDirInput.replace(/^(?:\.\/|\/)+|\/+$/g, "");
             const normalizedServerDir = cleanSegments ? `/${cleanSegments}/` : "/htdocs/";
+
+            // Normalize optional FTP protocol (defaults to "ftp" for InfinityFree compatibility; supports "ftps" / "ftps-legacy")
+            const rawProtocol = typeof ftp.protocol === "string" && ftp.protocol.trim()
+              ? ftp.protocol.trim().toLowerCase()
+              : "ftp";
+            const allowedProtocols = new Set(["ftp", "ftps", "ftps-legacy"]);
+            if (!allowedProtocols.has(rawProtocol)) {
+              console.error("Invalid ftp.protocol. Allowed values: ftp, ftps, ftps-legacy.");
+              process.exit(1);
+            }
 
             // Normalize optional web basePath ("" for root/addon domain, "/subpath" for subfolder)
             const rawBasePath = typeof site.basePath === "string" ? site.basePath.trim() : "";
-            const cleanBase = rawBasePath.replace(/^\/+|\/+$/g, "");
+            const cleanBase = rawBasePath.replace(/^(?:\.\/|\/)+|\/+$/g, "");
             const normalizedBasePath = cleanBase ? `/${cleanBase}` : "";
 
             const delim = "EOF_" + crypto.randomBytes(8).toString("hex");
@@ -139,18 +155,26 @@ jobs:
             writeKV(outFile, "ftp_username", ftp.username.trim());
             writeKV(outFile, "ftp_password", ftp.password);
             writeKV(outFile, "ftp_server_dir", normalizedServerDir);
+            writeKV(outFile, "ftp_protocol", rawProtocol);
 
-            console.log("Validated deploy configuration. Target FTP dir:", normalizedServerDir, "| basePath:", normalizedBasePath || "(root)");
+            console.log(
+              "Validated deploy configuration. Protocol:",
+              rawProtocol,
+              "| Target FTP dir:",
+              normalizedServerDir,
+              "| basePath:",
+              normalizedBasePath || "(root)"
+            );
           '
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (Bun)
+        run: bun install --frozen-lockfile
 
       - name: Run Spyfall engine unit tests
-        run: npm test
+        run: bun run test
 
       - name: Run ESLint & Firestore rules checks
-        run: npm run lint
+        run: bun run lint
 
       - name: Prepare static export tree (exclude preview-only Next.js API routes)
         run: rm -rf app/api
@@ -161,7 +185,7 @@ jobs:
           STATIC_EXPORT: 'true'
           NEXT_PUBLIC_GAME_MASTER_MODE: functions
           NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION: asia-southeast1
-        run: npm run build
+        run: bun run build
 
       - name: Verify static output bundle & sync .htaccess 404 path
         run: |
@@ -172,15 +196,16 @@ jobs:
           fi
           ls -la out/
 
-      - name: Upload ./out to InfinityFree via FTPS
+      - name: Upload ./out to InfinityFree via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ steps.secrets.outputs.ftp_server }}
           username: ${{ steps.secrets.outputs.ftp_username }}
           password: ${{ steps.secrets.outputs.ftp_password }}
-          protocol: ftps
+          protocol: ${{ steps.secrets.outputs.ftp_protocol }}
           port: 21
           security: loose
+          timeout: 300000
           local-dir: ./out/
           server-dir: ${{ steps.secrets.outputs.ftp_server_dir }}
           dangerous-clean-slate: false
