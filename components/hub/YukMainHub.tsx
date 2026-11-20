@@ -105,12 +105,16 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
   const [creatorCardsOpen, setCreatorCardsOpen] = useState(false);
   const creatorAnchorRef = useRef<HTMLDivElement | null>(null);
 
-  // Auto-switch to LAN Party Mode when connection drops offline
+  // Auto-switch to LAN Party Mode when browser drops offline
   useEffect(() => {
-    if (!isOnline) {
+    const handleOffline = () => {
       setNetworkMode('lan');
-    }
-  }, [isOnline]);
+    };
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     if (!creatorCardsOpen) return;

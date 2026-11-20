@@ -126,8 +126,35 @@ function HostLanPairingModal({
   }, []);
 
   useEffect(() => {
-    void prepareFreshOffer();
+    let cancelled = false;
+
+    lanRuntime
+      .createHostOfferSlot()
+      .then((slot) => {
+        if (cancelled) {
+          lanRuntime.cancelHostSlot(slot.slotId);
+          return;
+        }
+        activeSlotRef.current = slot.slotId;
+        setSlotId(slot.slotId);
+        setOfferCode(slot.offerCode);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setErrorMsg(
+          err instanceof Error
+            ? err.message
+            : 'Gagal menyiapkan QR LAN. Pastikan Wi-Fi/Hotspot aktif.',
+        );
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setBusy(false);
+        }
+      });
+
     return () => {
+      cancelled = true;
       // Cancel unfinished pairing slot if closed before connecting
       const currentId = activeSlotRef.current;
       if (currentId) {
@@ -137,7 +164,7 @@ function HostLanPairingModal({
         }
       }
     };
-  }, [prepareFreshOffer]);
+  }, []);
 
   const handleAnswerScanned = async (answerCode: string) => {
     if (!slotId || busy) return;
