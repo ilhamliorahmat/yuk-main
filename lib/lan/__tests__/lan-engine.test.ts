@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { GameType, WerewolfRoleId } from '../../games/types';
 import { LanHostAuthority } from '../lan-host-authority';
 import { isLanRoomId } from '../lan-protocol';
 import { compactLanSdp, decodeLanSignal, encodeLanSignal } from '../lan-signaling';
@@ -74,7 +75,7 @@ describe('Zero-Internet WebRTC LAN Signaling Codec', () => {
 
 describe('LanHostAuthority — Zero-Leak Isolation & All 5 Games + Session Platform', () => {
   function setupThreePlayerRoom(
-    gameType: 'spyfall' | 'kata_kata' | 'satu_frekuensi' | 'fakta_hari_ini' | 'pelukis_gadungan',
+    gameType: GameType,
   ) {
     const auth = new LanHostAuthority({
       hostUid: 'host_1',
@@ -100,6 +101,17 @@ describe('LanHostAuthority — Zero-Leak Isolation & All 5 Games + Session Platf
       displayName: 'Layar Panggung',
       avatarColor: '#F59E0B',
       isStageDisplay: true,
+    });
+    return auth;
+  }
+
+  function setupFourPlayerRoom(gameType: GameType) {
+    const auth = setupThreePlayerRoom(gameType);
+    auth.registerPeer({
+      uid: 'guest_4',
+      displayName: 'Rina',
+      avatarColor: '#8B5CF6',
+      isStageDisplay: false,
     });
     return auth;
   }
@@ -310,6 +322,103 @@ describe('LanHostAuthority — Zero-Leak Isolation & All 5 Games + Session Platf
     auth.handleAction('host_1', 'switchRoomGameType', { nextGameType: 'spyfall' });
     expect(auth.getRoom().gameType).toBe('spyfall');
     expect(auth.getRoom().lukisanState).toBeNull();
+    expect(auth.getRoom().completedGames).toHaveLength(1);
+  });
+
+  it('runs Malam Siluman Night -> Dawn -> Discussion -> Day Vote -> Reveal with strict peer & stage isolation', () => {
+    const auth = setupFourPlayerRoom('malam_siluman');
+    auth.handleAction('host_1', 'updateMalamSilumanSettings', {
+      wolfCountMode: 1,
+      revealRoleOnDeath: true,
+      enabledRoles: {
+        seer: true,
+        doctor: true,
+        hunter: false,
+        mayor: false,
+        stealthWolf: false,
+        jester: false,
+      },
+    });
+    auth.handleAction('host_1', 'startMalamSilumanRound', {});
+
+    const roomStart = auth.getRoom();
+    expect(roomStart.status).toBe('playing');
+    expect(roomStart.malamSilumanState?.phase).toBe('night');
+    expect(roomStart.malamSilumanState?.livingUids).toHaveLength(4);
+
+    // Layar Panggung receives zero secrets
+    const stageNight = auth.getSnapshotForPeer('tv_stage', true);
+    expect(stageNight.secretsByOwnedSeat).toEqual({});
+    expect(stageNight.revealedSecrets).toEqual({});
+
+    const uids = ['host_1', 'guest_2', 'guest_3', 'guest_4'] as const;
+    const rolesByUid: Record<string, WerewolfRoleId> = {};
+    for (const uid of uids) {
+      const snap = auth.getSnapshotForPeer(uid, false);
+      expect(Object.keys(snap.secretsByOwnedSeat)).toEqual([uid]);
+      rolesByUid[uid] = snap.secretsByOwnedSeat[uid]!.wolfRole!;
+    }
+
+    const wolfUid = uids.find((u) => rolesByUid[u] === 'siluman')!;
+    const seerUid = uids.find((u) => rolesByUid[u] === 'penerawang')!;
+    const docUid = uids.find((u) => rolesByUid[u] === 'tabib')!;
+    const wargaUid = uids.find((u) => rolesByUid[u] === 'warga')!;
+
+    // Doctor protects wargaUid so everyone survives Night 1 and we can run Day Vote
+    auth.handleAction(wolfUid, 'submitMalamSilumanNightAction', {
+      targetUid: wargaUid,
+      actAsUid: wolfUid,
+    });
+    auth.handleAction(seerUid, 'submitMalamSilumanNightAction', {
+      targetUid: wolfUid,
+      actAsUid: seerUid,
+    });
+    auth.handleAction(docUid, 'submitMalamSilumanNightAction', {
+      targetUid: wargaUid,
+      actAsUid: docUid,
+    });
+    auth.handleAction(wargaUid, 'submitMalamSilumanNightAction', {
+      targetUid: 'decoy',
+      actAsUid: wargaUid,
+    });
+
+    // Night auto-resolves into dawn; Doctor saved wargaUid, Seer got Aura Siluman!
+    expect(auth.getRoom().malamSilumanState?.phase).toBe('dawn');
+    expect(auth.getRoom().malamSilumanState?.livingUids).toHaveLength(4);
+
+    const seerSnap = auth.getSnapshotForPeer(seerUid, false).secretsByOwnedSeat[seerUid]!;
+    expect(seerSnap.peekHistory).toHaveLength(1);
+    expect(seerSnap.peekHistory?.[0].apparentTeam).toBe('siluman');
+
+    const wargaSnap = auth.getSnapshotForPeer(wargaUid, false).secretsByOwnedSeat[wargaUid]!;
+    expect(wargaSnap.peekHistory).toEqual([]);
+
+    // Host advances Dawn -> Day Discussion -> Day Voting
+    auth.handleAction('host_1', 'advanceMalamSilumanDayPhase', { nextPhase: 'day_discussion' });
+    expect(auth.getRoom().malamSilumanState?.phase).toBe('day_discussion');
+
+    auth.handleAction('host_1', 'advanceMalamSilumanDayPhase', { nextPhase: 'day_voting' });
+    expect(auth.getRoom().malamSilumanState?.phase).toBe('day_voting');
+
+    // All citizens vote out the wolf; wolf votes wargaUid
+    for (const uid of uids) {
+      const targetUid = uid === wolfUid ? wargaUid : wolfUid;
+      auth.handleAction(uid, 'castMalamSilumanVote', { targetUid, actAsUid: uid });
+    }
+
+    // Citizens win (+3 each living citizen, 0 for wolf)
+    const roomEnd = auth.getRoom();
+    expect(roomEnd.status).toBe('round_end');
+    expect(roomEnd.lastRoundResult?.winnerTeam).toBe('warga');
+    expect(roomEnd.malamSilumanState?.revealedRolesByUid?.[wolfUid]).toBe('siluman');
+
+    const playersList = auth.getPlayersList();
+    expect(playersList.find((p) => p.uid === wargaUid)?.score).toBe(3);
+    expect(playersList.find((p) => p.uid === wolfUid)?.score).toBe(0);
+
+    // Switch game cleans up malamSilumanState and archives match
+    auth.handleAction('host_1', 'switchRoomGameType', { nextGameType: 'spyfall' });
+    expect(auth.getRoom().malamSilumanState).toBeNull();
     expect(auth.getRoom().completedGames).toHaveLength(1);
   });
 });

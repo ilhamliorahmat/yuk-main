@@ -26,6 +26,8 @@ import kataCover from '@/src/assets/images/yukmain_kata_cover_1795098826342.jpg'
 import kataEmblem from '@/src/assets/images/yukmain_kata_emblem_1795098826535.jpg';
 import pelukisCover from '@/src/assets/images/yukmain_pelukis_cover_1795178136981.jpg';
 import pelukisEmblem from '@/src/assets/images/yukmain_pelukis_emblem_1795178137917.jpg';
+import silumanCover from '@/src/assets/images/yukmain_siluman_cover_1795180059853.jpg';
+import silumanEmblem from '@/src/assets/images/yukmain_siluman_emblem_1795180059939.jpg';
 import spyEmblem from '@/src/assets/images/yukmain_spy_emblem_1795001425384.jpg';
 import spyfallCover from '@/src/assets/images/yukmain_spyfall_cover_1795001423851.jpg';
 import { LanPairingModal } from '@/components/lan/LanPairingModal';
@@ -86,6 +88,11 @@ const GAME_VISUALS: Record<GameType, GameVisualMeta> = {
     cover: pelukisCover,
     emblem: pelukisEmblem,
     ctaClass: 'bg-emerald-500 hover:bg-emerald-400 text-slate-950',
+  },
+  malam_siluman: {
+    cover: silumanCover,
+    emblem: silumanEmblem,
+    ctaClass: 'bg-rose-600 hover:bg-rose-500 text-white',
   },
 };
 
@@ -580,19 +587,14 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {PARTY_GAMES.map((game, idx) => {
+            {PARTY_GAMES.map((game) => {
               const isCreatingThis = busyAction === `create:${game.id}`;
               const visual = GAME_VISUALS[game.id];
-              const isCenteredLastCard = idx === 4 && PARTY_GAMES.length === 5;
 
               return (
                 <article
                   key={game.id}
-                  className={`bg-[#131A24] border border-slate-800 rounded-2xl overflow-hidden flex flex-col justify-between ${
-                    isCenteredLastCard
-                      ? 'md:col-span-2 md:max-w-[calc(50%-0.75rem)] md:mx-auto md:w-full'
-                      : ''
-                  }`}
+                  className="bg-[#131A24] border border-slate-800 rounded-2xl overflow-hidden flex flex-col justify-between"
                 >
                   <div>
                     {/* 16:9 Game Cover Banner */}

@@ -3,7 +3,8 @@ export type GameType =
   | 'kata_kata'
   | 'satu_frekuensi'
   | 'fakta_hari_ini'
-  | 'pelukis_gadungan';
+  | 'pelukis_gadungan'
+  | 'malam_siluman';
 
 export type RoomStatus = 'lobby' | 'playing' | 'voting' | 'spy_guess' | 'round_end';
 
@@ -155,6 +156,80 @@ export interface LukisanState {
   guessedWord?: string | null;
 }
 
+export type WerewolfRoleId =
+  | 'siluman'
+  | 'siluman_bayangan'
+  | 'penerawang'
+  | 'tabib'
+  | 'pemburu'
+  | 'pak_rt'
+  | 'tumbal'
+  | 'warga';
+
+export type WerewolfTeam = 'siluman' | 'warga' | 'netral';
+
+export type MalamSilumanWolfCountMode = 'auto' | 1 | 2 | 3;
+
+export interface MalamSilumanRoleToggles {
+  seer: boolean;
+  doctor: boolean;
+  hunter: boolean;
+  mayor: boolean;
+  stealthWolf: boolean;
+  jester: boolean;
+}
+
+export interface MalamSilumanSettings {
+  wolfCountMode: MalamSilumanWolfCountMode;
+  revealRoleOnDeath: boolean;
+  enabledRoles: MalamSilumanRoleToggles;
+}
+
+export type MalamSilumanPhase =
+  | 'night'
+  | 'dawn'
+  | 'day_discussion'
+  | 'day_voting'
+  | 'hunter_revenge'
+  | 'reveal';
+
+export interface MalamSilumanDeadPlayer {
+  uid: string;
+  displayName: string;
+  cause: 'night_kill' | 'day_vote' | 'hunter_shot';
+  dayOrNightNumber: number;
+  revealedRole: WerewolfRoleId | null;
+  revealedTeam: WerewolfTeam | null;
+}
+
+export interface MalamSilumanPeekRecord {
+  night: number;
+  targetUid: string;
+  targetName: string;
+  apparentTeam: 'warga' | 'siluman';
+}
+
+export interface MalamSilumanState {
+  phase: MalamSilumanPhase;
+  nightNumber: number;
+  dayNumber: number;
+  participantUids: string[];
+  participantNamesByUid: Record<string, string>;
+  livingUids: string[];
+  deadPlayers: MalamSilumanDeadPlayer[];
+  submittedNightUids: string[];
+  submittedVoteUids: string[];
+  lastNightSummary: string | null;
+  lastDaySummary: string | null;
+  lastHunterSummary: string | null;
+  pendingHunterUid: string | null;
+  pendingHunterName: string | null;
+  hunterTrigger: 'night' | 'day' | null;
+  activeDeckComposition: WerewolfRoleId[];
+  revealedRolesByUid?: Record<string, WerewolfRoleId>;
+  lastVoteTally?: Record<string, number>;
+}
+
 export interface EliminationEntry {
   uid: string;
   displayName: string;
@@ -180,7 +255,16 @@ export interface PendingSpyGuess {
 
 export interface RoundResult {
   roundNumber: number;
-  winnerTeam: 'warga' | 'mata_mata' | 'penebak' | 'bluffer' | 'frekuensi' | 'pelukis' | 'gadungan';
+  winnerTeam:
+    | 'warga'
+    | 'mata_mata'
+    | 'penebak'
+    | 'bluffer'
+    | 'frekuensi'
+    | 'pelukis'
+    | 'gadungan'
+    | 'siluman'
+    | 'tumbal';
   reason: string;
   locationName: string;
   guessedLocation: string | null;
@@ -215,6 +299,10 @@ export interface ServerRoundStateDoc {
   // Pelukis Gadungan secret drawing word & broad category
   drawingCategory?: string;
   drawingWord?: string;
+  // Malam Siluman authoritative secret role assignments & doctor cooldown
+  wolfRolesByUid?: Record<string, WerewolfRoleId>;
+  wolfNamesByUid?: Record<string, string>;
+  lastProtectedByDoctor?: string | null;
   createdAtMs: number;
 }
 
@@ -293,11 +381,13 @@ export interface RoomDoc {
   customFacts?: CustomFactItem[];
   customDrawingPrompts?: CustomDrawingPrompt[];
   pelukisStrokeRounds?: 1 | 2;
+  malamSilumanSettings?: MalamSilumanSettings | null;
   eliminatedUids?: string[];
   eliminationLog?: EliminationEntry[];
   frequencyState?: FrequencyState | null;
   faktaState?: FaktaState | null;
   lukisanState?: LukisanState | null;
+  malamSilumanState?: MalamSilumanState | null;
   activeVote: VoteState | null;
   pendingSpyGuess: PendingSpyGuess | null;
   lastRoundResult: RoundResult | null;
@@ -356,6 +446,11 @@ export interface PlayerSecretDoc {
   drawingCategory?: string;
   drawingWord?: string | null;
   playerInkColor?: string;
+  wolfRole?: WerewolfRoleId;
+  wolfTeam?: WerewolfTeam;
+  fellowWolves?: Array<{ uid: string; displayName: string; role: WerewolfRoleId }>;
+  peekHistory?: MalamSilumanPeekRecord[];
+  lastProtectedUid?: string | null;
   createdAt?: unknown;
 }
 
@@ -366,6 +461,9 @@ export interface PlayerSubmissionDoc {
   guessValue?: number;
   suitPick?: SuitPick;
   votedUid?: string;
+  nightNumber?: number;
+  nightTargetUid?: string;
+  dayNumber?: number;
   updatedAt?: unknown;
 }
 

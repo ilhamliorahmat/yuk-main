@@ -18,6 +18,10 @@ import { getFirebaseServices } from '@/lib/firebase/client';
 import { handleFirestoreError, OperationType } from '@/lib/firebase/errors';
 import { sanitizeCustomFact } from '@/lib/games/fakta-hari-ini/engine';
 import { sanitizeCustomWordPair } from '@/lib/games/kata-kata/engine';
+import {
+  DEFAULT_MALAM_SILUMAN_SETTINGS,
+  sanitizeMalamSilumanSettings,
+} from '@/lib/games/malam-siluman/engine';
 import { sanitizeCustomDrawingPrompt } from '@/lib/games/pelukis-gadungan/engine';
 import { sanitizeCustomSpectrum } from '@/lib/games/satu-frekuensi/engine';
 import {
@@ -32,6 +36,7 @@ import type {
   CustomSpectrum,
   CustomWordPair,
   GameType,
+  MalamSilumanSettings,
   PlayerSecretDoc,
   PresenceEntry,
   RoomDoc,
@@ -114,6 +119,22 @@ function mapEndpointToLanAction(
       return 'resolvePelukisVote';
     case '/api/pelukis-gadungan/return-lobby':
       return 'returnPelukisToLobby';
+    case '/api/malam-siluman/start':
+      return 'startMalamSilumanRound';
+    case '/api/malam-siluman/night':
+      return 'submitMalamSilumanNightAction';
+    case '/api/malam-siluman/resolve-night':
+      return 'resolveMalamSilumanNight';
+    case '/api/malam-siluman/phase':
+      return 'advanceMalamSilumanDayPhase';
+    case '/api/malam-siluman/vote':
+      return 'castMalamSilumanVote';
+    case '/api/malam-siluman/resolve-vote':
+      return 'resolveMalamSilumanVote';
+    case '/api/malam-siluman/hunter':
+      return 'submitMalamSilumanHunterShot';
+    case '/api/malam-siluman/return-lobby':
+      return 'returnMalamSilumanToLobby';
     case '/api/session/switch-game':
       return 'switchRoomGameType';
     case '/api/session/open-recap':
@@ -198,11 +219,13 @@ export async function createRoom(params: {
     customFacts: [],
     customDrawingPrompts: [],
     pelukisStrokeRounds: 2,
+    malamSilumanSettings: DEFAULT_MALAM_SILUMAN_SETTINGS,
     eliminatedUids: [],
     eliminationLog: [],
     frequencyState: null,
     faktaState: null,
     lukisanState: null,
+    malamSilumanState: null,
     activeVote: null,
     pendingSpyGuess: null,
     lastRoundResult: null,
@@ -325,6 +348,7 @@ export async function checkAndResetExpiredRoomSession(
         frequencyState: null,
         faktaState: null,
         lukisanState: null,
+        malamSilumanState: null,
         activeVote: null,
         pendingSpyGuess: null,
         lastRoundResult: null,
@@ -1753,6 +1777,206 @@ export async function returnPelukisToLobby(params: {
   hostName: string;
 }): Promise<void> {
   const data = await callGameMasterApi('/api/pelukis-gadungan/return-lobby', {
+    roomId: params.roomId,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.hostUid,
+      senderName: params.hostName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+// --- Settings & Actions: Game #6 (Malam Siluman / malam_siluman) ---
+
+export async function updateMalamSilumanSettings(params: {
+  roomId: string;
+  settings: MalamSilumanSettings;
+}): Promise<void> {
+  const clean = sanitizeMalamSilumanSettings(params.settings);
+  if (isLanRoomId(params.roomId)) {
+    await lanRuntime.dispatchAction(params.roomId, 'updateMalamSilumanSettings', {
+      settings: clean,
+    });
+    return;
+  }
+
+  const { auth, db } = getFirebaseServices();
+  if (!db) throw new Error('Firebase belum terkonfigurasi.');
+
+  try {
+    await updateDoc(doc(db, 'rooms', params.roomId), {
+      malamSilumanSettings: clean,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `rooms/${params.roomId}`, auth);
+  }
+}
+
+export async function startMalamSilumanRound(params: {
+  roomId: string;
+  actorUid: string;
+  actorName: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/malam-siluman/start', {
+    roomId: params.roomId,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.actorUid,
+      senderName: params.actorName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function submitMalamSilumanNightAction(params: {
+  roomId: string;
+  actorUid: string;
+  actorName: string;
+  targetUid: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/malam-siluman/night', {
+    roomId: params.roomId,
+    targetUid: params.targetUid,
+    actAsUid: params.actorUid,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.actorUid,
+      senderName: params.actorName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function resolveMalamSilumanNight(params: {
+  roomId: string;
+  hostUid: string;
+  hostName: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/malam-siluman/resolve-night', {
+    roomId: params.roomId,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.hostUid,
+      senderName: params.hostName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function advanceMalamSilumanDayPhase(params: {
+  roomId: string;
+  hostUid: string;
+  hostName: string;
+  nextPhase: 'day_discussion' | 'day_voting';
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/malam-siluman/phase', {
+    roomId: params.roomId,
+    nextPhase: params.nextPhase,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.hostUid,
+      senderName: params.hostName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function castMalamSilumanVote(params: {
+  roomId: string;
+  voterUid: string;
+  voterName: string;
+  targetUid: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/malam-siluman/vote', {
+    roomId: params.roomId,
+    targetUid: params.targetUid,
+    actAsUid: params.voterUid,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.voterUid,
+      senderName: params.voterName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function resolveMalamSilumanVote(params: {
+  roomId: string;
+  hostUid: string;
+  hostName: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/malam-siluman/resolve-vote', {
+    roomId: params.roomId,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.hostUid,
+      senderName: params.hostName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function submitMalamSilumanHunterShot(params: {
+  roomId: string;
+  actorUid: string;
+  actorName: string;
+  targetUid?: string;
+  skip?: boolean;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/malam-siluman/hunter', {
+    roomId: params.roomId,
+    targetUid: params.targetUid ?? '',
+    skip: Boolean(params.skip),
+    actAsUid: params.actorUid,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.actorUid,
+      senderName: params.actorName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function returnMalamSilumanToLobby(params: {
+  roomId: string;
+  hostUid: string;
+  hostName: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/malam-siluman/return-lobby', {
     roomId: params.roomId,
   });
 

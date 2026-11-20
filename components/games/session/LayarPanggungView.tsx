@@ -7,6 +7,7 @@ import {
   Coffee,
   LogOut,
   Monitor,
+  Moon,
   Radio,
   Search,
   Smartphone,
@@ -19,6 +20,7 @@ import {
 import QRCode from 'qrcode';
 import { PelukisCanvas } from '@/components/games/pelukis-gadungan/PelukisCanvas';
 import { FrequencyDial } from '@/components/games/satu-frekuensi/FrequencyDial';
+import { MALAM_SILUMAN_ROLES } from '@/lib/games/malam-siluman/roles-id';
 import type {
   GameType,
   PlayerSecretDoc,
@@ -46,6 +48,7 @@ const GAME_META: Record<
   satu_frekuensi: { title: 'Satu Frekuensi', icon: Radio, accent: 'text-cyan-400' },
   fakta_hari_ini: { title: 'Fakta Hari Ini', icon: BookOpenCheck, accent: 'text-indigo-400' },
   pelukis_gadungan: { title: 'Pelukis Gadungan', icon: Brush, accent: 'text-emerald-400' },
+  malam_siluman: { title: 'Malam Siluman', icon: Moon, accent: 'text-rose-400' },
 };
 
 function formatClock(sec: number): string {
@@ -125,6 +128,11 @@ export function LayarPanggungView({
       return res.winnerTeam === 'pelukis'
         ? 'Pelukis Asli Menang! (+2 Poin)'
         : 'Pelukis Gadungan Menang! (+3 Poin)';
+    }
+    if (room.gameType === 'malam_siluman') {
+      if (res.winnerTeam === 'warga') return 'Tim Warga Menang!';
+      if (res.winnerTeam === 'tumbal') return 'Tumbal Menang Solo! (+4 Poin)';
+      return 'Kawanan Siluman Menang!';
     }
     return `Hasil Ronde #${res.roundNumber}`;
   }, [room]);
@@ -597,6 +605,145 @@ export function LayarPanggungView({
                   </div>
                 </div>
               )}
+
+              {/* GAME #6: MALAM SILUMAN STAGE (Zero living secret leaks) */}
+              {room.gameType === 'malam_siluman' && room.malamSilumanState && (() => {
+                const ms = room.malamSilumanState;
+                const livingSet = new Set(ms.livingUids);
+                const deadByUid = new Map(ms.deadPlayers.map((d) => [d.uid, d]));
+                const stagePhaseTitle =
+                  room.status === 'round_end'
+                    ? 'Pengungkapan Identitas Desa'
+                    : ms.phase === 'night'
+                      ? `Malam #${ms.nightNumber} — Desa Tertidur`
+                      : ms.phase === 'dawn'
+                        ? `Fajar Hari #${ms.dayNumber}`
+                        : ms.phase === 'day_discussion'
+                          ? `Diskusi Siang #${ms.dayNumber}`
+                          : ms.phase === 'day_voting'
+                            ? `Voting Eksekusi Siang #${ms.dayNumber}`
+                            : 'Tembakan Terakhir Pemburu!';
+                const stageProgressLabel =
+                  ms.phase === 'night'
+                    ? `${ms.submittedNightUids.length}/${ms.livingUids.length} Aksi Malam`
+                    : ms.phase === 'day_voting'
+                      ? `${ms.submittedVoteUids.length}/${ms.livingUids.length} Suara`
+                      : `${ms.livingUids.length}/${ms.participantUids.length} Hidup`;
+
+                return (
+                  <div className="rounded-2xl bg-[#131A24] border border-slate-800 p-6 sm:p-8 space-y-6">
+                    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                      <div>
+                        <p className="text-xs uppercase tracking-wider text-rose-400 font-bold">
+                          Ronde #{room.roundNumber} · Desa Malam Siluman
+                        </p>
+                        <h2 className="text-2xl sm:text-3xl font-black text-white mt-1">
+                          {stagePhaseTitle}
+                        </h2>
+                      </div>
+                      <div className="px-4 py-2 rounded-xl bg-rose-500/15 border border-rose-400/40 text-sm font-bold text-rose-200 tabular-nums">
+                        {stageProgressLabel}
+                      </div>
+                    </div>
+
+                    {(ms.lastNightSummary || ms.lastDaySummary || ms.lastHunterSummary) && (
+                      <div className="space-y-2.5">
+                        {ms.lastNightSummary && (
+                          <div className="rounded-xl bg-[#0B1018] border border-slate-800 p-4 text-sm text-slate-200 leading-relaxed">
+                            <span className="text-xs font-bold uppercase tracking-wider text-amber-400 block mb-1">
+                              Berita Fajar
+                            </span>
+                            {ms.lastNightSummary}
+                          </div>
+                        )}
+                        {ms.lastHunterSummary && (
+                          <div className="rounded-xl bg-rose-950/35 border border-rose-500/40 p-4 text-sm text-rose-200 leading-relaxed">
+                            <span className="text-xs font-bold uppercase tracking-wider text-rose-300 block mb-1">
+                              Tembakan Pemburu
+                            </span>
+                            {ms.lastHunterSummary}
+                          </div>
+                        )}
+                        {ms.lastDaySummary && (
+                          <div className="rounded-xl bg-[#0B1018] border border-slate-800 p-4 text-sm text-slate-200 leading-relaxed">
+                            <span className="text-xs font-bold uppercase tracking-wider text-cyan-400 block mb-1">
+                              Hasil Voting Siang
+                            </span>
+                            {ms.lastDaySummary}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {ms.phase === 'hunter_revenge' && ms.pendingHunterName && (
+                      <div className="rounded-xl bg-rose-500/15 border border-rose-400/50 p-4 text-center">
+                        <p className="text-xs font-bold uppercase tracking-wider text-rose-300">
+                          Fase Pembalasan Pemburu
+                        </p>
+                        <p className="text-lg font-black text-white mt-1">
+                          {ms.pendingHunterName} sedang membidik 1 tersangka untuk ikut gugur!
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="space-y-3">
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                        Status Penduduk Desa ({ms.livingUids.length} Hidup · {ms.deadPlayers.length} Gugur)
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {ms.participantUids.map((uid) => {
+                          const isAlive = livingSet.has(uid);
+                          const dead = deadByUid.get(uid);
+                          const endRoleId =
+                            room.status === 'round_end' ? ms.revealedRolesByUid?.[uid] : null;
+                          const shownRole =
+                            endRoleId ?? (dead?.revealedRole ? dead.revealedRole : null);
+                          const roleMeta = shownRole ? MALAM_SILUMAN_ROLES[shownRole] : null;
+
+                          return (
+                            <div
+                              key={uid}
+                              className={`rounded-xl px-4 py-3 border flex items-center justify-between gap-2 ${
+                                !isAlive
+                                  ? 'bg-[#0B1018]/60 border-rose-900/50 text-slate-400'
+                                  : 'bg-[#0B1018] border-slate-800 text-slate-100'
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <p className={`text-sm font-bold truncate ${!isAlive ? 'line-through' : 'text-white'}`}>
+                                  {ms.participantNamesByUid[uid] ?? 'Pemain'}
+                                </p>
+                                <p className="text-[11px] text-slate-400">
+                                  {isAlive
+                                    ? 'Masih Hidup'
+                                    : dead?.cause === 'night_kill'
+                                      ? `Gugur Malam #${dead.dayOrNightNumber}`
+                                      : dead?.cause === 'hunter_shot'
+                                        ? 'Tertembak Pemburu'
+                                        : `Dieksekusi Hari #${dead?.dayOrNightNumber ?? 1}`}
+                                </p>
+                              </div>
+                              <span
+                                className={`text-xs font-bold shrink-0 ${
+                                  roleMeta
+                                    ? roleMeta.team === 'siluman'
+                                      ? 'text-rose-400'
+                                      : roleMeta.team === 'netral'
+                                        ? 'text-amber-300'
+                                        : 'text-emerald-300'
+                                    : 'text-slate-500'
+                                }`}
+                              >
+                                {roleMeta ? roleMeta.name : isAlive ? 'Rahasia' : 'Tertutup'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Post-Round Role Reveal Table (Spyfall & Kata-Kata only) */}
               {room.status === 'round_end' &&

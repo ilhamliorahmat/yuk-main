@@ -32,6 +32,8 @@ export function getDefaultPacksForGame(gameType: GameType): string[] {
       return ['hukum_sejarah', 'nusantara'];
     case 'pelukis_gadungan':
       return ['kuliner', 'tongkrongan', 'hewan_alam'];
+    case 'malam_siluman':
+      return ['malam_siluman'];
     case 'spyfall':
     default:
       return ['nusantara', 'klasik'];

@@ -96,6 +96,25 @@ export const PARTY_GAMES: PartyGameDefinition[] = [
       'Jika Gadungan lolos dari suara terbanyak, Gadungan menang (+3 poin). Jika Gadungan tertangkap, ia mendapat 1 Kesempatan Terakhir menebak Kata Rahasia untuk membalikkan keadaan!',
     ],
   },
+  {
+    id: 'malam_siluman',
+    number: 6,
+    title: 'Malam Siluman',
+    subtitle: 'Werewolf Desa & Peran Rahasia',
+    description:
+      'Desa mendadak diteror Siluman di balik malam! Gunakan peran spesial seperti Penerawang, Tabib, Pemburu, hingga peran liar Siluman Bayangan & Tumbal—atau main klasik murni Siluman vs Warga.',
+    minPlayers: 4,
+    maxPlayers: 12,
+    durationLabel: '8–15 Menit · Tanpa Moderator',
+    available: true,
+    rulesSummary: [
+      'Minimal 4 pemain berkumpul di satu ruang. Siluman & Warga selalu aktif, sementara 6 peran opsional (Penerawang, Tabib, Pemburu, Pak RT, Siluman Bayangan, Tumbal) bisa dihidupkan atau dimatikan Host.',
+      'Setiap fase Malam, SEMUA pemain hidup tetap menekan tombol aksi (Warga & peran pasif mengirim "Ronda Malam") agar tidak ada yang ketahuan dari bunyi ketukan layar.',
+      'Siluman memangsa 1 warga per malam. Penerawang meneropong aura 1 orang, dan Tabib melindungi 1 orang (tidak boleh orang yang sama 2 malam berturut-turut).',
+      'Saat Fajar & Siang, desa berdiskusi lalu melakukan voting eksekusi rahasia. Suara Pak RT bernilai 2x, sedangkan Pemburu yang gugur langsung melepaskan Tembakan Terakhir.',
+      'Warga menang jika semua Siluman gugur; Siluman menang jika jumlahnya menyamai atau melebihi non-Siluman; Tumbal (jika aktif) menang SOLO (+4 poin) bila berhasil memancing desa mengeksekusinya di siang hari!',
+    ],
+  },
 ];
 
 export function getPartyGame(gameType: GameType): PartyGameDefinition {

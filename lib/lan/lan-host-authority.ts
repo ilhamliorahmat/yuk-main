@@ -28,6 +28,17 @@ import {
   getDefaultPacksForGame,
 } from '../games/session/engine';
 import {
+  buildDeadPlayerEntry,
+  calculateMalamSilumanScoreDeltas,
+  dealMalamSilumanRound,
+  DEFAULT_MALAM_SILUMAN_SETTINGS,
+  evaluateMalamSilumanVictory,
+  resolveMalamSilumanNight,
+  sanitizeMalamSilumanSettings,
+  tallyMalamSilumanDayVotes,
+} from '../games/malam-siluman/engine';
+import { MALAM_SILUMAN_ROLES } from '../games/malam-siluman/roles-id';
+import {
   calculatePelukisScoreDeltas,
   dealPelukisGadunganRound,
   evaluatePelukisWordGuess,
@@ -55,13 +66,17 @@ import type {
   GameType,
   LukisanPhase,
   LukisanStroke,
+  MalamSilumanDeadPlayer,
+  MalamSilumanState,
   PlayerSecretDoc,
   PresenceEntry,
   RoomDoc,
   RoomPlayerDoc,
+  RoundResult,
   ServerRoundStateDoc,
   SpyMode,
   SuitPick,
+  WerewolfRoleId,
 } from '../games/types';
 import {
   LAN_ROOM_PREFIX,
@@ -84,6 +99,8 @@ export class LanHostAuthority {
   private serverState: ServerRoundStateDoc | null = null;
   private frequencyGuessesByRound: Map<string, Map<string, number>> = new Map();
   private pelukisVotesByRound: Map<string, Map<string, string>> = new Map();
+  private malamSilumanNightActionsByRound: Map<string, Map<string, string>> = new Map();
+  private malamSilumanVotesByRound: Map<string, Map<string, string>> = new Map();
   private suitPicksByClash: Map<string, Map<string, SuitPick>> = new Map();
   private messages: ChatMessage[] = [];
   private presence: Record<string, PresenceEntry> = {};
@@ -120,11 +137,13 @@ export class LanHostAuthority {
       customFacts: [],
       customDrawingPrompts: [],
       pelukisStrokeRounds: 2,
+      malamSilumanSettings: DEFAULT_MALAM_SILUMAN_SETTINGS,
       eliminatedUids: [],
       eliminationLog: [],
       frequencyState: null,
       faktaState: null,
       lukisanState: null,
+      malamSilumanState: null,
       activeVote: null,
       pendingSpyGuess: null,
       lastRoundResult: null,
@@ -618,6 +637,17 @@ export class LanHostAuthority {
           spyMode,
           pelukisStrokeRounds,
           customDrawingPrompts,
+          updatedAt: now,
+        };
+        return {};
+      }
+
+      case 'updateMalamSilumanSettings': {
+        this.requireHost(senderDeviceUid);
+        const settings = sanitizeMalamSilumanSettings(payload.settings ?? payload);
+        this.room = {
+          ...this.room,
+          malamSilumanSettings: settings,
           updatedAt: now,
         };
         return {};
@@ -1815,12 +1845,398 @@ export class LanHostAuthority {
         return { isCorrect, winnerTeam };
       }
 
+      // ===================== GAME #6: MALAM SILUMAN =====================
+      case 'startMalamSilumanRound': {
+        this.requireHost(senderDeviceUid);
+        if (this.room.status !== 'lobby' && this.room.status !== 'round_end') {
+          throw new Error('Ronde sedang berlangsung.');
+        }
+        const activePlayers = filterActivePlayers(this.getPlayersList());
+        if (activePlayers.length < 4) {
+          throw new Error(
+            'Minimal 4 pemain aktif (tidak sedang BRB) dibutuhkan untuk memulai Malam Siluman.',
+          );
+        }
+
+        const settings = sanitizeMalamSilumanSettings(this.room.malamSilumanSettings);
+        const nextRound = this.room.roundNumber + 1;
+        const roundId = `r${nextRound}_${now.toString(36)}`;
+
+        const participantUids = activePlayers.map((p) => p.uid);
+        const participantNamesByUid: Record<string, string> = {};
+        for (const p of activePlayers) {
+          participantNamesByUid[p.uid] = p.displayName.slice(0, 40);
+        }
+
+        const dealt = dealMalamSilumanRound({
+          playerUids: participantUids,
+          playerNamesByUid: participantNamesByUid,
+          settings,
+          roundId,
+        });
+
+        const secretMap = new Map<string, PlayerSecretDoc>();
+        for (const [uid, sec] of Object.entries(dealt.secretsByUid)) {
+          secretMap.set(uid, { ...sec, createdAt: now });
+        }
+        this.secretsByRound.set(roundId, secretMap);
+
+        this.serverState = {
+          roundId,
+          roundNumber: nextRound,
+          locationName: 'Desa Malam Siluman',
+          spyUids: dealt.wolfUids,
+          spyNames: dealt.wolfNames,
+          wolfRolesByUid: dealt.rolesByUid,
+          wolfNamesByUid: participantNamesByUid,
+          lastProtectedByDoctor: null,
+          createdAtMs: now,
+        };
+
+        const nextState: MalamSilumanState = {
+          phase: 'night',
+          nightNumber: 1,
+          dayNumber: 0,
+          participantUids,
+          participantNamesByUid,
+          livingUids: participantUids,
+          deadPlayers: [],
+          submittedNightUids: [],
+          submittedVoteUids: [],
+          lastNightSummary: null,
+          lastDaySummary: null,
+          lastHunterSummary: null,
+          pendingHunterUid: null,
+          pendingHunterName: null,
+          hunterTrigger: null,
+          activeDeckComposition: dealt.deckComposition,
+        };
+
+        this.room = {
+          ...this.room,
+          status: 'playing',
+          roundNumber: nextRound,
+          currentRoundId: roundId,
+          roundEndsAtMs: 0,
+          firstSpeakerUid: '',
+          selectedLocationNames: [],
+          eliminatedUids: [],
+          eliminationLog: [],
+          malamSilumanSettings: settings,
+          malamSilumanState: nextState,
+          activeVote: null,
+          pendingSpyGuess: null,
+          activeRecap: null,
+          updatedAt: now,
+        };
+
+        this.pushSystemMessage(
+          `Malam #1 turun di desa (${activePlayers.length} warga, ${dealt.wolfUids.length} Siluman). Semua pemain hidup silakan kirim aksi malamnya!`,
+        );
+        return { roundNumber: nextRound, roundId };
+      }
+
+      case 'submitMalamSilumanNightAction': {
+        const actor = this.resolveActor(senderDeviceUid, payload);
+        const ms = this.room.malamSilumanState;
+        if (!ms || !this.serverState || this.room.status !== 'playing' || ms.phase !== 'night') {
+          throw new Error('Fase Malam sedang tidak aktif.');
+        }
+        if (!ms.livingUids.includes(actor.uid)) {
+          throw new Error('Hanya pemain yang masih hidup yang dapat beraksi di malam hari.');
+        }
+        const targetUid = String(payload.targetUid ?? '').trim();
+        if (!targetUid) {
+          throw new Error('Pilih target atau kirim aksi Ronda Malam terlebih dahulu.');
+        }
+
+        const actorRole = this.serverState.wolfRolesByUid?.[actor.uid] ?? 'warga';
+        if (
+          actorRole === 'tabib' &&
+          this.serverState.lastProtectedByDoctor &&
+          targetUid === this.serverState.lastProtectedByDoctor
+        ) {
+          throw new Error('Tabib tidak boleh melindungi orang yang sama 2 malam berturut-turut.');
+        }
+
+        const nightKey = `${this.room.currentRoundId}_n${ms.nightNumber}`;
+        const nightMap = this.malamSilumanNightActionsByRound.get(nightKey) ?? new Map<string, string>();
+        nightMap.set(actor.uid, targetUid);
+        this.malamSilumanNightActionsByRound.set(nightKey, nightMap);
+
+        const nextSubmittedUids = ms.livingUids.filter((u) => nightMap.has(u));
+        if (nextSubmittedUids.length < ms.livingUids.length) {
+          this.room = {
+            ...this.room,
+            malamSilumanState: {
+              ...ms,
+              submittedNightUids: nextSubmittedUids,
+            },
+            updatedAt: now,
+          };
+          return { allSubmitted: false };
+        }
+
+        return this.finalizeMalamSilumanNight(nextSubmittedUids, now);
+      }
+
+      case 'resolveMalamSilumanNight': {
+        this.requireHost(senderDeviceUid);
+        const ms = this.room.malamSilumanState;
+        if (!ms || !this.serverState) {
+          throw new Error('Ronde Malam Siluman tidak aktif.');
+        }
+        if (this.room.status !== 'playing' || ms.phase !== 'night') {
+          return {};
+        }
+        return this.finalizeMalamSilumanNight(ms.submittedNightUids, now);
+      }
+
+      case 'advanceMalamSilumanDayPhase': {
+        this.requireHost(senderDeviceUid);
+        const ms = this.room.malamSilumanState;
+        if (!ms || this.room.status !== 'playing') {
+          throw new Error('Ronde Malam Siluman sedang tidak berjalan.');
+        }
+        const nextPhase = payload.nextPhase;
+        if (nextPhase !== 'day_discussion' && nextPhase !== 'day_voting') {
+          throw new Error('Transisi fase tidak valid.');
+        }
+
+        if (nextPhase === 'day_discussion' && ms.phase === 'dawn') {
+          this.room = {
+            ...this.room,
+            malamSilumanState: {
+              ...ms,
+              phase: 'day_discussion',
+            },
+            updatedAt: now,
+          };
+          this.pushSystemMessage(
+            `Siang #${ms.dayNumber} dimulai! Warga desa berdiskusi mencari siapa Siluman.`,
+          );
+          return { phase: 'day_discussion' };
+        }
+
+        if (nextPhase === 'day_voting' && (ms.phase === 'day_discussion' || ms.phase === 'dawn')) {
+          this.room = {
+            ...this.room,
+            malamSilumanState: {
+              ...ms,
+              phase: 'day_voting',
+              submittedVoteUids: [],
+            },
+            updatedAt: now,
+          };
+          this.pushSystemMessage(
+            `Voting Eksekusi Siang #${ms.dayNumber} dibuka! Setiap warga hidup memilih secara rahasia.`,
+          );
+          return { phase: 'day_voting' };
+        }
+
+        return {};
+      }
+
+      case 'castMalamSilumanVote': {
+        const actor = this.resolveActor(senderDeviceUid, payload);
+        const ms = this.room.malamSilumanState;
+        if (!ms || !this.serverState || this.room.status !== 'playing' || ms.phase !== 'day_voting') {
+          throw new Error('Voting eksekusi sedang tidak aktif.');
+        }
+        if (!ms.livingUids.includes(actor.uid)) {
+          throw new Error('Pemain yang sudah gugur tidak memiliki hak suara.');
+        }
+        const targetUid = String(payload.targetUid ?? '').trim();
+        if (!targetUid) {
+          throw new Error('Pilih salah satu tersangka atau "Lewati Eksekusi".');
+        }
+        if (targetUid === actor.uid) {
+          throw new Error('Kamu tidak dapat memilih dirimu sendiri.');
+        }
+        if (targetUid !== 'skip' && !ms.livingUids.includes(targetUid)) {
+          throw new Error('Target yang dipilih tidak valid atau sudah gugur.');
+        }
+
+        const voteKey = `${this.room.currentRoundId}_d${ms.dayNumber}`;
+        const voteMap = this.malamSilumanVotesByRound.get(voteKey) ?? new Map<string, string>();
+        voteMap.set(actor.uid, targetUid);
+        this.malamSilumanVotesByRound.set(voteKey, voteMap);
+
+        const nextSubmittedUids = ms.livingUids.filter((u) => voteMap.has(u));
+        if (nextSubmittedUids.length < ms.livingUids.length) {
+          this.room = {
+            ...this.room,
+            malamSilumanState: {
+              ...ms,
+              submittedVoteUids: nextSubmittedUids,
+            },
+            updatedAt: now,
+          };
+          return { allVoted: false };
+        }
+
+        return this.finalizeMalamSilumanVote(nextSubmittedUids, now);
+      }
+
+      case 'resolveMalamSilumanVote': {
+        this.requireHost(senderDeviceUid);
+        const ms = this.room.malamSilumanState;
+        if (!ms || !this.serverState) {
+          throw new Error('Ronde Malam Siluman tidak aktif.');
+        }
+        if (this.room.status !== 'playing' || ms.phase !== 'day_voting') {
+          return {};
+        }
+        return this.finalizeMalamSilumanVote(ms.submittedVoteUids, now);
+      }
+
+      case 'submitMalamSilumanHunterShot': {
+        const ms = this.room.malamSilumanState;
+        if (!ms || !this.serverState || this.room.status !== 'playing' || ms.phase !== 'hunter_revenge' || !ms.pendingHunterUid) {
+          throw new Error('Tidak ada fase Tembakan Terakhir Pemburu yang aktif.');
+        }
+        const skip = Boolean(payload.skip);
+        const targetUid = String(payload.targetUid ?? '').trim();
+        if (!skip && !targetUid) {
+          throw new Error('Pilih 1 pemain hidup untuk ditembak atau lewati.');
+        }
+        if (!skip || senderDeviceUid !== this.room.hostUid) {
+          const actor = this.resolveActor(senderDeviceUid, payload);
+          if (actor.uid !== ms.pendingHunterUid) {
+            throw new Error('Hanya Pemburu yang baru gugur yang dapat menembak.');
+          }
+        }
+
+        const rolesByUid = this.serverState.wolfRolesByUid ?? {};
+        const namesByUid = ms.participantNamesByUid;
+        const settings = sanitizeMalamSilumanSettings(this.room.malamSilumanSettings);
+
+        let nextLivingUids = [...ms.livingUids];
+        const nextDeadPlayers = [...ms.deadPlayers];
+        let hunterSummary: string;
+
+        if (!skip) {
+          if (!ms.livingUids.includes(targetUid)) {
+            throw new Error('Target tembakan bukan pemain yang masih hidup.');
+          }
+          const targetName = namesByUid[targetUid] ?? 'Pemain';
+          const targetRole: WerewolfRoleId = rolesByUid[targetUid] ?? 'warga';
+          nextLivingUids = nextLivingUids.filter((u) => u !== targetUid);
+          nextDeadPlayers.push(
+            buildDeadPlayerEntry({
+              uid: targetUid,
+              displayName: targetName,
+              cause: 'hunter_shot',
+              dayOrNightNumber: ms.dayNumber,
+              role: targetRole,
+              revealRoleOnDeath: settings.revealRoleOnDeath,
+            }),
+          );
+          hunterSummary = `${ms.pendingHunterName ?? 'Pemburu'} menembak ${targetName} dengan Tembakan Terakhir${
+            settings.revealRoleOnDeath ? ` (${MALAM_SILUMAN_ROLES[targetRole].name})` : ''
+          }!`;
+        } else {
+          hunterSummary = `${ms.pendingHunterName ?? 'Pemburu'} menahan Tembakan Terakhirnya.`;
+        }
+
+        const victory = evaluateMalamSilumanVictory({
+          livingUids: nextLivingUids,
+          rolesByUid,
+          namesByUid,
+        });
+
+        if (victory.winnerTeam && victory.reason) {
+          const deltas = calculateMalamSilumanScoreDeltas({
+            participantUids: ms.participantUids,
+            livingUids: nextLivingUids,
+            rolesByUid,
+            winnerTeam: victory.winnerTeam,
+            tumbalWinnerUid: null,
+          });
+          this.applyScoreDeltas(deltas);
+
+          const roundResult: RoundResult = {
+            roundNumber: this.room.roundNumber,
+            winnerTeam: victory.winnerTeam,
+            reason: `${hunterSummary} ${victory.reason}`,
+            locationName: 'Desa Malam Siluman',
+            guessedLocation: null,
+            spyUids: this.serverState.spyUids,
+            spyNames: this.serverState.spyNames,
+            resolvedAtMs: now,
+            scoresApplied: true,
+          };
+
+          this.room = {
+            ...this.room,
+            status: 'round_end',
+            currentMatchRounds: (this.room.currentMatchRounds ?? 0) + 1,
+            malamSilumanState: {
+              ...ms,
+              phase: 'reveal',
+              livingUids: nextLivingUids,
+              deadPlayers: nextDeadPlayers,
+              lastHunterSummary: hunterSummary,
+              pendingHunterUid: null,
+              pendingHunterName: null,
+              hunterTrigger: null,
+              revealedRolesByUid: rolesByUid,
+            },
+            lastRoundResult: roundResult,
+            updatedAt: now,
+          };
+          this.pushSystemMessage(roundResult.reason);
+          return { winnerTeam: victory.winnerTeam };
+        }
+
+        if (ms.hunterTrigger === 'night') {
+          this.room = {
+            ...this.room,
+            malamSilumanState: {
+              ...ms,
+              phase: 'day_discussion',
+              livingUids: nextLivingUids,
+              deadPlayers: nextDeadPlayers,
+              lastHunterSummary: hunterSummary,
+              pendingHunterUid: null,
+              pendingHunterName: null,
+              hunterTrigger: null,
+            },
+            updatedAt: now,
+          };
+          this.pushSystemMessage(`${hunterSummary} Diskusi Siang #${ms.dayNumber} dimulai!`);
+          return { phase: 'day_discussion' };
+        }
+
+        const nextNightNumber = ms.nightNumber + 1;
+        this.room = {
+          ...this.room,
+          malamSilumanState: {
+            ...ms,
+            phase: 'night',
+            nightNumber: nextNightNumber,
+            livingUids: nextLivingUids,
+            deadPlayers: nextDeadPlayers,
+            submittedNightUids: [],
+            submittedVoteUids: [],
+            lastHunterSummary: hunterSummary,
+            pendingHunterUid: null,
+            pendingHunterName: null,
+            hunterTrigger: null,
+          },
+          updatedAt: now,
+        };
+        this.pushSystemMessage(`${hunterSummary} Malam #${nextNightNumber} pun turun...`);
+        return { phase: 'night', nightNumber: nextNightNumber };
+      }
+
       // ===================== RETURN TO LOBBY =====================
       case 'returnRoomToLobby':
       case 'returnKataKataToLobby':
       case 'returnSatuFrekuensiToLobby':
       case 'returnFaktaHariIniToLobby':
-      case 'returnPelukisToLobby': {
+      case 'returnPelukisToLobby':
+      case 'returnMalamSilumanToLobby': {
         this.requireHost(senderDeviceUid);
         this.room = {
           ...this.room,
@@ -1832,6 +2248,7 @@ export class LanHostAuthority {
           frequencyState: null,
           faktaState: null,
           lukisanState: null,
+          malamSilumanState: null,
           updatedAt: now,
         };
         return {};
@@ -1845,9 +2262,14 @@ export class LanHostAuthority {
         }
         const nextGameType = payload.nextGameType as GameType;
         if (
-          !['spyfall', 'kata_kata', 'satu_frekuensi', 'fakta_hari_ini', 'pelukis_gadungan'].includes(
-            nextGameType,
-          )
+          ![
+            'spyfall',
+            'kata_kata',
+            'satu_frekuensi',
+            'fakta_hari_ini',
+            'pelukis_gadungan',
+            'malam_siluman',
+          ].includes(nextGameType)
         ) {
           throw new Error('Jenis permainan tidak valid.');
         }
@@ -1886,6 +2308,7 @@ export class LanHostAuthority {
           frequencyState: null,
           faktaState: null,
           lukisanState: null,
+          malamSilumanState: null,
           activeVote: null,
           pendingSpyGuess: null,
           lastRoundResult: null,
@@ -2153,5 +2576,387 @@ export class LanHostAuthority {
     };
     this.pushSystemMessage(reason);
     return { allVoted: true, caughtGadungan: false };
+  }
+
+  private finalizeMalamSilumanNight(
+    submittedNightUids: string[],
+    now: number,
+  ): Record<string, unknown> {
+    const ms = this.room.malamSilumanState!;
+    const serverState = this.serverState!;
+    const rolesByUid = serverState.wolfRolesByUid ?? {};
+    const namesByUid = ms.participantNamesByUid;
+    const settings = sanitizeMalamSilumanSettings(this.room.malamSilumanSettings);
+
+    const nightKey = `${this.room.currentRoundId}_n${ms.nightNumber}`;
+    const nightMap = this.malamSilumanNightActionsByRound.get(nightKey) ?? new Map<string, string>();
+    const nightTargetsByUid: Record<string, string> = {};
+    for (const [uid, targetUid] of nightMap.entries()) {
+      nightTargetsByUid[uid] = targetUid;
+    }
+
+    const nightRes = resolveMalamSilumanNight({
+      nightNumber: ms.nightNumber,
+      livingUids: ms.livingUids,
+      rolesByUid,
+      namesByUid,
+      nightTargetsByUid,
+      previousDoctorProtectedUid: serverState.lastProtectedByDoctor ?? null,
+      seed: this.room.currentRoundId,
+    });
+
+    const roundSecrets = this.secretsByRound.get(this.room.currentRoundId);
+    if (roundSecrets && nightRes.seerPeek) {
+      const seerSecret = roundSecrets.get(nightRes.seerPeek.seerUid);
+      if (seerSecret) {
+        roundSecrets.set(nightRes.seerPeek.seerUid, {
+          ...seerSecret,
+          peekHistory: [...(seerSecret.peekHistory ?? []), nightRes.seerPeek.record],
+        });
+      }
+    }
+
+    const nextDoctorProtected = nightRes.nextDoctorLastProtectedUid ?? null;
+    this.serverState = {
+      ...serverState,
+      lastProtectedByDoctor: nextDoctorProtected,
+    };
+    const doctorUid = ms.livingUids.find((u) => rolesByUid[u] === 'tabib') ?? null;
+    if (roundSecrets && doctorUid) {
+      const docSecret = roundSecrets.get(doctorUid);
+      if (docSecret) {
+        roundSecrets.set(doctorUid, {
+          ...docSecret,
+          lastProtectedUid: nextDoctorProtected,
+        });
+      }
+    }
+
+    const nextLivingUids = nightRes.eliminatedUid
+      ? ms.livingUids.filter((u) => u !== nightRes.eliminatedUid)
+      : [...ms.livingUids];
+
+    const nextDeadPlayers: MalamSilumanDeadPlayer[] = [...ms.deadPlayers];
+    let killedHunter = false;
+    if (nightRes.eliminatedUid) {
+      const victimRole: WerewolfRoleId = rolesByUid[nightRes.eliminatedUid] ?? 'warga';
+      if (victimRole === 'pemburu') {
+        killedHunter = true;
+      }
+      nextDeadPlayers.push(
+        buildDeadPlayerEntry({
+          uid: nightRes.eliminatedUid,
+          displayName: namesByUid[nightRes.eliminatedUid] ?? 'Pemain',
+          cause: 'night_kill',
+          dayOrNightNumber: ms.nightNumber,
+          role: victimRole,
+          revealRoleOnDeath: settings.revealRoleOnDeath,
+        }),
+      );
+    }
+
+    if (killedHunter && nightRes.eliminatedUid && nextLivingUids.length > 0) {
+      const hunterName = namesByUid[nightRes.eliminatedUid] ?? 'Pemburu';
+      this.room = {
+        ...this.room,
+        malamSilumanState: {
+          ...ms,
+          phase: 'hunter_revenge',
+          dayNumber: ms.nightNumber,
+          livingUids: nextLivingUids,
+          deadPlayers: nextDeadPlayers,
+          submittedNightUids,
+          submittedVoteUids: [],
+          lastNightSummary: nightRes.dawnMessage,
+          lastHunterSummary: null,
+          pendingHunterUid: nightRes.eliminatedUid,
+          pendingHunterName: hunterName,
+          hunterTrigger: 'night',
+        },
+        updatedAt: now,
+      };
+      this.pushSystemMessage(
+        `${nightRes.dawnMessage} ${hunterName} adalah PEMBURU dan langsung membidik Tembakan Terakhir!`,
+      );
+      return { phase: 'hunter_revenge' };
+    }
+
+    const victory = evaluateMalamSilumanVictory({
+      livingUids: nextLivingUids,
+      rolesByUid,
+      namesByUid,
+    });
+
+    if (victory.winnerTeam && victory.reason) {
+      const deltas = calculateMalamSilumanScoreDeltas({
+        participantUids: ms.participantUids,
+        livingUids: nextLivingUids,
+        rolesByUid,
+        winnerTeam: victory.winnerTeam,
+        tumbalWinnerUid: victory.tumbalWinnerUid,
+      });
+      this.applyScoreDeltas(deltas);
+
+      const roundResult: RoundResult = {
+        roundNumber: this.room.roundNumber,
+        winnerTeam: victory.winnerTeam,
+        reason: `${nightRes.dawnMessage} ${victory.reason}`,
+        locationName: 'Desa Malam Siluman',
+        guessedLocation: null,
+        spyUids: serverState.spyUids,
+        spyNames: serverState.spyNames,
+        resolvedAtMs: now,
+        scoresApplied: true,
+      };
+
+      this.room = {
+        ...this.room,
+        status: 'round_end',
+        currentMatchRounds: (this.room.currentMatchRounds ?? 0) + 1,
+        malamSilumanState: {
+          ...ms,
+          phase: 'reveal',
+          dayNumber: ms.nightNumber,
+          livingUids: nextLivingUids,
+          deadPlayers: nextDeadPlayers,
+          submittedNightUids,
+          submittedVoteUids: [],
+          lastNightSummary: nightRes.dawnMessage,
+          revealedRolesByUid: rolesByUid,
+        },
+        lastRoundResult: roundResult,
+        updatedAt: now,
+      };
+      this.pushSystemMessage(roundResult.reason);
+      return { winnerTeam: victory.winnerTeam };
+    }
+
+    this.room = {
+      ...this.room,
+      malamSilumanState: {
+        ...ms,
+        phase: 'dawn',
+        dayNumber: ms.nightNumber,
+        livingUids: nextLivingUids,
+        deadPlayers: nextDeadPlayers,
+        submittedNightUids,
+        submittedVoteUids: [],
+        lastNightSummary: nightRes.dawnMessage,
+        lastHunterSummary: null,
+        pendingHunterUid: null,
+        pendingHunterName: null,
+        hunterTrigger: null,
+      },
+      updatedAt: now,
+    };
+    this.pushSystemMessage(nightRes.dawnMessage);
+    return { phase: 'dawn' };
+  }
+
+  private finalizeMalamSilumanVote(
+    submittedVoteUids: string[],
+    now: number,
+  ): Record<string, unknown> {
+    const ms = this.room.malamSilumanState!;
+    const serverState = this.serverState!;
+    const rolesByUid = serverState.wolfRolesByUid ?? {};
+    const namesByUid = ms.participantNamesByUid;
+    const settings = sanitizeMalamSilumanSettings(this.room.malamSilumanSettings);
+
+    const voteKey = `${this.room.currentRoundId}_d${ms.dayNumber}`;
+    const voteMap = this.malamSilumanVotesByRound.get(voteKey) ?? new Map<string, string>();
+    const votesByUid: Record<string, string> = {};
+    for (const [uid, targetUid] of voteMap.entries()) {
+      votesByUid[uid] = targetUid;
+    }
+
+    const tally = tallyMalamSilumanDayVotes({
+      votesByUid,
+      livingUids: ms.livingUids,
+      rolesByUid,
+    });
+
+    if (!tally.executedUid) {
+      const reason = tally.isTie
+        ? `Suara voting Siang #${ms.dayNumber} seri! Tidak ada warga yang dieksekusi.`
+        : `Desa sepakat melewati eksekusi Siang #${ms.dayNumber}. Tidak ada yang dihukum.`;
+
+      const nextNightNumber = ms.nightNumber + 1;
+      this.room = {
+        ...this.room,
+        malamSilumanState: {
+          ...ms,
+          phase: 'night',
+          nightNumber: nextNightNumber,
+          submittedNightUids: [],
+          submittedVoteUids,
+          lastDaySummary: reason,
+          lastHunterSummary: null,
+          lastVoteTally: tally.voteTally,
+        },
+        updatedAt: now,
+      };
+      this.pushSystemMessage(`${reason} Malam #${nextNightNumber} segera tiba...`);
+      return { phase: 'night', nightNumber: nextNightNumber };
+    }
+
+    const executedUid = tally.executedUid;
+    const executedName = namesByUid[executedUid] ?? 'Pemain';
+    const executedRole: WerewolfRoleId = rolesByUid[executedUid] ?? 'warga';
+    const nextLivingUids = ms.livingUids.filter((u) => u !== executedUid);
+    const nextDeadPlayers: MalamSilumanDeadPlayer[] = [
+      ...ms.deadPlayers,
+      buildDeadPlayerEntry({
+        uid: executedUid,
+        displayName: executedName,
+        cause: 'day_vote',
+        dayOrNightNumber: ms.dayNumber,
+        role: executedRole,
+        revealRoleOnDeath: settings.revealRoleOnDeath,
+      }),
+    ];
+    const daySummary = `${executedName} dieksekusi oleh keputusan voting desa pada Siang #${ms.dayNumber}${
+      settings.revealRoleOnDeath ? ` (ternyata ${MALAM_SILUMAN_ROLES[executedRole].name})` : ''
+    }.`;
+
+    const victoryAfterVote = evaluateMalamSilumanVictory({
+      livingUids: nextLivingUids,
+      rolesByUid,
+      namesByUid,
+      dayExecutedUid: executedUid,
+    });
+
+    if (victoryAfterVote.winnerTeam === 'tumbal' && victoryAfterVote.reason) {
+      const deltas = calculateMalamSilumanScoreDeltas({
+        participantUids: ms.participantUids,
+        livingUids: nextLivingUids,
+        rolesByUid,
+        winnerTeam: 'tumbal',
+        tumbalWinnerUid: victoryAfterVote.tumbalWinnerUid,
+      });
+      this.applyScoreDeltas(deltas);
+
+      const roundResult: RoundResult = {
+        roundNumber: this.room.roundNumber,
+        winnerTeam: 'tumbal',
+        reason: victoryAfterVote.reason,
+        locationName: 'Desa Malam Siluman',
+        guessedLocation: null,
+        spyUids: serverState.spyUids,
+        spyNames: serverState.spyNames,
+        resolvedAtMs: now,
+        scoresApplied: true,
+      };
+
+      this.room = {
+        ...this.room,
+        status: 'round_end',
+        currentMatchRounds: (this.room.currentMatchRounds ?? 0) + 1,
+        malamSilumanState: {
+          ...ms,
+          phase: 'reveal',
+          livingUids: nextLivingUids,
+          deadPlayers: nextDeadPlayers,
+          submittedNightUids: [],
+          submittedVoteUids,
+          lastDaySummary: daySummary,
+          lastVoteTally: tally.voteTally,
+          revealedRolesByUid: rolesByUid,
+        },
+        lastRoundResult: roundResult,
+        updatedAt: now,
+      };
+      this.pushSystemMessage(victoryAfterVote.reason);
+      return { winnerTeam: 'tumbal' };
+    }
+
+    if (executedRole === 'pemburu' && nextLivingUids.length > 0) {
+      this.room = {
+        ...this.room,
+        malamSilumanState: {
+          ...ms,
+          phase: 'hunter_revenge',
+          livingUids: nextLivingUids,
+          deadPlayers: nextDeadPlayers,
+          submittedNightUids: [],
+          submittedVoteUids,
+          lastDaySummary: daySummary,
+          lastHunterSummary: null,
+          lastVoteTally: tally.voteTally,
+          pendingHunterUid: executedUid,
+          pendingHunterName: executedName,
+          hunterTrigger: 'day',
+        },
+        updatedAt: now,
+      };
+      this.pushSystemMessage(
+        `${daySummary} Sebagai PEMBURU, ${executedName} berhak melepaskan Tembakan Terakhir!`,
+      );
+      return { phase: 'hunter_revenge' };
+    }
+
+    if (victoryAfterVote.winnerTeam && victoryAfterVote.reason) {
+      const deltas = calculateMalamSilumanScoreDeltas({
+        participantUids: ms.participantUids,
+        livingUids: nextLivingUids,
+        rolesByUid,
+        winnerTeam: victoryAfterVote.winnerTeam,
+        tumbalWinnerUid: null,
+      });
+      this.applyScoreDeltas(deltas);
+
+      const roundResult: RoundResult = {
+        roundNumber: this.room.roundNumber,
+        winnerTeam: victoryAfterVote.winnerTeam,
+        reason: `${daySummary} ${victoryAfterVote.reason}`,
+        locationName: 'Desa Malam Siluman',
+        guessedLocation: null,
+        spyUids: serverState.spyUids,
+        spyNames: serverState.spyNames,
+        resolvedAtMs: now,
+        scoresApplied: true,
+      };
+
+      this.room = {
+        ...this.room,
+        status: 'round_end',
+        currentMatchRounds: (this.room.currentMatchRounds ?? 0) + 1,
+        malamSilumanState: {
+          ...ms,
+          phase: 'reveal',
+          livingUids: nextLivingUids,
+          deadPlayers: nextDeadPlayers,
+          submittedNightUids: [],
+          submittedVoteUids,
+          lastDaySummary: daySummary,
+          lastVoteTally: tally.voteTally,
+          revealedRolesByUid: rolesByUid,
+        },
+        lastRoundResult: roundResult,
+        updatedAt: now,
+      };
+      this.pushSystemMessage(roundResult.reason);
+      return { winnerTeam: victoryAfterVote.winnerTeam };
+    }
+
+    const nextNightNumber = ms.nightNumber + 1;
+    this.room = {
+      ...this.room,
+      malamSilumanState: {
+        ...ms,
+        phase: 'night',
+        nightNumber: nextNightNumber,
+        livingUids: nextLivingUids,
+        deadPlayers: nextDeadPlayers,
+        submittedNightUids: [],
+        submittedVoteUids,
+        lastDaySummary: daySummary,
+        lastHunterSummary: null,
+        lastVoteTally: tally.voteTally,
+      },
+      updatedAt: now,
+    };
+    this.pushSystemMessage(`${daySummary} Malam #${nextNightNumber} pun turun kembali...`);
+    return { phase: 'night', nightNumber: nextNightNumber };
   }
 }

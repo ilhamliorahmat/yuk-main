@@ -6,6 +6,7 @@ import {
   BookOpenCheck,
   Brush,
   Check,
+  Moon,
   Radio,
   Search,
   Sparkles,
@@ -70,6 +71,14 @@ const GAME_OPTIONS: Array<{
     icon: Brush,
     accent: 'text-emerald-400',
   },
+  {
+    id: 'malam_siluman',
+    title: 'Malam Siluman',
+    subtitle: 'Siluman berburu malam hari, warga berdebat & voting di siang hari.',
+    playersHint: '4–12 pemain',
+    icon: Moon,
+    accent: 'text-rose-400',
+  },
 ];
 
 export function GameSwitcherModal({
@@ -119,9 +128,9 @@ export function GameSwitcherModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 8 }}
         transition={{ duration: 0.18 }}
-        className="w-full max-w-lg rounded-2xl bg-[#131A24] border border-slate-700/80 shadow-2xl overflow-hidden"
+        className="w-full max-w-lg max-h-[88dvh] flex flex-col rounded-2xl bg-[#131A24] border border-slate-700/80 shadow-2xl overflow-hidden"
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+        <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <ArrowRightLeft className="w-5 h-5 text-cyan-400" />
             <h2 id="game-switcher-title" className="text-base font-bold text-white">
@@ -138,13 +147,13 @@ export function GameSwitcherModal({
           </button>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="p-5 flex-1 min-h-0 flex flex-col gap-4">
           {!canSwitch ? (
-            <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-3.5 text-xs text-amber-200 leading-relaxed">
+            <div className="shrink-0 rounded-xl bg-amber-500/10 border border-amber-500/30 p-3.5 text-xs text-amber-200 leading-relaxed">
               Selesaikan ronde aktif terlebih dahulu sebelum mengganti permainan agar skor ronde ini tidak terpotong.
             </div>
           ) : (
-            <div className="rounded-xl bg-[#0B1018] border border-slate-800 p-3.5 text-xs text-slate-300 leading-relaxed">
+            <div className="shrink-0 rounded-xl bg-[#0B1018] border border-slate-800 p-3.5 text-xs text-slate-300 leading-relaxed">
               {currentRounds > 0 ? (
                 <span>
                   Game saat ini sudah memainkan <strong className="text-white tabular-nums">{currentRounds} ronde</strong>. Pemenang & poin game ini akan otomatis disimpan ke <strong className="text-amber-300">Rekap Permainan</strong>, lalu game baru dimulai dari 0 poin.
@@ -157,49 +166,51 @@ export function GameSwitcherModal({
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {GAME_OPTIONS.map((item) => {
-              const Icon = item.icon;
-              const isCurrent = item.id === room.gameType;
-              const isSelected = item.id === selected;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  disabled={!canSwitch || submitting}
-                  onClick={() => setSelected(item.id)}
-                  className={`text-left p-3.5 rounded-xl border transition-all min-h-[84px] ${
-                    isSelected
-                      ? 'bg-slate-800/90 border-cyan-400/70 ring-1 ring-cyan-400/30'
-                      : 'bg-[#0B1018] border-slate-800 hover:border-slate-700'
-                  } disabled:opacity-50`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <Icon className={`w-4 h-4 shrink-0 ${item.accent}`} />
-                      <span className="text-sm font-bold text-white leading-tight">
-                        {item.title}
-                      </span>
+          <div className="flex-1 min-h-0 max-h-[44dvh] sm:max-h-[300px] overflow-y-auto overscroll-contain p-0.5 pr-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {GAME_OPTIONS.map((item) => {
+                const Icon = item.icon;
+                const isCurrent = item.id === room.gameType;
+                const isSelected = item.id === selected;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    disabled={!canSwitch || submitting}
+                    onClick={() => setSelected(item.id)}
+                    className={`text-left p-3.5 rounded-xl border transition-all min-h-[84px] ${
+                      isSelected
+                        ? 'bg-slate-800/90 border-cyan-400/70 ring-1 ring-cyan-400/30'
+                        : 'bg-[#0B1018] border-slate-800 hover:border-slate-700'
+                    } disabled:opacity-50`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Icon className={`w-4 h-4 shrink-0 ${item.accent}`} />
+                        <span className="text-sm font-bold text-white leading-tight">
+                          {item.title}
+                        </span>
+                      </div>
+                      {isSelected && <Check className="w-4 h-4 text-cyan-400 shrink-0" />}
                     </div>
-                    {isSelected && <Check className="w-4 h-4 text-cyan-400 shrink-0" />}
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1.5 leading-snug">{item.subtitle}</p>
-                  <div className="flex items-center justify-between mt-2 text-[11px] text-slate-500">
-                    <span>{item.playersHint}</span>
-                    {isCurrent && <span className="text-amber-400 font-semibold">Aktif</span>}
-                  </div>
-                </button>
-              );
-            })}
+                    <p className="text-xs text-slate-400 mt-1.5 leading-snug">{item.subtitle}</p>
+                    <div className="flex items-center justify-between mt-2 text-[11px] text-slate-500">
+                      <span>{item.playersHint}</span>
+                      {isCurrent && <span className="text-amber-400 font-semibold">Aktif</span>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {error && (
-            <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2">
+            <p className="shrink-0 text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2">
               {error}
             </p>
           )}
 
-          <div className="flex items-center justify-end gap-2 pt-1">
+          <div className="shrink-0 flex items-center justify-end gap-2 pt-1">
             <button
               type="button"
               onClick={onClose}
