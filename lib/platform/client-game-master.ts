@@ -2023,7 +2023,7 @@ async function handleSessionSwitchGame(
   payload: Record<string, unknown>,
 ): Promise<ClientGameMasterResponse> {
   const roomId = assertRoomId(payload.roomId);
-  const targetGameType = payload.targetGameType as GameType;
+  const targetGameType = (payload.targetGameType ?? payload.nextGameType) as GameType;
   if (!VALID_GAME_TYPES.includes(targetGameType)) {
     throw new Error('Jenis permainan tujuan tidak valid.');
   }
@@ -2063,7 +2063,11 @@ async function handleSessionSwitchGame(
     tx.update(roomRef, {
       gameType: targetGameType,
       status: 'lobby',
+      roundNumber: 0,
+      currentRoundId: '',
       currentMatchRounds: 0,
+      roundEndsAtMs: 0,
+      firstSpeakerUid: '',
       enabledPacks: getDefaultPacksForGame(targetGameType),
       selectedLocationNames: [],
       eliminatedUids: [],
@@ -2215,7 +2219,7 @@ async function handleSessionSuitPick(
   payload: Record<string, unknown>,
 ): Promise<ClientGameMasterResponse> {
   const roomId = assertRoomId(payload.roomId);
-  const suitPick = payload.suitPick as SuitPick;
+  const suitPick = (payload.suitPick ?? payload.pick) as SuitPick;
   if (suitPick !== 'batu' && suitPick !== 'gunting' && suitPick !== 'kertas') {
     throw new Error('Pilihan suit harus Batu, Gunting, atau Kertas.');
   }
