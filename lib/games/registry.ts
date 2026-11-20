@@ -77,6 +77,25 @@ export const PARTY_GAMES: PartyGameDefinition[] = [
       'Jika Penebak berhasil menunjuk Pembawa Fakta, Penebak meraih +(N−1) poin. Jika Penebak salah pilih, seluruh Tim Bluffer (termasuk Pembawa Fakta) masing-masing mendapat +1 poin!',
     ],
   },
+  {
+    id: 'pelukis_gadungan',
+    number: 5,
+    title: 'Pelukis Gadungan',
+    subtitle: 'Gambar 1 Garis & Tebak Peniru',
+    description:
+      'Semua pemain tahu kata rahasia yang sama—kecuali sang Pelukis Gadungan yang hanya melihat Tema umum! Bergiliran menggambar 1 tarikan garis di kanvas bersama lalu bongkar siapa yang asal meniru!',
+    minPlayers: 3,
+    maxPlayers: 12,
+    durationLabel: '4–6 Menit · Tanpa Timer',
+    available: true,
+    rulesSummary: [
+      'Minimal 3 pemain berkumpul di satu ruang. Host menentukan 1 atau 2 putaran garis per pemain serta mode 1 atau 2 Pelukis Gadungan.',
+      'Pelukis Asli melihat Tema umum (mis. "Kuliner Nusantara") beserta Kata Rahasia (mis. "Sate Ayam"). Pelukis Gadungan HANYA melihat Tema umum tanpa tahu Kata Rahasia!',
+      'Sesuai urutan giliran, tiap pemain menggambar tepat 1 garis kontinu dengan warna masing-masing di kanvas bersama—jangan terlalu jelas nanti dicontek Gadungan, jangan terlalu abstrak nanti dicurigai!',
+      'Setelah semua garis selesai, semua pemain berdiskusi lalu memilih 1 tersangka Pelukis Gadungan secara serentak.',
+      'Jika Gadungan lolos dari suara terbanyak, Gadungan menang (+3 poin). Jika Gadungan tertangkap, ia mendapat 1 Kesempatan Terakhir menebak Kata Rahasia untuk membalikkan keadaan!',
+    ],
+  },
 ];
 
 export function getPartyGame(gameType: GameType): PartyGameDefinition {

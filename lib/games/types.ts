@@ -1,4 +1,9 @@
-export type GameType = 'spyfall' | 'kata_kata' | 'satu_frekuensi' | 'fakta_hari_ini';
+export type GameType =
+  | 'spyfall'
+  | 'kata_kata'
+  | 'satu_frekuensi'
+  | 'fakta_hari_ini'
+  | 'pelukis_gadungan';
 
 export type RoomStatus = 'lobby' | 'playing' | 'voting' | 'spy_guess' | 'round_end';
 
@@ -103,6 +108,53 @@ export interface FaktaState {
   blufferPointsEach?: number;
 }
 
+export interface CustomDrawingPrompt {
+  id: string;
+  category: string;
+  word: string;
+}
+
+export interface DrawingPromptItem extends CustomDrawingPrompt {
+  packId: string;
+  packLabel: string;
+}
+
+export type LukisanPhase = 'drawing' | 'voting' | 'gadungan_guess' | 'reveal';
+
+export interface LukisanStroke {
+  strokeIndex: number;
+  strokeRound: number;
+  uid: string;
+  displayName: string;
+  color: string;
+  /** Flattened integer pairs [x0, y0, x1, y1, ...] normalized to 0..1000 canvas grid */
+  points: number[];
+}
+
+export interface LukisanState {
+  phase: LukisanPhase;
+  /** Public broad category visible to all players, Pelukis Gadungan, and Layar Panggung */
+  category: string;
+  totalStrokeRounds: 1 | 2;
+  strokeRound: number;
+  turnOrder: string[];
+  turnNamesByUid: Record<string, string>;
+  turnColorsByUid: Record<string, string>;
+  currentTurnIndex: number;
+  currentTurnUid: string;
+  currentTurnName: string;
+  strokes: LukisanStroke[];
+  submittedVoteUids: string[];
+  accusedUid: string | null;
+  accusedName: string | null;
+  voteTally?: Record<string, number>;
+  votesByUid?: Record<string, string>;
+  revealedWord?: string | null;
+  gadunganUids?: string[];
+  gadunganNames?: string[];
+  guessedWord?: string | null;
+}
+
 export interface EliminationEntry {
   uid: string;
   displayName: string;
@@ -128,13 +180,15 @@ export interface PendingSpyGuess {
 
 export interface RoundResult {
   roundNumber: number;
-  winnerTeam: 'warga' | 'mata_mata' | 'penebak' | 'bluffer' | 'frekuensi';
+  winnerTeam: 'warga' | 'mata_mata' | 'penebak' | 'bluffer' | 'frekuensi' | 'pelukis' | 'gadungan';
   reason: string;
   locationName: string;
   guessedLocation: string | null;
   citizenWord?: string;
   spyWord?: string;
   guessedWord?: string | null;
+  drawingCategory?: string;
+  drawingWord?: string;
   spyUids: string[];
   spyNames: string[];
   resolvedAtMs: number;
@@ -158,6 +212,9 @@ export interface ServerRoundStateDoc {
   factCategory?: string;
   truthTellerUid?: string;
   truthTellerName?: string;
+  // Pelukis Gadungan secret drawing word & broad category
+  drawingCategory?: string;
+  drawingWord?: string;
   createdAtMs: number;
 }
 
@@ -234,10 +291,13 @@ export interface RoomDoc {
   customWordPairs?: CustomWordPair[];
   customSpectrums?: CustomSpectrum[];
   customFacts?: CustomFactItem[];
+  customDrawingPrompts?: CustomDrawingPrompt[];
+  pelukisStrokeRounds?: 1 | 2;
   eliminatedUids?: string[];
   eliminationLog?: EliminationEntry[];
   frequencyState?: FrequencyState | null;
   faktaState?: FaktaState | null;
+  lukisanState?: LukisanState | null;
   activeVote: VoteState | null;
   pendingSpyGuess: PendingSpyGuess | null;
   lastRoundResult: RoundResult | null;
@@ -271,6 +331,8 @@ export interface RoomPlayerDoc {
  * - Game #4 (`fakta_hari_ini`): `isGuesser`; for Bluffers ONLY (`isGuesser === false`),
  *   includes `isTruthTeller`, `truthTellerUid`, `truthTellerName`, and fact parts.
  *   For the Guesser (`isGuesser === true`), strictly omits ALL fact and truth-teller fields!
+ * - Game #5 (`pelukis_gadungan`): `isGadungan`, `drawingCategory`, `playerInkColor`;
+ *   `drawingWord` is populated ONLY for Pelukis Asli (`drawingWord: null` for Pelukis Gadungan).
  */
 export interface PlayerSecretDoc {
   uid: string;
@@ -290,6 +352,10 @@ export interface PlayerSecretDoc {
   factTwist?: string;
   factSuffix?: string;
   factCategory?: string;
+  isGadungan?: boolean;
+  drawingCategory?: string;
+  drawingWord?: string | null;
+  playerInkColor?: string;
   createdAt?: unknown;
 }
 
@@ -299,6 +365,7 @@ export interface PlayerSubmissionDoc {
   gameType: GameType | 'suit_duel';
   guessValue?: number;
   suitPick?: SuitPick;
+  votedUid?: string;
   updatedAt?: unknown;
 }
 

@@ -24,6 +24,8 @@ import frekuensiCover from '@/src/assets/images/yukmain_frekuensi_cover_17951158
 import frekuensiEmblem from '@/src/assets/images/yukmain_frekuensi_emblem_1795115893627.jpg';
 import kataCover from '@/src/assets/images/yukmain_kata_cover_1795098826342.jpg';
 import kataEmblem from '@/src/assets/images/yukmain_kata_emblem_1795098826535.jpg';
+import pelukisCover from '@/src/assets/images/yukmain_pelukis_cover_1795178136981.jpg';
+import pelukisEmblem from '@/src/assets/images/yukmain_pelukis_emblem_1795178137917.jpg';
 import spyEmblem from '@/src/assets/images/yukmain_spy_emblem_1795001425384.jpg';
 import spyfallCover from '@/src/assets/images/yukmain_spyfall_cover_1795001423851.jpg';
 import { LanPairingModal } from '@/components/lan/LanPairingModal';
@@ -79,6 +81,11 @@ const GAME_VISUALS: Record<GameType, GameVisualMeta> = {
     cover: faktaCover,
     emblem: faktaEmblem,
     ctaClass: 'bg-violet-600 hover:bg-violet-500 text-white',
+  },
+  pelukis_gadungan: {
+    cover: pelukisCover,
+    emblem: pelukisEmblem,
+    ctaClass: 'bg-emerald-500 hover:bg-emerald-400 text-slate-950',
   },
 };
 
@@ -573,14 +580,19 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {PARTY_GAMES.map((game) => {
+            {PARTY_GAMES.map((game, idx) => {
               const isCreatingThis = busyAction === `create:${game.id}`;
               const visual = GAME_VISUALS[game.id];
+              const isCenteredLastCard = idx === 4 && PARTY_GAMES.length === 5;
 
               return (
                 <article
                   key={game.id}
-                  className="bg-[#131A24] border border-slate-800 rounded-2xl overflow-hidden flex flex-col justify-between"
+                  className={`bg-[#131A24] border border-slate-800 rounded-2xl overflow-hidden flex flex-col justify-between ${
+                    isCenteredLastCard
+                      ? 'md:col-span-2 md:max-w-[calc(50%-0.75rem)] md:mx-auto md:w-full'
+                      : ''
+                  }`}
                 >
                   <div>
                     {/* 16:9 Game Cover Banner */}

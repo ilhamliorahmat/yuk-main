@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BookOpenCheck,
+  Brush,
   Coffee,
   LogOut,
   Monitor,
@@ -16,6 +17,7 @@ import {
   Wifi,
 } from 'lucide-react';
 import QRCode from 'qrcode';
+import { PelukisCanvas } from '@/components/games/pelukis-gadungan/PelukisCanvas';
 import { FrequencyDial } from '@/components/games/satu-frekuensi/FrequencyDial';
 import type {
   GameType,
@@ -43,6 +45,7 @@ const GAME_META: Record<
   kata_kata: { title: 'Kata-Kata Hari Ini', icon: Sparkles, accent: 'text-amber-400' },
   satu_frekuensi: { title: 'Satu Frekuensi', icon: Radio, accent: 'text-cyan-400' },
   fakta_hari_ini: { title: 'Fakta Hari Ini', icon: BookOpenCheck, accent: 'text-indigo-400' },
+  pelukis_gadungan: { title: 'Pelukis Gadungan', icon: Brush, accent: 'text-emerald-400' },
 };
 
 function formatClock(sec: number): string {
@@ -117,6 +120,11 @@ export function LayarPanggungView({
       return room.faktaState?.guesserWon
         ? `Penebak Menang! (+${room.faktaState.guesserPoints ?? 0} Poin)`
         : 'Tim Bluffer Menang! (+1 Poin Semua Bluffer)';
+    }
+    if (room.gameType === 'pelukis_gadungan') {
+      return res.winnerTeam === 'pelukis'
+        ? 'Pelukis Asli Menang! (+2 Poin)'
+        : 'Pelukis Gadungan Menang! (+3 Poin)';
     }
     return `Hasil Ronde #${res.roundNumber}`;
   }, [room]);
@@ -525,6 +533,68 @@ export function LayarPanggungView({
                       </p>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* GAME #5: PELUKIS GADUNGAN STAGE */}
+              {room.gameType === 'pelukis_gadungan' && room.lukisanState && (
+                <div className="rounded-2xl bg-[#131A24] border border-slate-800 p-6 sm:p-8 space-y-6">
+                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-wider text-emerald-400 font-bold">
+                        Ronde #{room.roundNumber} · Tema Umum: {room.lukisanState.category}
+                      </p>
+                      <h2 className="text-2xl sm:text-3xl font-black text-white mt-1">
+                        {room.status === 'round_end'
+                          ? `Kata Rahasia: ${room.lukisanState.revealedWord ?? '—'}`
+                          : room.lukisanState.phase === 'drawing'
+                            ? `Giliran Menggambar: ${room.lukisanState.currentTurnName}`
+                            : room.lukisanState.phase === 'voting'
+                              ? 'Diskusi & Voting Pelukis Gadungan!'
+                              : `${room.lukisanState.accusedName} Menebak Kata Rahasia...`}
+                      </h2>
+                    </div>
+                    <div className="px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/40 text-sm font-bold text-emerald-200 tabular-nums">
+                      {room.lukisanState.phase === 'drawing'
+                        ? `Putaran ${room.lukisanState.strokeRound}/${room.lukisanState.totalStrokeRounds}`
+                        : room.lukisanState.phase === 'voting'
+                          ? `${room.lukisanState.submittedVoteUids.length}/${room.lukisanState.turnOrder.length} Suara`
+                          : room.status === 'round_end'
+                            ? 'Pengungkapan'
+                            : 'Kesempatan Terakhir'}
+                    </div>
+                  </div>
+
+                  {room.status === 'round_end' && (
+                    <div className="rounded-xl bg-rose-500/10 border border-rose-400/40 p-4 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-rose-300">
+                          Pelukis Gadungan Ronde Ini
+                        </p>
+                        <p className="text-xl font-black text-white mt-0.5">
+                          {room.lukisanState.gadunganNames?.join(', ') || '—'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-slate-400">Kata Rahasia</p>
+                        <p className="text-xl font-black text-emerald-300">
+                          {room.lukisanState.revealedWord ?? '—'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="max-w-xl mx-auto">
+                    <PelukisCanvas
+                      strokes={room.lukisanState.strokes}
+                      interactive={false}
+                      allowReplay={room.status === 'round_end'}
+                      autoPlayReplay={room.status === 'round_end'}
+                      turnOrder={room.lukisanState.turnOrder}
+                      turnNamesByUid={room.lukisanState.turnNamesByUid}
+                      turnColorsByUid={room.lukisanState.turnColorsByUid}
+                    />
+                  </div>
                 </div>
               )}
 

@@ -21,7 +21,7 @@ service cloud.firestore {
     }
 
     function isValidGameType(gameType) {
-      return gameType in ['spyfall', 'kata_kata', 'satu_frekuensi', 'fakta_hari_ini'];
+      return gameType in ['spyfall', 'kata_kata', 'satu_frekuensi', 'fakta_hari_ini', 'pelukis_gadungan'];
     }
 
     function incoming() { return request.resource.data; }
@@ -52,7 +52,7 @@ service cloud.firestore {
 
     function isValidRoom(d, roomId) {
       return d.keys().hasAll(['id', 'code', 'gameType', 'hostUid', 'status', 'roundNumber', 'currentRoundId', 'roundDurationSec', 'roundEndsAtMs', 'firstSpeakerUid', 'spyMode', 'enabledPacks', 'selectedLocationNames', 'customLocations', 'activeVote', 'pendingSpyGuess', 'lastRoundResult', 'createdAt', 'updatedAt']) &&
-        d.keys().hasOnly(['id', 'code', 'gameType', 'hostUid', 'status', 'roundNumber', 'currentRoundId', 'currentMatchRounds', 'completedGames', 'activeRecap', 'lastEmptyAtMs', 'roundDurationSec', 'roundEndsAtMs', 'firstSpeakerUid', 'spyMode', 'enabledPacks', 'selectedLocationNames', 'customLocations', 'customWordPairs', 'customSpectrums', 'customFacts', 'eliminatedUids', 'eliminationLog', 'frequencyState', 'faktaState', 'activeVote', 'pendingSpyGuess', 'lastRoundResult', 'createdAt', 'updatedAt']) &&
+        d.keys().hasOnly(['id', 'code', 'gameType', 'hostUid', 'status', 'roundNumber', 'currentRoundId', 'currentMatchRounds', 'completedGames', 'activeRecap', 'lastEmptyAtMs', 'roundDurationSec', 'roundEndsAtMs', 'firstSpeakerUid', 'spyMode', 'enabledPacks', 'selectedLocationNames', 'customLocations', 'customWordPairs', 'customSpectrums', 'customFacts', 'customDrawingPrompts', 'pelukisStrokeRounds', 'eliminatedUids', 'eliminationLog', 'frequencyState', 'faktaState', 'lukisanState', 'activeVote', 'pendingSpyGuess', 'lastRoundResult', 'createdAt', 'updatedAt']) &&
         d.id == roomId && isValidCode(d.code) && isValidGameType(d.gameType) &&
         d.hostUid is string && d.hostUid.size() <= 128 &&
         d.status in ['lobby', 'playing', 'voting', 'spy_guess', 'round_end'] &&
@@ -72,10 +72,13 @@ service cloud.firestore {
         (!('customWordPairs' in d) || (d.customWordPairs is list && d.customWordPairs.size() <= 30)) &&
         (!('customSpectrums' in d) || (d.customSpectrums is list && d.customSpectrums.size() <= 25)) &&
         (!('customFacts' in d) || (d.customFacts is list && d.customFacts.size() <= 30)) &&
+        (!('customDrawingPrompts' in d) || (d.customDrawingPrompts is list && d.customDrawingPrompts.size() <= 30)) &&
+        (!('pelukisStrokeRounds' in d) || (d.pelukisStrokeRounds is int && d.pelukisStrokeRounds in [1, 2])) &&
         (!('eliminatedUids' in d) || (d.eliminatedUids is list && d.eliminatedUids.size() <= 20)) &&
         (!('eliminationLog' in d) || (d.eliminationLog is list && d.eliminationLog.size() <= 20)) &&
         (!('frequencyState' in d) || d.frequencyState == null || d.frequencyState is map) &&
         (!('faktaState' in d) || d.faktaState == null || d.faktaState is map) &&
+        (!('lukisanState' in d) || d.lukisanState == null || d.lukisanState is map) &&
         (d.activeVote == null || d.activeVote is map) &&
         (d.pendingSpyGuess == null || d.pendingSpyGuess is map) &&
         (d.lastRoundResult == null || d.lastRoundResult is map) &&
@@ -108,6 +111,12 @@ service cloud.firestore {
           d.keys().hasOnly(['uid', 'roundId', 'gameType', 'suitPick', 'updatedAt']) &&
           d.gameType == 'suit_duel' &&
           d.suitPick in ['batu', 'gunting', 'kertas']
+        ) || (
+          d.keys().hasAll(['uid', 'roundId', 'gameType', 'votedUid', 'updatedAt']) &&
+          d.keys().hasOnly(['uid', 'roundId', 'gameType', 'votedUid', 'updatedAt']) &&
+          d.gameType == 'pelukis_gadungan' &&
+          d.votedUid is string && d.votedUid.size() >= 1 && d.votedUid.size() <= 128 &&
+          d.votedUid != uid
         )
       );
     }
@@ -142,6 +151,31 @@ service cloud.firestore {
           (existing().frequencyState.phase == 'dialing' &&
             incoming().frequencyState.phase == 'dialing' &&
             incoming().status == 'playing')
+        )
+      );
+    }
+
+    function isAuthorizedLukisanUpdate(roomId) {
+      return existing().gameType != 'pelukis_gadungan' || (
+        existing().lukisanState is map &&
+        incoming().lukisanState is map && (
+          // Current turn painter (or Numpang controller / Host skip) submits stroke & advances turn/voting
+          (existing().lukisanState.phase == 'drawing' &&
+            incoming().lukisanState.phase in ['drawing', 'voting'] &&
+            incoming().status == 'playing' &&
+            (ownsSeat(roomId, existing().lukisanState.currentTurnUid) || request.auth.uid == existing().hostUid)) ||
+          // Member registers secret vote receipt on submittedVoteUids during voting
+          (existing().lukisanState.phase == 'voting' &&
+            incoming().lukisanState.phase == 'voting' &&
+            incoming().status == 'playing') ||
+          // Host resolves tallied votes into gadungan_guess or round_end reveal
+          (existing().lukisanState.phase == 'voting' &&
+            request.auth.uid == existing().hostUid) ||
+          // Caught Pelukis Gadungan (or Host surrender/force resolve) submits last-chance word guess
+          (existing().lukisanState.phase == 'gadungan_guess' &&
+            incoming().lukisanState.phase == 'reveal' &&
+            incoming().status == 'round_end' &&
+            (ownsSeat(roomId, existing().lukisanState.accusedUid) || request.auth.uid == existing().hostUid))
         )
       );
     }
@@ -193,17 +227,17 @@ service cloud.firestore {
           (existing().hostUid == request.auth.uid &&
             existing().status in ['lobby', 'round_end'] &&
             incoming().status == 'lobby' &&
-            incoming().diff(existing()).affectedKeys().hasOnly(['gameType', 'status', 'roundNumber', 'currentRoundId', 'currentMatchRounds', 'completedGames', 'activeRecap', 'roundEndsAtMs', 'firstSpeakerUid', 'enabledPacks', 'selectedLocationNames', 'eliminatedUids', 'eliminationLog', 'frequencyState', 'faktaState', 'activeVote', 'pendingSpyGuess', 'lastRoundResult', 'updatedAt'])) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['gameType', 'status', 'roundNumber', 'currentRoundId', 'currentMatchRounds', 'completedGames', 'activeRecap', 'roundEndsAtMs', 'firstSpeakerUid', 'enabledPacks', 'selectedLocationNames', 'eliminatedUids', 'eliminationLog', 'frequencyState', 'faktaState', 'lukisanState', 'activeVote', 'pendingSpyGuess', 'lastRoundResult', 'updatedAt'])) ||
           // 2. Host same-game management (settings, round start, lobby return, vote cancel, Rekap Permainan, host transfer)
           (existing().hostUid == request.auth.uid && incoming().gameType == existing().gameType && (
             (existing().status in ['lobby', 'round_end'] &&
-              incoming().diff(existing()).affectedKeys().hasOnly(['roundDurationSec', 'spyMode', 'enabledPacks', 'customLocations', 'customWordPairs', 'customSpectrums', 'customFacts', 'updatedAt'])) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['roundDurationSec', 'spyMode', 'enabledPacks', 'customLocations', 'customWordPairs', 'customSpectrums', 'customFacts', 'customDrawingPrompts', 'pelukisStrokeRounds', 'updatedAt'])) ||
             incoming().diff(existing()).affectedKeys().hasOnly(['hostUid', 'faktaState', 'updatedAt']) ||
             (existing().status in ['lobby', 'round_end'] && incoming().status == 'playing' &&
               incoming().roundNumber == existing().roundNumber + 1 &&
-              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'roundNumber', 'currentRoundId', 'roundEndsAtMs', 'firstSpeakerUid', 'selectedLocationNames', 'eliminatedUids', 'eliminationLog', 'frequencyState', 'faktaState', 'activeVote', 'pendingSpyGuess', 'activeRecap', 'updatedAt'])) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'roundNumber', 'currentRoundId', 'roundEndsAtMs', 'firstSpeakerUid', 'selectedLocationNames', 'eliminatedUids', 'eliminationLog', 'frequencyState', 'faktaState', 'lukisanState', 'activeVote', 'pendingSpyGuess', 'activeRecap', 'updatedAt'])) ||
             (incoming().status == 'lobby' &&
-              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'activeVote', 'pendingSpyGuess', 'eliminatedUids', 'eliminationLog', 'frequencyState', 'faktaState', 'updatedAt'])) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'activeVote', 'pendingSpyGuess', 'eliminatedUids', 'eliminationLog', 'frequencyState', 'faktaState', 'lukisanState', 'updatedAt'])) ||
             (existing().status in ['voting', 'spy_guess'] && incoming().status == 'playing' &&
               incoming().diff(existing()).affectedKeys().hasOnly(['status', 'activeVote', 'pendingSpyGuess', 'updatedAt'])) ||
             (existing().status in ['lobby', 'round_end'] &&
@@ -217,7 +251,8 @@ service cloud.firestore {
             incoming().currentRoundId == existing().currentRoundId &&
             isAuthorizedFaktaUpdate(roomId) &&
             isAuthorizedFrequencyUpdate(roomId) &&
-            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'currentMatchRounds', 'activeVote', 'pendingSpyGuess', 'eliminatedUids', 'eliminationLog', 'frequencyState', 'faktaState', 'lastRoundResult', 'updatedAt'])) ||
+            isAuthorizedLukisanUpdate(roomId) &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'currentMatchRounds', 'activeVote', 'pendingSpyGuess', 'eliminatedUids', 'eliminationLog', 'frequencyState', 'faktaState', 'lukisanState', 'lastRoundResult', 'updatedAt'])) ||
           // 4. Active room member Suit Duel tiebreaker update inside activeRecap
           (isMember(roomId) && incoming().gameType == existing().gameType &&
             existing().activeRecap is map && incoming().activeRecap is map &&
@@ -241,7 +276,7 @@ service cloud.firestore {
               incoming().completedGames.size() == 0 &&
               incoming().activeRecap == null &&
               incoming().lastEmptyAtMs == null &&
-              incoming().diff(existing()).affectedKeys().hasOnly(['hostUid', 'status', 'roundNumber', 'currentRoundId', 'currentMatchRounds', 'completedGames', 'activeRecap', 'lastEmptyAtMs', 'roundEndsAtMs', 'firstSpeakerUid', 'eliminatedUids', 'eliminationLog', 'frequencyState', 'faktaState', 'activeVote', 'pendingSpyGuess', 'lastRoundResult', 'updatedAt']))
+              incoming().diff(existing()).affectedKeys().hasOnly(['hostUid', 'status', 'roundNumber', 'currentRoundId', 'currentMatchRounds', 'completedGames', 'activeRecap', 'lastEmptyAtMs', 'roundEndsAtMs', 'firstSpeakerUid', 'eliminatedUids', 'eliminationLog', 'frequencyState', 'faktaState', 'lukisanState', 'activeVote', 'pendingSpyGuess', 'lastRoundResult', 'updatedAt']))
           ))
         );
       allow delete: if isSignedIn() && isValidId(roomId) && existing().hostUid == request.auth.uid;
@@ -315,6 +350,7 @@ service cloud.firestore {
           ownsSeat(roomId, playerId) &&
           isValidSubmission(incoming(), playerId, roundId) && (
             (incoming().gameType == 'satu_frekuensi' && getRoom(roomId).status == 'playing') ||
+            (incoming().gameType == 'pelukis_gadungan' && getRoom(roomId).status == 'playing') ||
             (incoming().gameType == 'suit_duel' && getRoom(roomId).activeRecap is map)
           );
         allow list, delete: if false;
@@ -325,7 +361,7 @@ service cloud.firestore {
         allow create, update: if isSignedIn() && isValidId(roomId) && stateId == 'current' &&
           isHost(roomId) &&
           incoming().keys().hasAll(['roundId', 'roundNumber', 'locationName', 'spyUids', 'spyNames', 'createdAtMs']) &&
-          incoming().keys().hasOnly(['roundId', 'roundNumber', 'locationName', 'citizenWord', 'spyWord', 'spyUids', 'spyNames', 'targetValue', 'factPrefix', 'factTwist', 'factSuffix', 'factCategory', 'truthTellerUid', 'truthTellerName', 'createdAtMs']) &&
+          incoming().keys().hasOnly(['roundId', 'roundNumber', 'locationName', 'citizenWord', 'spyWord', 'spyUids', 'spyNames', 'targetValue', 'factPrefix', 'factTwist', 'factSuffix', 'factCategory', 'truthTellerUid', 'truthTellerName', 'drawingCategory', 'drawingWord', 'createdAtMs']) &&
           incoming().roundId is string && incoming().roundId.size() <= 64 &&
           incoming().roundNumber is int && incoming().roundNumber >= 1 &&
           incoming().locationName is string && incoming().locationName.size() <= 80 &&
@@ -338,6 +374,8 @@ service cloud.firestore {
           (!('factCategory' in incoming()) || (incoming().factCategory is string && incoming().factCategory.size() <= 40)) &&
           (!('truthTellerUid' in incoming()) || (incoming().truthTellerUid is string && incoming().truthTellerUid.size() <= 128)) &&
           (!('truthTellerName' in incoming()) || (incoming().truthTellerName is string && incoming().truthTellerName.size() <= 40)) &&
+          (!('drawingCategory' in incoming()) || (incoming().drawingCategory is string && incoming().drawingCategory.size() <= 60)) &&
+          (!('drawingWord' in incoming()) || (incoming().drawingWord is string && incoming().drawingWord.size() <= 80)) &&
           incoming().createdAtMs is int && incoming().createdAtMs > 0;
         allow list, delete: if false;
       }

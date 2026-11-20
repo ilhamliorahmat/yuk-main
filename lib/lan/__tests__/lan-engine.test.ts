@@ -72,8 +72,10 @@ describe('Zero-Internet WebRTC LAN Signaling Codec', () => {
   });
 });
 
-describe('LanHostAuthority — Zero-Leak Isolation & All 4 Games + Session Platform', () => {
-  function setupThreePlayerRoom(gameType: 'spyfall' | 'kata_kata' | 'satu_frekuensi' | 'fakta_hari_ini') {
+describe('LanHostAuthority — Zero-Leak Isolation & All 5 Games + Session Platform', () => {
+  function setupThreePlayerRoom(
+    gameType: 'spyfall' | 'kata_kata' | 'satu_frekuensi' | 'fakta_hari_ini' | 'pelukis_gadungan',
+  ) {
     const auth = new LanHostAuthority({
       hostUid: 'host_1',
       hostName: 'Budi',
@@ -237,4 +239,78 @@ describe('LanHostAuthority — Zero-Leak Isolation & All 4 Games + Session Platf
     expect(auth.getRoom().activeRecap).not.toBeNull();
     expect(auth.getRoom().activeRecap?.completedGames).toHaveLength(1);
   });
+
+  it('runs Pelukis Gadungan drawing turns -> voting -> gadungan_guess -> reveal & stage isolation', () => {
+    const auth = setupThreePlayerRoom('pelukis_gadungan');
+    auth.handleAction('host_1', 'updatePelukisSettings', {
+      enabledPacks: ['kuliner'],
+      spyMode: 'single',
+      pelukisStrokeRounds: 1,
+      customDrawingPrompts: [],
+    });
+    auth.handleAction('host_1', 'startPelukisRound', {});
+
+    const stageStart = auth.getSnapshotForPeer('tv_stage', true);
+    expect(stageStart.secretsByOwnedSeat).toEqual({});
+    expect(stageStart.revealedSecrets).toEqual({});
+
+    const lukisanStart = auth.getRoom().lukisanState!;
+    expect(lukisanStart.phase).toBe('drawing');
+    expect(lukisanStart.turnOrder).toHaveLength(3);
+
+    // Find Gadungan vs Pelukis Asli from peer snapshots
+    const uids = ['host_1', 'guest_2', 'guest_3'] as const;
+    const gadunganUid = uids.find(
+      (uid) => auth.getSnapshotForPeer(uid, false).secretsByOwnedSeat[uid]?.isGadungan === true,
+    )!;
+    const pelukisUid = uids.find((uid) => uid !== gadunganUid)!;
+
+    const gadunganSecret = auth.getSnapshotForPeer(gadunganUid, false).secretsByOwnedSeat[gadunganUid];
+    const pelukisSecret = auth.getSnapshotForPeer(pelukisUid, false).secretsByOwnedSeat[pelukisUid];
+    expect(gadunganSecret?.drawingCategory).toBe(lukisanStart.category);
+    expect(gadunganSecret?.drawingWord).toBeNull();
+    expect(typeof pelukisSecret?.drawingWord).toBe('string');
+
+    // Execute 1 stroke per turn in exact turnOrder
+    for (const drawerUid of lukisanStart.turnOrder) {
+      auth.handleAction(drawerUid, 'submitPelukisStroke', {
+        points: [100, 100, 300, 300, 500, 200],
+        actAsUid: drawerUid,
+      });
+    }
+
+    expect(auth.getRoom().lukisanState?.phase).toBe('voting');
+    expect(auth.getRoom().lukisanState?.strokes).toHaveLength(3);
+
+    // All Pelukis Asli vote for Gadungan; Gadungan votes for someone else
+    for (const voterUid of uids) {
+      const targetUid = voterUid === gadunganUid ? pelukisUid : gadunganUid;
+      auth.handleAction(voterUid, 'castPelukisVote', { targetUid, actAsUid: voterUid });
+    }
+
+    expect(auth.getRoom().lukisanState?.phase).toBe('gadungan_guess');
+    expect(auth.getRoom().lukisanState?.accusedUid).toBe(gadunganUid);
+
+    // Gadungan surrenders -> Pelukis Asli win (+2 each)
+    auth.handleAction(gadunganUid, 'submitPelukisGuess', {
+      surrender: true,
+      actAsUid: gadunganUid,
+    });
+
+    expect(auth.getRoom().status).toBe('round_end');
+    expect(auth.getRoom().lastRoundResult?.winnerTeam).toBe('pelukis');
+    expect(auth.getRoom().lukisanState?.revealedWord).toBe(pelukisSecret?.drawingWord);
+
+    const pelukisPlayer = auth.getPlayersList().find((p) => p.uid === pelukisUid);
+    const gadunganPlayer = auth.getPlayersList().find((p) => p.uid === gadunganUid);
+    expect(pelukisPlayer?.score).toBe(2);
+    expect(gadunganPlayer?.score).toBe(0);
+
+    // Game switcher cleans up lukisanState and archives match
+    auth.handleAction('host_1', 'switchRoomGameType', { nextGameType: 'spyfall' });
+    expect(auth.getRoom().gameType).toBe('spyfall');
+    expect(auth.getRoom().lukisanState).toBeNull();
+    expect(auth.getRoom().completedGames).toHaveLength(1);
+  });
 });
+

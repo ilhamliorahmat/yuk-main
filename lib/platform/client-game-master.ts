@@ -31,6 +31,14 @@ import {
   scoreSatuFrekuensiRound,
 } from '@/lib/games/satu-frekuensi/engine';
 import {
+  calculatePelukisScoreDeltas,
+  dealPelukisGadunganRound,
+  evaluatePelukisWordGuess,
+  mergeDrawingPromptPool,
+  normalizeAndSimplifyPoints,
+  tallyPelukisVotes,
+} from '@/lib/games/pelukis-gadungan/engine';
+import {
   calculateRoundScoreDeltas,
   dealSpyfallRound,
   evaluateSpyGuess,
@@ -50,6 +58,9 @@ import type {
   FaktaState,
   FrequencyState,
   GameType,
+  LukisanPhase,
+  LukisanState,
+  LukisanStroke,
   PlayerSubmissionDoc,
   RoomDoc,
   RoomPlayerDoc,
@@ -76,6 +87,12 @@ export type ClientGameMasterEndpoint =
   | '/api/fakta-hari-ini/next-phase'
   | '/api/fakta-hari-ini/guess'
   | '/api/fakta-hari-ini/return-lobby'
+  | '/api/pelukis-gadungan/start'
+  | '/api/pelukis-gadungan/stroke'
+  | '/api/pelukis-gadungan/vote'
+  | '/api/pelukis-gadungan/guess'
+  | '/api/pelukis-gadungan/resolve'
+  | '/api/pelukis-gadungan/return-lobby'
   | '/api/session/switch-game'
   | '/api/session/open-recap'
   | '/api/session/close-recap'
@@ -2007,14 +2024,730 @@ async function handleFaktaHariIniReturnLobby(
   });
 }
 
+// --- Game #5: Pelukis Gadungan (pelukis_gadungan) ---
+
+async function handlePelukisStart(
+  db: Firestore,
+  callerUid: string,
+  payload: Record<string, unknown>,
+): Promise<ClientGameMasterResponse> {
+  const roomId = assertRoomId(payload.roomId);
+  const players = await fetchOrderedRoomPlayers(db, roomId);
+
+  const roomRef = doc(db, 'rooms', roomId);
+  const serverStateRef = doc(db, 'rooms', roomId, 'serverState', 'current');
+
+  return runTransaction(db, async (tx) => {
+    const [roomSnap, serverStateSnap] = await Promise.all([
+      tx.get(roomRef),
+      tx.get(serverStateRef),
+    ]);
+
+    if (!roomSnap.exists()) {
+      throw new Error('Ruang permainan tidak ditemukan.');
+    }
+
+    const room = roomSnap.data() as RoomDoc;
+    if (room.gameType !== 'pelukis_gadungan') {
+      throw new Error('Ruang ini bukan permainan Pelukis Gadungan.');
+    }
+    if (room.hostUid !== callerUid) {
+      throw new Error('Hanya Host ruang yang dapat memulai ronde baru.');
+    }
+    if (room.status !== 'lobby' && room.status !== 'round_end') {
+      throw new Error('Ronde sedang berlangsung.');
+    }
+
+    const activePlayers = filterActivePlayers(players);
+    if (activePlayers.length < 3) {
+      throw new Error(
+        'Minimal 3 pemain aktif (tidak sedang BRB) dibutuhkan untuk memulai Pelukis Gadungan.',
+      );
+    }
+
+    const pool = mergeDrawingPromptPool(
+      room.enabledPacks ?? ['kuliner', 'tongkrongan', 'hewan_alam'],
+      room.customDrawingPrompts ?? [],
+    );
+
+    const prevServerState = serverStateSnap.exists()
+      ? (serverStateSnap.data() as ServerRoundStateDoc)
+      : null;
+    const previousWord =
+      prevServerState?.drawingWord ?? room.lukisanState?.revealedWord ?? null;
+
+    const nextRoundNumber = (room.roundNumber ?? 0) + 1;
+    const roundId = `round_${nextRoundNumber}_${Date.now()}`;
+    const totalStrokeRounds: 1 | 2 = room.pelukisStrokeRounds === 1 ? 1 : 2;
+
+    const dealt = dealPelukisGadunganRound({
+      players: activePlayers.map((p) => ({
+        uid: p.uid,
+        displayName: p.displayName,
+        avatarColor: p.avatarColor,
+      })),
+      pool,
+      spyMode: room.spyMode ?? 'single',
+      previousWord,
+      roundId,
+    });
+
+    const firstTurnUid = dealt.turnOrder[0];
+    const firstTurnName = dealt.turnNamesByUid[firstTurnUid] ?? 'Pemain';
+
+    const nextLukisanState: LukisanState = {
+      phase: 'drawing',
+      category: dealt.prompt.category,
+      totalStrokeRounds,
+      strokeRound: 1,
+      turnOrder: dealt.turnOrder,
+      turnNamesByUid: dealt.turnNamesByUid,
+      turnColorsByUid: dealt.turnColorsByUid,
+      currentTurnIndex: 0,
+      currentTurnUid: firstTurnUid,
+      currentTurnName: firstTurnName,
+      strokes: [],
+      submittedVoteUids: [],
+      accusedUid: null,
+      accusedName: null,
+    };
+
+    tx.update(roomRef, {
+      status: 'playing',
+      roundNumber: nextRoundNumber,
+      currentRoundId: roundId,
+      roundEndsAtMs: 0,
+      firstSpeakerUid: firstTurnUid,
+      selectedLocationNames: [],
+      lukisanState: nextLukisanState,
+      activeVote: null,
+      pendingSpyGuess: null,
+      activeRecap: null,
+      updatedAt: serverTimestamp(),
+    });
+
+    const nextServerState: ServerRoundStateDoc = {
+      roundId,
+      roundNumber: nextRoundNumber,
+      locationName: dealt.prompt.category.slice(0, 80),
+      drawingCategory: dealt.prompt.category.slice(0, 60),
+      drawingWord: dealt.prompt.word.slice(0, 80),
+      spyUids: dealt.gadunganUids,
+      spyNames: dealt.gadunganNames,
+      createdAtMs: Date.now(),
+    };
+    tx.set(serverStateRef, nextServerState);
+
+    for (const [playerUid, secret] of Object.entries(dealt.secretsByUid)) {
+      const secretRef = doc(db, 'rooms', roomId, 'rounds', roundId, 'secrets', playerUid);
+      tx.set(secretRef, {
+        ...secret,
+        createdAt: serverTimestamp(),
+      });
+    }
+
+    return {
+      ok: true,
+      systemMessage: `Ronde #${nextRoundNumber} Pelukis Gadungan dimulai! Tema: ${dealt.prompt.category}. Giliran pertama: ${firstTurnName}.`,
+    };
+  });
+}
+
+async function handlePelukisStroke(
+  db: Firestore,
+  callerUid: string,
+  payload: Record<string, unknown>,
+): Promise<ClientGameMasterResponse> {
+  const roomId = assertRoomId(payload.roomId);
+  const action = payload.action === 'skip' ? 'skip' : 'draw';
+  const players = await fetchOrderedRoomPlayers(db, roomId);
+  const roomRef = doc(db, 'rooms', roomId);
+
+  return runTransaction(db, async (tx) => {
+    const roomSnap = await tx.get(roomRef);
+    if (!roomSnap.exists()) {
+      throw new Error('Ruang permainan tidak ditemukan.');
+    }
+
+    const room = roomSnap.data() as RoomDoc;
+    if (room.gameType !== 'pelukis_gadungan' || !room.lukisanState) {
+      throw new Error('Ruang ini bukan permainan Pelukis Gadungan.');
+    }
+    const lukisan = room.lukisanState;
+    if (room.status !== 'playing' || lukisan.phase !== 'drawing') {
+      throw new Error('Fase menggambar sedang tidak aktif.');
+    }
+
+    const isHost = room.hostUid === callerUid;
+    if (action === 'draw') {
+      const actorPlayer = resolveActorPlayer(players, callerUid, payload.actAsUid);
+      if (actorPlayer.uid !== lukisan.currentTurnUid) {
+        throw new Error(`Sekarang giliran ${lukisan.currentTurnName} untuk menggambar.`);
+      }
+    } else if (!isHost) {
+      const actorPlayer = resolveActorPlayer(players, callerUid, payload.actAsUid);
+      if (actorPlayer.uid !== lukisan.currentTurnUid) {
+        throw new Error('Hanya pemain yang sedang mendapat giliran atau Host yang dapat melewati giliran.');
+      }
+    }
+
+    let nextStrokes: LukisanStroke[] = [...lukisan.strokes];
+    const currentDrawerName =
+      lukisan.turnNamesByUid[lukisan.currentTurnUid] ?? lukisan.currentTurnName;
+
+    if (action === 'draw') {
+      const rawPoints = Array.isArray(payload.points) ? (payload.points as number[]) : [];
+      const cleanPoints = normalizeAndSimplifyPoints(rawPoints, 10, 50);
+      if (cleanPoints.length < 4) {
+        throw new Error('Buat minimal 1 tarikan garis pada kanvas sebelum mengirim.');
+      }
+      nextStrokes.push({
+        strokeIndex: nextStrokes.length + 1,
+        strokeRound: lukisan.strokeRound,
+        uid: lukisan.currentTurnUid,
+        displayName: currentDrawerName,
+        color: lukisan.turnColorsByUid[lukisan.currentTurnUid] ?? '#F43F5E',
+        points: cleanPoints,
+      });
+    }
+
+    const nextIndex = lukisan.currentTurnIndex + 1;
+    let nextPhase: LukisanPhase = lukisan.phase;
+    let nextStrokeRound = lukisan.strokeRound;
+    let nextTurnIndex = nextIndex;
+    let nextTurnUid = '';
+    let nextTurnName = '';
+    let systemMessage: string | null = null;
+
+    if (nextIndex < lukisan.turnOrder.length) {
+      nextTurnUid = lukisan.turnOrder[nextIndex];
+      nextTurnName = lukisan.turnNamesByUid[nextTurnUid] ?? 'Pemain';
+    } else if (lukisan.strokeRound < lukisan.totalStrokeRounds) {
+      nextStrokeRound = lukisan.strokeRound + 1;
+      nextTurnIndex = 0;
+      nextTurnUid = lukisan.turnOrder[0];
+      nextTurnName = lukisan.turnNamesByUid[nextTurnUid] ?? 'Pemain';
+      systemMessage = `Putaran #${nextStrokeRound} dimulai! Giliran ${nextTurnName} menambah 1 goresan.`;
+    } else {
+      nextPhase = 'voting';
+      nextTurnIndex = 0;
+      nextTurnUid = '';
+      nextTurnName = '';
+      systemMessage =
+        'Semua goresan selesai! Waktunya berdiskusi lalu memilih siapa Pelukis Gadungan secara rahasia.';
+    }
+
+    tx.update(roomRef, {
+      lukisanState: {
+        ...lukisan,
+        phase: nextPhase,
+        strokeRound: nextStrokeRound,
+        currentTurnIndex: nextTurnIndex,
+        currentTurnUid: nextTurnUid,
+        currentTurnName: nextTurnName,
+        strokes: nextStrokes,
+      },
+      updatedAt: serverTimestamp(),
+    });
+
+    return { ok: true, systemMessage };
+  });
+}
+
+async function handlePelukisVote(
+  db: Firestore,
+  callerUid: string,
+  payload: Record<string, unknown>,
+): Promise<ClientGameMasterResponse> {
+  const roomId = assertRoomId(payload.roomId);
+  const targetUid = typeof payload.targetUid === 'string' ? payload.targetUid.trim() : '';
+  if (!targetUid) {
+    throw new Error('Pilih salah satu pelukis yang dicurigai.');
+  }
+
+  const players = await fetchOrderedRoomPlayers(db, roomId);
+  const actorPlayer = resolveActorPlayer(players, callerUid, payload.actAsUid);
+  const actorUid = actorPlayer.uid;
+  const activePlayers = filterActivePlayers(players);
+
+  const roomRef = doc(db, 'rooms', roomId);
+  const serverStateRef = doc(db, 'rooms', roomId, 'serverState', 'current');
+
+  return runTransaction(db, async (tx) => {
+    const roomSnap = await tx.get(roomRef);
+    if (!roomSnap.exists()) {
+      throw new Error('Ruang permainan tidak ditemukan.');
+    }
+
+    const room = roomSnap.data() as RoomDoc;
+    if (room.gameType !== 'pelukis_gadungan' || !room.lukisanState) {
+      throw new Error('Ruang ini bukan permainan Pelukis Gadungan.');
+    }
+    const lukisan = room.lukisanState;
+    if (room.status !== 'playing' || lukisan.phase !== 'voting') {
+      throw new Error('Pemungutan suara sedang tidak aktif.');
+    }
+    if (!lukisan.turnOrder.includes(actorUid)) {
+      throw new Error('Hanya peserta aktif ronde ini yang memiliki hak suara.');
+    }
+    if (!lukisan.turnOrder.includes(targetUid)) {
+      throw new Error('Target yang dipilih bukan peserta ronde ini.');
+    }
+    if (targetUid === actorUid) {
+      throw new Error('Kamu tidak bisa memilih dirimu sendiri.');
+    }
+
+    const isHostDevice = room.hostUid === callerUid;
+    const otherVoters = lukisan.turnOrder.filter((uid) => uid !== actorUid);
+
+    // If Host device is voting, read serverState + other voter submissions BEFORE writes
+    let serverState: ServerRoundStateDoc | null = null;
+    const votesByUid: Record<string, string> = { [actorUid]: targetUid };
+
+    if (isHostDevice) {
+      const [serverStateSnap, ...otherSubSnaps] = await Promise.all([
+        tx.get(serverStateRef),
+        ...otherVoters.map((uid) =>
+          tx.get(doc(db, 'rooms', roomId, 'rounds', room.currentRoundId, 'submissions', uid)),
+        ),
+      ]);
+      serverState = serverStateSnap.exists()
+        ? (serverStateSnap.data() as ServerRoundStateDoc)
+        : null;
+      otherVoters.forEach((uid, idx) => {
+        const snap = otherSubSnaps[idx];
+        if (snap?.exists()) {
+          const data = snap.data() as PlayerSubmissionDoc;
+          if (data.votedUid) {
+            votesByUid[uid] = data.votedUid;
+          }
+        }
+      });
+    }
+
+    const subRef = doc(
+      db,
+      'rooms',
+      roomId,
+      'rounds',
+      room.currentRoundId,
+      'submissions',
+      actorUid,
+    );
+    const subDoc: PlayerSubmissionDoc = {
+      uid: actorUid,
+      roundId: room.currentRoundId,
+      gameType: 'pelukis_gadungan',
+      votedUid: targetUid,
+      updatedAt: serverTimestamp(),
+    };
+    tx.set(subRef, subDoc);
+
+    const submittedSet = new Set(lukisan.submittedVoteUids);
+    submittedSet.add(actorUid);
+    const nextSubmittedUids = lukisan.turnOrder.filter((uid) => submittedSet.has(uid));
+    const allVotesIn = nextSubmittedUids.length >= lukisan.turnOrder.length;
+
+    // Non-host devices only register their own secret vote receipt; Host resolves tally
+    if (!isHostDevice || !allVotesIn || !serverState) {
+      tx.update(roomRef, {
+        lukisanState: {
+          ...lukisan,
+          submittedVoteUids: nextSubmittedUids,
+        },
+        updatedAt: serverTimestamp(),
+      });
+      return { ok: true, systemMessage: null };
+    }
+
+    // Host cast the final vote -> resolve immediately inside transaction
+    const tally = tallyPelukisVotes({
+      votesByUid,
+      eligibleVoterUids: lukisan.turnOrder,
+      gadunganUids: serverState.spyUids,
+    });
+    const accusedName = tally.accusedUid
+      ? lukisan.turnNamesByUid[tally.accusedUid] ?? 'Pemain'
+      : null;
+
+    if (tally.caughtGadungan && tally.accusedUid) {
+      tx.update(roomRef, {
+        lukisanState: {
+          ...lukisan,
+          phase: 'gadungan_guess',
+          submittedVoteUids: nextSubmittedUids,
+          accusedUid: tally.accusedUid,
+          accusedName,
+          voteTally: tally.voteTally,
+          votesByUid,
+        },
+        updatedAt: serverTimestamp(),
+      });
+      return {
+        ok: true,
+        systemMessage: `${accusedName} tertuduh sebagai Pelukis Gadungan! Dia punya 1 Kesempatan Terakhir menebak Kata Rahasia!`,
+      };
+    }
+
+    const secretWord = serverState.drawingWord ?? serverState.locationName;
+    const category = serverState.drawingCategory ?? lukisan.category;
+    const deltas = calculatePelukisScoreDeltas({
+      playerUids: activePlayers.map((p) => p.uid),
+      gadunganUids: serverState.spyUids,
+      winnerTeam: 'gadungan',
+    });
+
+    const reason = tally.isTie || !tally.accusedUid
+      ? `Suara voting seri! Pelukis Gadungan (${serverState.spyNames.join(', ')}) lolos dan meraih +3 poin!`
+      : `Salah tuduh! ${accusedName} ternyata Pelukis Asli! Pelukis Gadungan (${serverState.spyNames.join(', ')}) menang +3 poin!`;
+
+    const roundResult: RoundResult = {
+      roundNumber: room.roundNumber,
+      winnerTeam: 'gadungan',
+      reason,
+      locationName: secretWord,
+      guessedLocation: null,
+      drawingCategory: category,
+      drawingWord: secretWord,
+      spyUids: serverState.spyUids,
+      spyNames: serverState.spyNames,
+      resolvedAtMs: Date.now(),
+      scoresApplied: true,
+    };
+
+    tx.update(roomRef, {
+      status: 'round_end',
+      currentMatchRounds: (room.currentMatchRounds ?? 0) + 1,
+      lukisanState: {
+        ...lukisan,
+        phase: 'reveal',
+        submittedVoteUids: nextSubmittedUids,
+        accusedUid: tally.accusedUid,
+        accusedName,
+        voteTally: tally.voteTally,
+        votesByUid,
+        revealedWord: secretWord,
+        gadunganUids: serverState.spyUids,
+        gadunganNames: serverState.spyNames,
+      },
+      lastRoundResult: roundResult,
+      updatedAt: serverTimestamp(),
+    });
+
+    for (const player of activePlayers) {
+      const delta = deltas[player.uid] ?? 0;
+      if (delta > 0) {
+        tx.update(doc(db, 'rooms', roomId, 'players', player.uid), {
+          score: increment(delta),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
+
+    return { ok: true, systemMessage: reason };
+  });
+}
+
+async function handlePelukisResolve(
+  db: Firestore,
+  callerUid: string,
+  payload: Record<string, unknown>,
+): Promise<ClientGameMasterResponse> {
+  const roomId = assertRoomId(payload.roomId);
+  const players = await fetchOrderedRoomPlayers(db, roomId);
+  const activePlayers = filterActivePlayers(players);
+
+  const roomRef = doc(db, 'rooms', roomId);
+  const serverStateRef = doc(db, 'rooms', roomId, 'serverState', 'current');
+
+  return runTransaction(db, async (tx) => {
+    const [roomSnap, serverStateSnap] = await Promise.all([
+      tx.get(roomRef),
+      tx.get(serverStateRef),
+    ]);
+    if (!roomSnap.exists()) {
+      throw new Error('Ruang permainan tidak ditemukan.');
+    }
+
+    const room = roomSnap.data() as RoomDoc;
+    if (room.gameType !== 'pelukis_gadungan' || !room.lukisanState) {
+      throw new Error('Ruang ini bukan permainan Pelukis Gadungan.');
+    }
+    if (room.hostUid !== callerUid) {
+      throw new Error('Hanya Host yang dapat membuka hasil voting.');
+    }
+    if (room.status === 'round_end' || room.lukisanState.phase === 'reveal' || room.lukisanState.phase === 'gadungan_guess') {
+      return { ok: true, systemMessage: null };
+    }
+    if (room.lukisanState.phase !== 'voting') {
+      throw new Error('Voting belum aktif.');
+    }
+    if (!serverStateSnap.exists()) {
+      throw new Error('Status rahasia ronde tidak ditemukan.');
+    }
+
+    const serverState = serverStateSnap.data() as ServerRoundStateDoc;
+    const lukisan = room.lukisanState;
+    const subSnaps = await Promise.all(
+      lukisan.turnOrder.map((uid) =>
+        tx.get(doc(db, 'rooms', roomId, 'rounds', room.currentRoundId, 'submissions', uid)),
+      ),
+    );
+
+    const votesByUid: Record<string, string> = {};
+    lukisan.turnOrder.forEach((uid, idx) => {
+      const snap = subSnaps[idx];
+      if (snap?.exists()) {
+        const data = snap.data() as PlayerSubmissionDoc;
+        if (data.votedUid) {
+          votesByUid[uid] = data.votedUid;
+        }
+      }
+    });
+
+    const tally = tallyPelukisVotes({
+      votesByUid,
+      eligibleVoterUids: lukisan.turnOrder,
+      gadunganUids: serverState.spyUids,
+    });
+    const accusedName = tally.accusedUid
+      ? lukisan.turnNamesByUid[tally.accusedUid] ?? 'Pemain'
+      : null;
+
+    if (tally.caughtGadungan && tally.accusedUid) {
+      tx.update(roomRef, {
+        lukisanState: {
+          ...lukisan,
+          phase: 'gadungan_guess',
+          accusedUid: tally.accusedUid,
+          accusedName,
+          voteTally: tally.voteTally,
+          votesByUid,
+        },
+        updatedAt: serverTimestamp(),
+      });
+      return {
+        ok: true,
+        systemMessage: `${accusedName} tertuduh sebagai Pelukis Gadungan! Dia punya 1 Kesempatan Terakhir menebak Kata Rahasia!`,
+      };
+    }
+
+    const secretWord = serverState.drawingWord ?? serverState.locationName;
+    const category = serverState.drawingCategory ?? lukisan.category;
+    const deltas = calculatePelukisScoreDeltas({
+      playerUids: activePlayers.map((p) => p.uid),
+      gadunganUids: serverState.spyUids,
+      winnerTeam: 'gadungan',
+    });
+
+    const reason = tally.isTie || !tally.accusedUid
+      ? `Suara voting seri! Pelukis Gadungan (${serverState.spyNames.join(', ')}) lolos dan meraih +3 poin!`
+      : `Salah tuduh! ${accusedName} ternyata Pelukis Asli! Pelukis Gadungan (${serverState.spyNames.join(', ')}) menang +3 poin!`;
+
+    const roundResult: RoundResult = {
+      roundNumber: room.roundNumber,
+      winnerTeam: 'gadungan',
+      reason,
+      locationName: secretWord,
+      guessedLocation: null,
+      drawingCategory: category,
+      drawingWord: secretWord,
+      spyUids: serverState.spyUids,
+      spyNames: serverState.spyNames,
+      resolvedAtMs: Date.now(),
+      scoresApplied: true,
+    };
+
+    tx.update(roomRef, {
+      status: 'round_end',
+      currentMatchRounds: (room.currentMatchRounds ?? 0) + 1,
+      lukisanState: {
+        ...lukisan,
+        phase: 'reveal',
+        accusedUid: tally.accusedUid,
+        accusedName,
+        voteTally: tally.voteTally,
+        votesByUid,
+        revealedWord: secretWord,
+        gadunganUids: serverState.spyUids,
+        gadunganNames: serverState.spyNames,
+      },
+      lastRoundResult: roundResult,
+      updatedAt: serverTimestamp(),
+    });
+
+    for (const player of activePlayers) {
+      const delta = deltas[player.uid] ?? 0;
+      if (delta > 0) {
+        tx.update(doc(db, 'rooms', roomId, 'players', player.uid), {
+          score: increment(delta),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
+
+    return { ok: true, systemMessage: reason };
+  });
+}
+
+async function handlePelukisGuess(
+  db: Firestore,
+  callerUid: string,
+  payload: Record<string, unknown>,
+): Promise<ClientGameMasterResponse> {
+  const roomId = assertRoomId(payload.roomId);
+  const surrender = Boolean(payload.surrender);
+  const guessedWord =
+    typeof payload.guessedWord === 'string' ? payload.guessedWord.trim().slice(0, 60) : '';
+
+  if (!surrender && !guessedWord) {
+    throw new Error('Ketik tebakan Kata Rahasia terlebih dahulu.');
+  }
+
+  const players = await fetchOrderedRoomPlayers(db, roomId);
+  const activePlayers = filterActivePlayers(players);
+  const roomRef = doc(db, 'rooms', roomId);
+  const serverStateRef = doc(db, 'rooms', roomId, 'serverState', 'current');
+
+  return runTransaction(db, async (tx) => {
+    const [roomSnap, serverStateSnap] = await Promise.all([
+      tx.get(roomRef),
+      tx.get(serverStateRef),
+    ]);
+
+    if (!roomSnap.exists()) {
+      throw new Error('Ruang permainan tidak ditemukan.');
+    }
+    const room = roomSnap.data() as RoomDoc;
+    if (room.gameType !== 'pelukis_gadungan' || !room.lukisanState) {
+      throw new Error('Ruang ini bukan permainan Pelukis Gadungan.');
+    }
+    const lukisan = room.lukisanState;
+    if (room.status !== 'playing' || lukisan.phase !== 'gadungan_guess') {
+      throw new Error('Tidak ada fase tebakan terakhir Pelukis Gadungan.');
+    }
+
+    const isHost = room.hostUid === callerUid;
+    let actorName = lukisan.accusedName ?? 'Pelukis Gadungan';
+    if (!surrender || !isHost) {
+      const actorPlayer = resolveActorPlayer(players, callerUid, payload.actAsUid);
+      if (actorPlayer.uid !== lukisan.accusedUid) {
+        throw new Error('Hanya Pelukis Gadungan yang tertangkap yang dapat menebak kata rahasia.');
+      }
+      actorName = actorPlayer.displayName;
+    }
+
+    if (!serverStateSnap.exists()) {
+      throw new Error('Status rahasia ronde tidak ditemukan.');
+    }
+    const serverState = serverStateSnap.data() as ServerRoundStateDoc;
+    const secretWord = serverState.drawingWord ?? serverState.locationName;
+    const category = serverState.drawingCategory ?? lukisan.category;
+
+    const isCorrect = !surrender && evaluatePelukisWordGuess(guessedWord, secretWord);
+    const winnerTeam: 'pelukis' | 'gadungan' = isCorrect ? 'gadungan' : 'pelukis';
+
+    const deltas = calculatePelukisScoreDeltas({
+      playerUids: activePlayers.map((p) => p.uid),
+      gadunganUids: serverState.spyUids,
+      winnerTeam,
+    });
+
+    const reason = surrender
+      ? `${actorName} menyerah menebak! Tim Pelukis Asli menangkap Pelukis Gadungan (${secretWord}) dan meraih +2 poin!`
+      : isCorrect
+        ? `Luar biasa! ${actorName} menebak "${guessedWord}" dengan TEPAT dan mencuri kemenangan Pelukis Gadungan (+3 poin)!`
+        : `Tebakan ${actorName} ("${guessedWord}") meleset! Kata aslinya "${secretWord}". Semua Pelukis Asli meraih +2 poin!`;
+
+    const roundResult: RoundResult = {
+      roundNumber: room.roundNumber,
+      winnerTeam,
+      reason,
+      locationName: secretWord,
+      guessedLocation: surrender ? null : guessedWord,
+      guessedWord: surrender ? null : guessedWord,
+      drawingCategory: category,
+      drawingWord: secretWord,
+      spyUids: serverState.spyUids,
+      spyNames: serverState.spyNames,
+      resolvedAtMs: Date.now(),
+      scoresApplied: true,
+    };
+
+    tx.update(roomRef, {
+      status: 'round_end',
+      currentMatchRounds: (room.currentMatchRounds ?? 0) + 1,
+      lukisanState: {
+        ...lukisan,
+        phase: 'reveal',
+        revealedWord: secretWord,
+        gadunganUids: serverState.spyUids,
+        gadunganNames: serverState.spyNames,
+        guessedWord: surrender ? null : guessedWord,
+      },
+      lastRoundResult: roundResult,
+      updatedAt: serverTimestamp(),
+    });
+
+    for (const player of activePlayers) {
+      const delta = deltas[player.uid] ?? 0;
+      if (delta > 0) {
+        tx.update(doc(db, 'rooms', roomId, 'players', player.uid), {
+          score: increment(delta),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
+
+    return { ok: true, systemMessage: reason };
+  });
+}
+
+async function handlePelukisReturnLobby(
+  db: Firestore,
+  callerUid: string,
+  payload: Record<string, unknown>,
+): Promise<ClientGameMasterResponse> {
+  const roomId = assertRoomId(payload.roomId);
+  const roomRef = doc(db, 'rooms', roomId);
+
+  return runTransaction(db, async (tx) => {
+    const roomSnap = await tx.get(roomRef);
+    if (!roomSnap.exists()) {
+      throw new Error('Ruang permainan tidak ditemukan.');
+    }
+    const room = roomSnap.data() as RoomDoc;
+    if (room.hostUid !== callerUid) {
+      throw new Error('Hanya Host yang dapat mengembalikan ruang ke lobi.');
+    }
+
+    tx.update(roomRef, {
+      status: 'lobby',
+      activeVote: null,
+      pendingSpyGuess: null,
+      lukisanState: null,
+      updatedAt: serverTimestamp(),
+    });
+
+    return { ok: true, systemMessage: 'Host mengembalikan ruang Pelukis Gadungan ke lobi.' };
+  });
+}
+
 // --- v3.1.0 Session Actions (Game Switcher, Rekap Permainan, Best-of-3 Suit Duel) ---
 
-const VALID_GAME_TYPES: GameType[] = ['spyfall', 'kata_kata', 'satu_frekuensi', 'fakta_hari_ini'];
+const VALID_GAME_TYPES: GameType[] = [
+  'spyfall',
+  'kata_kata',
+  'satu_frekuensi',
+  'fakta_hari_ini',
+  'pelukis_gadungan',
+];
 const GAME_TITLE_MAP: Record<GameType, string> = {
   spyfall: 'Yang Bener Yang Mana',
   kata_kata: 'Kata-Kata Hari Ini',
   satu_frekuensi: 'Satu Frekuensi',
   fakta_hari_ini: 'Fakta Hari Ini',
+  pelukis_gadungan: 'Pelukis Gadungan',
 };
 
 async function handleSessionSwitchGame(
@@ -2074,6 +2807,7 @@ async function handleSessionSwitchGame(
       eliminationLog: [],
       frequencyState: null,
       faktaState: null,
+      lukisanState: null,
       activeVote: null,
       pendingSpyGuess: null,
       lastRoundResult: null,
@@ -2157,6 +2891,7 @@ async function handleSessionOpenRecap(
       eliminationLog: [],
       frequencyState: null,
       faktaState: null,
+      lukisanState: null,
       activeVote: null,
       pendingSpyGuess: null,
       completedGames: nextCompletedGames,
@@ -2427,6 +3162,18 @@ export async function executeClientGameMaster(
         return await handleFaktaHariIniGuess(db, currentUser.uid, payload);
       case '/api/fakta-hari-ini/return-lobby':
         return await handleFaktaHariIniReturnLobby(db, currentUser.uid, payload);
+      case '/api/pelukis-gadungan/start':
+        return await handlePelukisStart(db, currentUser.uid, payload);
+      case '/api/pelukis-gadungan/stroke':
+        return await handlePelukisStroke(db, currentUser.uid, payload);
+      case '/api/pelukis-gadungan/vote':
+        return await handlePelukisVote(db, currentUser.uid, payload);
+      case '/api/pelukis-gadungan/guess':
+        return await handlePelukisGuess(db, currentUser.uid, payload);
+      case '/api/pelukis-gadungan/resolve':
+        return await handlePelukisResolve(db, currentUser.uid, payload);
+      case '/api/pelukis-gadungan/return-lobby':
+        return await handlePelukisReturnLobby(db, currentUser.uid, payload);
       case '/api/session/switch-game':
         return await handleSessionSwitchGame(db, currentUser.uid, payload);
       case '/api/session/open-recap':

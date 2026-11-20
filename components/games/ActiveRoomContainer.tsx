@@ -8,6 +8,7 @@ import { isLanRoomId } from '@/lib/lan/lan-protocol';
 import { lanRuntime } from '@/lib/lan/lan-runtime';
 import { FaktaHariIniRoomView } from './fakta-hari-ini/FaktaHariIniRoomView';
 import { KataKataRoomView } from './kata-kata/KataKataRoomView';
+import { PelukisGadunganRoomView } from './pelukis-gadungan/PelukisGadunganRoomView';
 import { SatuFrekuensiRoomView } from './satu-frekuensi/SatuFrekuensiRoomView';
 import { GameSwitcherModal } from './session/GameSwitcherModal';
 import { LayarPanggungView } from './session/LayarPanggungView';
@@ -188,6 +189,24 @@ export function ActiveRoomContainer({
     if (room.gameType === 'fakta_hari_ini') {
       return (
         <FaktaHariIniRoomView
+          room={room}
+          players={players}
+          mySecret={mySecret}
+          messages={messages}
+          presence={presence}
+          myUid={effectiveSeatUid}
+          myName={effectiveSeatName}
+          deviceUid={myUid}
+          deviceName={myName}
+          onBeforeLeave={() => setIsLeaving(true)}
+          onExitToHub={onExitToHub}
+        />
+      );
+    }
+
+    if (room.gameType === 'pelukis_gadungan') {
+      return (
+        <PelukisGadunganRoomView
           room={room}
           players={players}
           mySecret={mySecret}

@@ -45,6 +45,7 @@ const GAME_LABELS: Record<GameType, string> = {
   kata_kata: 'Kata-Kata Hari Ini',
   satu_frekuensi: 'Satu Frekuensi',
   fakta_hari_ini: 'Fakta Hari Ini',
+  pelukis_gadungan: 'Pelukis Gadungan',
 };
 
 const SUIT_OPTIONS: Array<{

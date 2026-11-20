@@ -18,6 +18,7 @@ import { getFirebaseServices } from '@/lib/firebase/client';
 import { handleFirestoreError, OperationType } from '@/lib/firebase/errors';
 import { sanitizeCustomFact } from '@/lib/games/fakta-hari-ini/engine';
 import { sanitizeCustomWordPair } from '@/lib/games/kata-kata/engine';
+import { sanitizeCustomDrawingPrompt } from '@/lib/games/pelukis-gadungan/engine';
 import { sanitizeCustomSpectrum } from '@/lib/games/satu-frekuensi/engine';
 import {
   getDefaultPacksForGame,
@@ -25,6 +26,7 @@ import {
 } from '@/lib/games/session/engine';
 import { generateRoomCode, sanitizeCustomLocation } from '@/lib/games/spyfall/engine';
 import type {
+  CustomDrawingPrompt,
   CustomFactItem,
   CustomLocation,
   CustomSpectrum,
@@ -100,6 +102,18 @@ function mapEndpointToLanAction(
       return 'submitFaktaHariIniGuess';
     case '/api/fakta-hari-ini/return-lobby':
       return 'returnFaktaHariIniToLobby';
+    case '/api/pelukis-gadungan/start':
+      return 'startPelukisRound';
+    case '/api/pelukis-gadungan/stroke':
+      return sub === 'skip' ? 'skipPelukisTurn' : 'submitPelukisStroke';
+    case '/api/pelukis-gadungan/vote':
+      return 'castPelukisVote';
+    case '/api/pelukis-gadungan/guess':
+      return 'submitPelukisGuess';
+    case '/api/pelukis-gadungan/resolve':
+      return 'resolvePelukisVote';
+    case '/api/pelukis-gadungan/return-lobby':
+      return 'returnPelukisToLobby';
     case '/api/session/switch-game':
       return 'switchRoomGameType';
     case '/api/session/open-recap':
@@ -182,10 +196,13 @@ export async function createRoom(params: {
     customWordPairs: [],
     customSpectrums: [],
     customFacts: [],
+    customDrawingPrompts: [],
+    pelukisStrokeRounds: 2,
     eliminatedUids: [],
     eliminationLog: [],
     frequencyState: null,
     faktaState: null,
+    lukisanState: null,
     activeVote: null,
     pendingSpyGuess: null,
     lastRoundResult: null,
@@ -307,6 +324,7 @@ export async function checkAndResetExpiredRoomSession(
         eliminationLog: [],
         frequencyState: null,
         faktaState: null,
+        lukisanState: null,
         activeVote: null,
         pendingSpyGuess: null,
         lastRoundResult: null,
@@ -1533,6 +1551,208 @@ export async function returnFaktaHariIniToLobby(params: {
   hostName: string;
 }): Promise<void> {
   const data = await callGameMasterApi('/api/fakta-hari-ini/return-lobby', {
+    roomId: params.roomId,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.hostUid,
+      senderName: params.hostName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+// --- Settings & Actions: Game #5 (Pelukis Gadungan / pelukis_gadungan) ---
+
+export async function updatePelukisGadunganSettings(params: {
+  roomId: string;
+  enabledPacks: string[];
+  spyMode: SpyMode;
+  pelukisStrokeRounds: 1 | 2;
+  customDrawingPrompts: CustomDrawingPrompt[];
+}): Promise<void> {
+  if (isLanRoomId(params.roomId)) {
+    await lanRuntime.dispatchAction(params.roomId, 'updatePelukisSettings', {
+      enabledPacks: params.enabledPacks,
+      spyMode: params.spyMode,
+      pelukisStrokeRounds: params.pelukisStrokeRounds,
+      customDrawingPrompts: params.customDrawingPrompts,
+    });
+    return;
+  }
+
+  const { auth, db } = getFirebaseServices();
+  if (!db) throw new Error('Firebase belum terkonfigurasi.');
+
+  const cleanPacks = params.enabledPacks.slice(0, 10);
+  const cleanCustom = params.customDrawingPrompts
+    .map((item) => sanitizeCustomDrawingPrompt(item))
+    .filter((item): item is CustomDrawingPrompt => item !== null)
+    .slice(0, 30);
+
+  if (cleanPacks.length === 0 && cleanCustom.length === 0) {
+    throw new Error('Pilih minimal 1 paket tema gambar atau buat tema kustom.');
+  }
+
+  const effectivePacks = cleanPacks.length > 0 ? cleanPacks : ['kuliner'];
+  const strokeRounds: 1 | 2 = params.pelukisStrokeRounds === 1 ? 1 : 2;
+
+  try {
+    await updateDoc(doc(db, 'rooms', params.roomId), {
+      enabledPacks: effectivePacks,
+      spyMode: params.spyMode,
+      pelukisStrokeRounds: strokeRounds,
+      customDrawingPrompts: cleanCustom,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `rooms/${params.roomId}`, auth);
+  }
+}
+
+export async function startPelukisRound(params: {
+  roomId: string;
+  actorUid: string;
+  actorName: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/pelukis-gadungan/start', {
+    roomId: params.roomId,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.actorUid,
+      senderName: params.actorName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function submitPelukisStroke(params: {
+  roomId: string;
+  actorUid: string;
+  actorName: string;
+  points: number[];
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/pelukis-gadungan/stroke', {
+    roomId: params.roomId,
+    action: 'draw',
+    points: params.points,
+    actAsUid: params.actorUid,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.actorUid,
+      senderName: params.actorName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function skipPelukisTurn(params: {
+  roomId: string;
+  actorUid: string;
+  actorName: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/pelukis-gadungan/stroke', {
+    roomId: params.roomId,
+    action: 'skip',
+    actAsUid: params.actorUid,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.actorUid,
+      senderName: params.actorName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function castPelukisVote(params: {
+  roomId: string;
+  voterUid: string;
+  voterName: string;
+  targetUid: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/pelukis-gadungan/vote', {
+    roomId: params.roomId,
+    targetUid: params.targetUid,
+    actAsUid: params.voterUid,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.voterUid,
+      senderName: params.voterName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function resolvePelukisVote(params: {
+  roomId: string;
+  hostUid: string;
+  hostName: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/pelukis-gadungan/resolve', {
+    roomId: params.roomId,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.hostUid,
+      senderName: params.hostName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function submitPelukisGuess(params: {
+  roomId: string;
+  actorUid: string;
+  actorName: string;
+  guessedWord?: string;
+  surrender?: boolean;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/pelukis-gadungan/guess', {
+    roomId: params.roomId,
+    guessedWord: params.guessedWord ?? '',
+    surrender: Boolean(params.surrender),
+    actAsUid: params.actorUid,
+  });
+
+  if (data.systemMessage) {
+    void sendRoomChatMessage({
+      roomId: params.roomId,
+      senderUid: params.actorUid,
+      senderName: params.actorName,
+      text: data.systemMessage,
+      type: 'system',
+    }).catch(() => {});
+  }
+}
+
+export async function returnPelukisToLobby(params: {
+  roomId: string;
+  hostUid: string;
+  hostName: string;
+}): Promise<void> {
+  const data = await callGameMasterApi('/api/pelukis-gadungan/return-lobby', {
     roomId: params.roomId,
   });
 

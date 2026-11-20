@@ -28,6 +28,15 @@ import {
   getDefaultPacksForGame,
 } from '../games/session/engine';
 import {
+  calculatePelukisScoreDeltas,
+  dealPelukisGadunganRound,
+  evaluatePelukisWordGuess,
+  mergeDrawingPromptPool,
+  normalizeAndSimplifyPoints,
+  sanitizeCustomDrawingPrompt,
+  tallyPelukisVotes,
+} from '../games/pelukis-gadungan/engine';
+import {
   calculateRoundScoreDeltas,
   dealSpyfallRound,
   evaluateSpyGuess,
@@ -38,11 +47,14 @@ import {
 } from '../games/spyfall/engine';
 import type {
   ChatMessage,
+  CustomDrawingPrompt,
   CustomFactItem,
   CustomLocation,
   CustomSpectrum,
   CustomWordPair,
   GameType,
+  LukisanPhase,
+  LukisanStroke,
   PlayerSecretDoc,
   PresenceEntry,
   RoomDoc,
@@ -62,7 +74,7 @@ import {
  * Pure In-Memory Authoritative LAN Party Game Master.
  *
  * Runs strictly on the Host device during Zero-Internet LAN Party Mode.
- * Reuses the exact same pure engines across all 4 games + v3.1.0 session platform,
+ * Reuses the exact same pure engines across all 5 games + v3.1.0 session platform,
  * enforcing actor/seat ownership and guaranteeing per-peer secret isolation.
  */
 export class LanHostAuthority {
@@ -71,6 +83,7 @@ export class LanHostAuthority {
   private secretsByRound: Map<string, Map<string, PlayerSecretDoc>> = new Map();
   private serverState: ServerRoundStateDoc | null = null;
   private frequencyGuessesByRound: Map<string, Map<string, number>> = new Map();
+  private pelukisVotesByRound: Map<string, Map<string, string>> = new Map();
   private suitPicksByClash: Map<string, Map<string, SuitPick>> = new Map();
   private messages: ChatMessage[] = [];
   private presence: Record<string, PresenceEntry> = {};
@@ -105,10 +118,13 @@ export class LanHostAuthority {
       customWordPairs: [],
       customSpectrums: [],
       customFacts: [],
+      customDrawingPrompts: [],
+      pelukisStrokeRounds: 2,
       eliminatedUids: [],
       eliminationLog: [],
       frequencyState: null,
       faktaState: null,
+      lukisanState: null,
       activeVote: null,
       pendingSpyGuess: null,
       lastRoundResult: null,
@@ -575,6 +591,33 @@ export class LanHostAuthority {
           ...this.room,
           enabledPacks: rawPacks.length > 0 ? rawPacks.slice(0, 10) : ['hukum_sejarah'],
           customFacts,
+          updatedAt: now,
+        };
+        return {};
+      }
+
+      case 'updatePelukisSettings': {
+        this.requireHost(senderDeviceUid);
+        const rawPacks = Array.isArray(payload.enabledPacks)
+          ? (payload.enabledPacks as string[])
+          : ['kuliner', 'tongkrongan', 'hewan_alam'];
+        const spyMode = (['single', 'double', 'random'].includes(String(payload.spyMode))
+          ? payload.spyMode
+          : 'single') as SpyMode;
+        const pelukisStrokeRounds: 1 | 2 = Number(payload.pelukisStrokeRounds) === 1 ? 1 : 2;
+        const customDrawingPrompts = (Array.isArray(payload.customDrawingPrompts)
+          ? (payload.customDrawingPrompts as CustomDrawingPrompt[])
+          : []
+        )
+          .map((item) => sanitizeCustomDrawingPrompt(item))
+          .filter((item): item is CustomDrawingPrompt => item !== null)
+          .slice(0, 30);
+        this.room = {
+          ...this.room,
+          enabledPacks: rawPacks.length > 0 ? rawPacks.slice(0, 10) : ['kuliner'],
+          spyMode,
+          pelukisStrokeRounds,
+          customDrawingPrompts,
           updatedAt: now,
         };
         return {};
@@ -1490,11 +1533,294 @@ export class LanHostAuthority {
         return { guesserWon: scored.guesserWon };
       }
 
+      // ===================== GAME #5: PELUKIS GADUNGAN =====================
+      case 'startPelukisRound': {
+        this.requireHost(senderDeviceUid);
+        const activePlayers = filterActivePlayers(this.getPlayersList());
+        if (activePlayers.length < 3) {
+          throw new Error('Minimal 3 pemain aktif (tidak BRB) dibutuhkan untuk Pelukis Gadungan.');
+        }
+        const pool = mergeDrawingPromptPool(
+          this.room.enabledPacks,
+          this.room.customDrawingPrompts ?? [],
+        );
+        const nextRound = this.room.roundNumber + 1;
+        const roundId = `r${nextRound}_${now.toString(36)}`;
+        const totalStrokeRounds: 1 | 2 = this.room.pelukisStrokeRounds === 1 ? 1 : 2;
+
+        const dealt = dealPelukisGadunganRound({
+          players: activePlayers.map((p) => ({
+            uid: p.uid,
+            displayName: p.displayName,
+            avatarColor: p.avatarColor,
+          })),
+          pool,
+          spyMode: this.room.spyMode,
+          previousWord: this.serverState?.drawingWord ?? null,
+          roundId,
+        });
+
+        const secretMap = new Map<string, PlayerSecretDoc>();
+        for (const [uid, sec] of Object.entries(dealt.secretsByUid)) {
+          secretMap.set(uid, { ...sec, createdAt: now });
+        }
+        this.secretsByRound.set(roundId, secretMap);
+        this.pelukisVotesByRound.set(roundId, new Map());
+
+        this.serverState = {
+          roundId,
+          roundNumber: nextRound,
+          locationName: dealt.prompt.category,
+          drawingCategory: dealt.prompt.category,
+          drawingWord: dealt.prompt.word,
+          spyUids: dealt.gadunganUids,
+          spyNames: dealt.gadunganNames,
+          createdAtMs: now,
+        };
+
+        const firstTurnUid = dealt.turnOrder[0];
+        const firstTurnName = dealt.turnNamesByUid[firstTurnUid] ?? 'Pemain';
+
+        this.room = {
+          ...this.room,
+          status: 'playing',
+          roundNumber: nextRound,
+          currentRoundId: roundId,
+          roundEndsAtMs: 0,
+          firstSpeakerUid: firstTurnUid,
+          lukisanState: {
+            phase: 'drawing',
+            category: dealt.prompt.category,
+            totalStrokeRounds,
+            strokeRound: 1,
+            turnOrder: dealt.turnOrder,
+            turnNamesByUid: dealt.turnNamesByUid,
+            turnColorsByUid: dealt.turnColorsByUid,
+            currentTurnIndex: 0,
+            currentTurnUid: firstTurnUid,
+            currentTurnName: firstTurnName,
+            strokes: [],
+            submittedVoteUids: [],
+            accusedUid: null,
+            accusedName: null,
+          },
+          activeRecap: null,
+          updatedAt: now,
+        };
+        this.pushSystemMessage(
+          `Ronde ${nextRound} Pelukis Gadungan dimulai! Tema: ${dealt.prompt.category}. Giliran pertama: ${firstTurnName}.`,
+        );
+        return { roundNumber: nextRound, roundId };
+      }
+
+      case 'submitPelukisStroke':
+      case 'skipPelukisTurn': {
+        const lukisan = this.room.lukisanState;
+        if (!lukisan || this.room.status !== 'playing' || lukisan.phase !== 'drawing') {
+          throw new Error('Fase menggambar sedang tidak aktif.');
+        }
+
+        const isSkip = action === 'skipPelukisTurn' || payload.action === 'skip';
+        if (!isSkip) {
+          const actor = this.resolveActor(senderDeviceUid, payload);
+          if (actor.uid !== lukisan.currentTurnUid) {
+            throw new Error(`Sekarang giliran ${lukisan.currentTurnName} untuk menggambar.`);
+          }
+        } else if (senderDeviceUid !== this.room.hostUid) {
+          const actor = this.resolveActor(senderDeviceUid, payload);
+          if (actor.uid !== lukisan.currentTurnUid) {
+            throw new Error('Hanya pemain aktif atau Host yang dapat melewati giliran.');
+          }
+        }
+
+        const nextStrokes: LukisanStroke[] = [...lukisan.strokes];
+        if (!isSkip) {
+          const rawPoints = Array.isArray(payload.points) ? (payload.points as number[]) : [];
+          const cleanPoints = normalizeAndSimplifyPoints(rawPoints, 10, 50);
+          if (cleanPoints.length < 4) {
+            throw new Error('Buat minimal 1 tarikan garis pada kanvas sebelum mengirim.');
+          }
+          nextStrokes.push({
+            strokeIndex: nextStrokes.length + 1,
+            strokeRound: lukisan.strokeRound,
+            uid: lukisan.currentTurnUid,
+            displayName: lukisan.turnNamesByUid[lukisan.currentTurnUid] ?? lukisan.currentTurnName,
+            color: lukisan.turnColorsByUid[lukisan.currentTurnUid] ?? '#F43F5E',
+            points: cleanPoints,
+          });
+        }
+
+        const nextIndex = lukisan.currentTurnIndex + 1;
+        let nextPhase: LukisanPhase = lukisan.phase;
+        let nextStrokeRound = lukisan.strokeRound;
+        let nextTurnIndex = nextIndex;
+        let nextTurnUid = '';
+        let nextTurnName = '';
+
+        if (nextIndex < lukisan.turnOrder.length) {
+          nextTurnUid = lukisan.turnOrder[nextIndex];
+          nextTurnName = lukisan.turnNamesByUid[nextTurnUid] ?? 'Pemain';
+        } else if (lukisan.strokeRound < lukisan.totalStrokeRounds) {
+          nextStrokeRound = lukisan.strokeRound + 1;
+          nextTurnIndex = 0;
+          nextTurnUid = lukisan.turnOrder[0];
+          nextTurnName = lukisan.turnNamesByUid[nextTurnUid] ?? 'Pemain';
+          this.pushSystemMessage(
+            `Putaran #${nextStrokeRound} dimulai! Giliran ${nextTurnName} menambah 1 goresan.`,
+          );
+        } else {
+          nextPhase = 'voting';
+          nextTurnIndex = 0;
+          nextTurnUid = '';
+          nextTurnName = '';
+          this.pushSystemMessage(
+            'Semua goresan selesai! Saatnya berdiskusi dan memilih Pelukis Gadungan secara rahasia.',
+          );
+        }
+
+        this.room = {
+          ...this.room,
+          lukisanState: {
+            ...lukisan,
+            phase: nextPhase,
+            strokeRound: nextStrokeRound,
+            currentTurnIndex: nextTurnIndex,
+            currentTurnUid: nextTurnUid,
+            currentTurnName: nextTurnName,
+            strokes: nextStrokes,
+          },
+          updatedAt: now,
+        };
+        return { phase: nextPhase, strokeCount: nextStrokes.length };
+      }
+
+      case 'castPelukisVote': {
+        const actor = this.resolveActor(senderDeviceUid, payload);
+        const lukisan = this.room.lukisanState;
+        if (!lukisan || !this.serverState || lukisan.phase !== 'voting') {
+          throw new Error('Voting Pelukis Gadungan belum aktif.');
+        }
+        if (!lukisan.turnOrder.includes(actor.uid)) {
+          throw new Error('Hanya peserta ronde ini yang berhak memilih.');
+        }
+        const targetUid = String(payload.targetUid ?? '');
+        if (!lukisan.turnOrder.includes(targetUid) || targetUid === actor.uid) {
+          throw new Error('Pilihan tersangka tidak valid.');
+        }
+
+        const votesMap =
+          this.pelukisVotesByRound.get(this.room.currentRoundId) ?? new Map<string, string>();
+        votesMap.set(actor.uid, targetUid);
+        this.pelukisVotesByRound.set(this.room.currentRoundId, votesMap);
+
+        const nextSubmittedUids = lukisan.turnOrder.filter((uid) => votesMap.has(uid));
+        if (nextSubmittedUids.length < lukisan.turnOrder.length) {
+          this.room = {
+            ...this.room,
+            lukisanState: {
+              ...lukisan,
+              submittedVoteUids: nextSubmittedUids,
+            },
+            updatedAt: now,
+          };
+          return { allVoted: false };
+        }
+
+        return this.finalizePelukisVoteTally(nextSubmittedUids, now);
+      }
+
+      case 'resolvePelukisVote': {
+        this.requireHost(senderDeviceUid);
+        const lukisan = this.room.lukisanState;
+        if (!lukisan || !this.serverState) {
+          throw new Error('Ronde Pelukis Gadungan tidak aktif.');
+        }
+        if (this.room.status === 'round_end' || lukisan.phase === 'reveal' || lukisan.phase === 'gadungan_guess') {
+          return {};
+        }
+        if (lukisan.phase !== 'voting') {
+          throw new Error('Voting belum aktif.');
+        }
+        return this.finalizePelukisVoteTally(lukisan.submittedVoteUids, now);
+      }
+
+      case 'submitPelukisGuess': {
+        const lukisan = this.room.lukisanState;
+        if (!lukisan || !this.serverState || lukisan.phase !== 'gadungan_guess') {
+          throw new Error('Tidak ada fase tebakan terakhir Pelukis Gadungan.');
+        }
+        const surrender = Boolean(payload.surrender);
+        const guessedWord = surrender ? '' : String(payload.guessedWord ?? '').trim().slice(0, 60);
+        if (!surrender && !guessedWord) {
+          throw new Error('Ketik tebakan Kata Rahasia terlebih dahulu.');
+        }
+
+        let actorName = lukisan.accusedName ?? 'Pelukis Gadungan';
+        if (!surrender || senderDeviceUid !== this.room.hostUid) {
+          const actor = this.resolveActor(senderDeviceUid, payload);
+          if (actor.uid !== lukisan.accusedUid) {
+            throw new Error('Hanya Pelukis Gadungan yang tertangkap yang dapat menebak kata rahasia.');
+          }
+          actorName = actor.displayName;
+        }
+
+        const secretWord = this.serverState.drawingWord ?? this.serverState.locationName;
+        const category = this.serverState.drawingCategory ?? lukisan.category;
+        const isCorrect = !surrender && evaluatePelukisWordGuess(guessedWord, secretWord);
+        const winnerTeam: 'pelukis' | 'gadungan' = isCorrect ? 'gadungan' : 'pelukis';
+
+        const activePlayers = filterActivePlayers(this.getPlayersList());
+        const deltas = calculatePelukisScoreDeltas({
+          playerUids: activePlayers.map((p) => p.uid),
+          gadunganUids: this.serverState.spyUids,
+          winnerTeam,
+        });
+        this.applyScoreDeltas(deltas);
+
+        const reason = surrender
+          ? `${actorName} menyerah menebak! Pelukis Asli menangkap Pelukis Gadungan (${secretWord}) dan meraih +2 poin!`
+          : isCorrect
+            ? `${actorName} menebak "${guessedWord}" dengan TEPAT dan mencuri kemenangan (+3 poin)!`
+            : `Tebakan ${actorName} ("${guessedWord}") meleset! Kata aslinya "${secretWord}". Semua Pelukis Asli +2 poin!`;
+
+        this.room = {
+          ...this.room,
+          status: 'round_end',
+          currentMatchRounds: (this.room.currentMatchRounds ?? 0) + 1,
+          lukisanState: {
+            ...lukisan,
+            phase: 'reveal',
+            revealedWord: secretWord,
+            gadunganUids: this.serverState.spyUids,
+            gadunganNames: this.serverState.spyNames,
+            guessedWord: surrender ? null : guessedWord,
+          },
+          lastRoundResult: {
+            roundNumber: this.room.roundNumber,
+            winnerTeam,
+            reason,
+            locationName: secretWord,
+            guessedLocation: surrender ? null : guessedWord,
+            guessedWord: surrender ? null : guessedWord,
+            drawingCategory: category,
+            drawingWord: secretWord,
+            spyUids: this.serverState.spyUids,
+            spyNames: this.serverState.spyNames,
+            resolvedAtMs: now,
+            scoresApplied: true,
+          },
+          updatedAt: now,
+        };
+        this.pushSystemMessage(reason);
+        return { isCorrect, winnerTeam };
+      }
+
       // ===================== RETURN TO LOBBY =====================
       case 'returnRoomToLobby':
       case 'returnKataKataToLobby':
       case 'returnSatuFrekuensiToLobby':
-      case 'returnFaktaHariIniToLobby': {
+      case 'returnFaktaHariIniToLobby':
+      case 'returnPelukisToLobby': {
         this.requireHost(senderDeviceUid);
         this.room = {
           ...this.room,
@@ -1505,6 +1831,7 @@ export class LanHostAuthority {
           eliminationLog: [],
           frequencyState: null,
           faktaState: null,
+          lukisanState: null,
           updatedAt: now,
         };
         return {};
@@ -1517,7 +1844,11 @@ export class LanHostAuthority {
           throw new Error('Selesaikan atau kembali ke lobi terlebih dahulu sebelum ganti game.');
         }
         const nextGameType = payload.nextGameType as GameType;
-        if (!['spyfall', 'kata_kata', 'satu_frekuensi', 'fakta_hari_ini'].includes(nextGameType)) {
+        if (
+          !['spyfall', 'kata_kata', 'satu_frekuensi', 'fakta_hari_ini', 'pelukis_gadungan'].includes(
+            nextGameType,
+          )
+        ) {
           throw new Error('Jenis permainan tidak valid.');
         }
 
@@ -1554,6 +1885,7 @@ export class LanHostAuthority {
           eliminationLog: [],
           frequencyState: null,
           faktaState: null,
+          lukisanState: null,
           activeVote: null,
           pendingSpyGuess: null,
           lastRoundResult: null,
@@ -1731,5 +2063,95 @@ export class LanHostAuthority {
         updatedAt: Date.now(),
       };
     }
+  }
+
+  private finalizePelukisVoteTally(
+    submittedVoteUids: string[],
+    now: number,
+  ): Record<string, unknown> {
+    const lukisan = this.room.lukisanState!;
+    const serverState = this.serverState!;
+    const votesMap = this.pelukisVotesByRound.get(this.room.currentRoundId) ?? new Map();
+    const votesByUid: Record<string, string> = {};
+    for (const [voterUid, targetUid] of votesMap.entries()) {
+      votesByUid[voterUid] = targetUid;
+    }
+
+    const tally = tallyPelukisVotes({
+      votesByUid,
+      eligibleVoterUids: lukisan.turnOrder,
+      gadunganUids: serverState.spyUids,
+    });
+    const accusedName = tally.accusedUid
+      ? lukisan.turnNamesByUid[tally.accusedUid] ?? 'Pemain'
+      : null;
+
+    if (tally.caughtGadungan && tally.accusedUid) {
+      this.room = {
+        ...this.room,
+        lukisanState: {
+          ...lukisan,
+          phase: 'gadungan_guess',
+          submittedVoteUids,
+          accusedUid: tally.accusedUid,
+          accusedName,
+          voteTally: tally.voteTally,
+          votesByUid,
+        },
+        updatedAt: now,
+      };
+      this.pushSystemMessage(
+        `${accusedName} tertuduh sebagai Pelukis Gadungan! Dia mendapat 1 Kesempatan Terakhir menebak Kata Rahasia!`,
+      );
+      return { allVoted: true, caughtGadungan: true, accusedUid: tally.accusedUid };
+    }
+
+    const secretWord = serverState.drawingWord ?? serverState.locationName;
+    const category = serverState.drawingCategory ?? lukisan.category;
+    const activePlayers = filterActivePlayers(this.getPlayersList());
+    const deltas = calculatePelukisScoreDeltas({
+      playerUids: activePlayers.map((p) => p.uid),
+      gadunganUids: serverState.spyUids,
+      winnerTeam: 'gadungan',
+    });
+    this.applyScoreDeltas(deltas);
+
+    const reason = tally.isTie || !tally.accusedUid
+      ? `Suara voting seri! Pelukis Gadungan (${serverState.spyNames.join(', ')}) lolos dan meraih +3 poin!`
+      : `Salah tuduh! ${accusedName} ternyata Pelukis Asli! Pelukis Gadungan (${serverState.spyNames.join(', ')}) menang +3 poin!`;
+
+    this.room = {
+      ...this.room,
+      status: 'round_end',
+      currentMatchRounds: (this.room.currentMatchRounds ?? 0) + 1,
+      lukisanState: {
+        ...lukisan,
+        phase: 'reveal',
+        submittedVoteUids,
+        accusedUid: tally.accusedUid,
+        accusedName,
+        voteTally: tally.voteTally,
+        votesByUid,
+        revealedWord: secretWord,
+        gadunganUids: serverState.spyUids,
+        gadunganNames: serverState.spyNames,
+      },
+      lastRoundResult: {
+        roundNumber: this.room.roundNumber,
+        winnerTeam: 'gadungan',
+        reason,
+        locationName: secretWord,
+        guessedLocation: null,
+        drawingCategory: category,
+        drawingWord: secretWord,
+        spyUids: serverState.spyUids,
+        spyNames: serverState.spyNames,
+        resolvedAtMs: now,
+        scoresApplied: true,
+      },
+      updatedAt: now,
+    };
+    this.pushSystemMessage(reason);
+    return { allVoted: true, caughtGadungan: false };
   }
 }

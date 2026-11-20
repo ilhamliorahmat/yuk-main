@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import {
   ArrowRightLeft,
   BookOpenCheck,
+  Brush,
   Check,
   Radio,
   Search,
@@ -60,6 +61,14 @@ const GAME_OPTIONS: Array<{
     playersHint: '3–12 pemain',
     icon: BookOpenCheck,
     accent: 'text-indigo-400',
+  },
+  {
+    id: 'pelukis_gadungan',
+    title: 'Pelukis Gadungan',
+    subtitle: 'Gambar 1 garis & tebak siapa yang cuma meniru tanpa tahu kata.',
+    playersHint: '3–12 pemain',
+    icon: Brush,
+    accent: 'text-emerald-400',
   },
 ];
 
