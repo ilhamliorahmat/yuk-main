@@ -34,7 +34,7 @@ import {
 } from '@/lib/platform/room-service';
 import { AuthDialog } from './AuthDialog';
 
-const CREATOR_GITHUB_URL = 'https://github.com/Liorahmat';
+const CREATOR_GITHUB_URL = 'https://github.com/ilhamliorahmat/';
 const CREATOR_WEBSITE_URL = 'https://liorahmat.xo.je';
 
 interface YukMainHubProps {
@@ -310,7 +310,7 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-white truncate">GitHub</p>
                           <p className="text-[11px] text-slate-400 truncate">
-                            github.com/Liorahmat
+                            github.com/ilhamliorahmat
                           </p>
                         </div>
                       </div>
