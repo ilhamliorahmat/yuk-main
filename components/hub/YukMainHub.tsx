@@ -12,8 +12,10 @@ import {
   Github,
   Globe,
   Monitor,
+  QrCode,
   ShieldAlert,
   Users,
+  Wifi,
   X,
 } from 'lucide-react';
 import faktaCover from '@/src/assets/images/yukmain_fakta_cover_1795115894333.jpg';
@@ -24,9 +26,19 @@ import kataCover from '@/src/assets/images/yukmain_kata_cover_1795098826342.jpg'
 import kataEmblem from '@/src/assets/images/yukmain_kata_emblem_1795098826535.jpg';
 import spyEmblem from '@/src/assets/images/yukmain_spy_emblem_1795001425384.jpg';
 import spyfallCover from '@/src/assets/images/yukmain_spyfall_cover_1795001423851.jpg';
+import { LanPairingModal } from '@/components/lan/LanPairingModal';
+import { OfflineNoticeBanner } from '@/components/pwa/OfflineNoticeBanner';
+import { PwaInstallButton } from '@/components/pwa/PwaInstallButton';
 import { useAuth } from '@/hooks/use-auth';
+import { useOnlineStatus } from '@/hooks/use-pwa';
 import { PARTY_GAMES } from '@/lib/games/registry';
 import type { GameType, PartyGameDefinition } from '@/lib/games/types';
+import {
+  getLocalLanProfile,
+  saveLocalLanNickname,
+  type NetworkMode,
+} from '@/lib/lan/lan-protocol';
+import { lanRuntime } from '@/lib/lan/lan-runtime';
 import {
   createRoom,
   joinRoomAsStageDisplay,
@@ -73,6 +85,18 @@ const GAME_VISUALS: Record<GameType, GameVisualMeta> = {
 
 export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProps) {
   const { user, profile, configured } = useAuth();
+  const isOnline = useOnlineStatus();
+  const [networkMode, setNetworkMode] = useState<NetworkMode>(() =>
+    typeof navigator !== 'undefined' && !navigator.onLine ? 'lan' : 'online',
+  );
+  const [lanNickname, setLanNickname] = useState<string>(() => {
+    const local = getLocalLanProfile();
+    return local.displayName === 'Pemain LAN' ? '' : local.displayName;
+  });
+  const [lanGuestModal, setLanGuestModal] = useState<{ open: boolean; stage: boolean }>({
+    open: false,
+    stage: false,
+  });
   const [joinCode, setJoinCode] = useState(initialRoomCode.toUpperCase());
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -80,6 +104,13 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
   const [rulesGame, setRulesGame] = useState<PartyGameDefinition | null>(null);
   const [creatorCardsOpen, setCreatorCardsOpen] = useState(false);
   const creatorAnchorRef = useRef<HTMLDivElement | null>(null);
+
+  // Auto-switch to LAN Party Mode when connection drops offline
+  useEffect(() => {
+    if (!isOnline) {
+      setNetworkMode('lan');
+    }
+  }, [isOnline]);
 
   useEffect(() => {
     if (!creatorCardsOpen) return;
@@ -106,6 +137,31 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
 
   const handleCreateGame = async (gameType: GameType) => {
     setErrorMsg(null);
+
+    if (networkMode === 'lan') {
+      const effectiveName = (lanNickname.trim() || profile?.displayName || 'Host LAN').slice(0, 40);
+      const localProfile = saveLocalLanNickname(effectiveName);
+      setBusyAction(`create:${gameType}`);
+      try {
+        const { roomId } = lanRuntime.startHostRoom({
+          hostUid: localProfile.uid,
+          hostName: localProfile.displayName,
+          avatarColor: localProfile.avatarColor,
+          gameType,
+        });
+        onEnterRoom(roomId, { isStageDisplay: false });
+      } catch (err) {
+        setErrorMsg(err instanceof Error ? err.message : 'Gagal membuat ruang LAN Party.');
+      } finally {
+        setBusyAction(null);
+      }
+      return;
+    }
+
+    if (!isOnline) {
+      setErrorMsg('Kamu sedang offline. Pindah ke Mode LAN Party untuk main tanpa internet.');
+      return;
+    }
     if (!configured) {
       setErrorMsg('Konfigurasi Firebase belum tersedia di environment.');
       return;
@@ -232,14 +288,20 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
         id="beranda"
         className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 pt-10 pb-12 sm:pt-14 sm:pb-16 space-y-12"
       >
-        {!configured && (
+        <OfflineNoticeBanner
+          isLanModeActive={networkMode === 'lan'}
+          onSwitchToLan={() => setNetworkMode('lan')}
+        />
+
+        {!configured && networkMode === 'online' && (
           <div className="rounded-2xl bg-amber-950/40 border border-amber-700/60 p-4 flex items-start gap-3 text-sm text-amber-200">
             <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5 text-amber-400" />
             <div>
               <p className="font-semibold">Konfigurasi Firebase Belum Terdeteksi</p>
               <p className="text-xs text-amber-200/80 mt-1">
                 Pastikan variabel <code className="font-mono-tabular">NEXT_PUBLIC_FIREBASE_*</code>{' '}
-                telah diisi di <code className="font-mono-tabular">.env.local</code>.
+                telah diisi di <code className="font-mono-tabular">.env.local</code>, atau gunakan{' '}
+                <strong className="text-white">Mode LAN Party</strong> tanpa internet.
               </p>
             </div>
           </div>
@@ -348,47 +410,139 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
             </div>
           )}
 
-          {/* Focused Room Entry Dock (Join by Code or Open Stage Display) */}
-          <div id="gabung-ruang" className="max-w-xl mx-auto space-y-2.5 scroll-mt-24">
-            <form
-              onSubmit={handleJoinRoom}
-              className="flex flex-col sm:flex-row items-stretch gap-2.5"
+          {/* Dual-Mode Room Entry Dock (Online vs Zero-Internet LAN Party) */}
+          <div id="gabung-ruang" className="max-w-xl mx-auto space-y-3.5 scroll-mt-24">
+            {/* Segmented Mode Switcher */}
+            <div
+              role="tablist"
+              aria-label="Pilih mode koneksi"
+              className="inline-grid grid-cols-2 p-1 rounded-xl bg-[#131A24] border border-slate-800 w-full sm:w-auto"
             >
-              <input
-                type="text"
-                maxLength={6}
-                value={joinCode}
-                onChange={(e) =>
-                  setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))
-                }
-                placeholder="KODE 6 HURUF"
-                aria-label="Kode Ruang"
-                className="flex-1 min-h-[48px] px-4 rounded-xl bg-[#131A24] border border-slate-800 text-white font-mono-tabular text-sm tracking-widest uppercase text-center sm:text-left placeholder:text-slate-500 placeholder:tracking-normal focus:outline-none focus:border-amber-400/70"
-              />
-              <div className="flex items-stretch gap-2.5">
-                <button
-                  type="submit"
-                  disabled={busyAction !== null || joinCode.trim().length !== 6}
-                  className="flex-1 sm:flex-none min-h-[48px] px-5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-sm inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 transition-colors disabled:opacity-40"
-                >
-                  <span>{busyAction === 'join' ? 'Masuk...' : 'Gabung'}</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  disabled={busyAction !== null || joinCode.trim().length !== 6}
-                  onClick={() => void handleJoinAsStage()}
-                  title="Buka di TV/Laptop tanpa menampilkan rahasia pemain"
-                  className="flex-1 sm:flex-none min-h-[48px] px-4 rounded-xl bg-[#131A24] hover:bg-slate-800/90 border border-slate-700 hover:border-amber-400/50 text-slate-200 hover:text-amber-200 font-semibold text-sm inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 transition-colors disabled:opacity-40"
-                >
-                  <Monitor className="w-4 h-4 text-amber-300" />
-                  <span>{busyAction === 'stage' ? 'Membuka...' : 'Layar Panggung'}</span>
-                </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={networkMode === 'online'}
+                onClick={() => {
+                  setErrorMsg(null);
+                  setNetworkMode('online');
+                }}
+                className={`min-h-[40px] px-4 rounded-lg text-xs sm:text-sm font-semibold inline-flex items-center justify-center gap-2 transition-colors ${
+                  networkMode === 'online'
+                    ? 'bg-amber-400 text-slate-950'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                <Globe className="w-4 h-4" />
+                <span>Online</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={networkMode === 'lan'}
+                onClick={() => {
+                  setErrorMsg(null);
+                  setNetworkMode('lan');
+                }}
+                className={`min-h-[40px] px-4 rounded-lg text-xs sm:text-sm font-semibold inline-flex items-center justify-center gap-2 transition-colors ${
+                  networkMode === 'lan'
+                    ? 'bg-amber-400 text-slate-950'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                <Wifi className="w-4 h-4" />
+                <span>LAN Party (Tanpa Internet)</span>
+              </button>
+            </div>
+
+            {networkMode === 'online' ? (
+              <form
+                onSubmit={handleJoinRoom}
+                className="flex flex-col sm:flex-row items-stretch gap-2.5"
+              >
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={joinCode}
+                  onChange={(e) =>
+                    setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))
+                  }
+                  placeholder="KODE 6 HURUF"
+                  aria-label="Kode Ruang"
+                  className="flex-1 min-h-[48px] px-4 rounded-xl bg-[#131A24] border border-slate-800 text-white font-mono-tabular text-sm tracking-widest uppercase text-center sm:text-left placeholder:text-slate-500 placeholder:tracking-normal focus:outline-none focus:border-amber-400/70"
+                />
+                <div className="flex items-stretch gap-2.5">
+                  <button
+                    type="submit"
+                    disabled={busyAction !== null || joinCode.trim().length !== 6}
+                    className="flex-1 sm:flex-none min-h-[48px] px-5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-sm inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 transition-colors disabled:opacity-40"
+                  >
+                    <span>{busyAction === 'join' ? 'Masuk...' : 'Gabung'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busyAction !== null || joinCode.trim().length !== 6}
+                    onClick={() => void handleJoinAsStage()}
+                    title="Buka di TV/Laptop tanpa menampilkan rahasia pemain"
+                    className="flex-1 sm:flex-none min-h-[48px] px-4 rounded-xl bg-[#131A24] hover:bg-slate-800/90 border border-slate-700 hover:border-amber-400/50 text-slate-200 hover:text-amber-200 font-semibold text-sm inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 transition-colors disabled:opacity-40"
+                  >
+                    <Monitor className="w-4 h-4 text-amber-300" />
+                    <span>{busyAction === 'stage' ? 'Membuka...' : 'Layar Panggung'}</span>
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-2.5">
+                <div className="flex flex-col sm:flex-row items-stretch gap-2.5">
+                  <input
+                    type="text"
+                    maxLength={32}
+                    value={lanNickname}
+                    onChange={(e) => {
+                      setLanNickname(e.target.value);
+                      if (e.target.value.trim()) {
+                        saveLocalLanNickname(e.target.value);
+                      }
+                    }}
+                    placeholder={profile?.displayName || 'Nama panggilanmu (tanpa login)'}
+                    aria-label="Nama Panggilan LAN"
+                    className="flex-1 min-h-[48px] px-4 rounded-xl bg-[#131A24] border border-slate-800 text-white text-sm text-center sm:text-left placeholder:text-slate-500 focus:outline-none focus:border-amber-400/70"
+                  />
+                  <div className="flex items-stretch gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (lanNickname.trim()) saveLocalLanNickname(lanNickname);
+                        setLanGuestModal({ open: true, stage: false });
+                      }}
+                      className="flex-1 sm:flex-none min-h-[48px] px-5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-sm inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
+                    >
+                      <QrCode className="w-4 h-4" />
+                      <span>Gabung LAN</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLanGuestModal({ open: true, stage: true })}
+                      title="Hubungkan TV/Laptop sebagai Layar Panggung via Wi-Fi LAN"
+                      className="flex-1 sm:flex-none min-h-[48px] px-4 rounded-xl bg-[#131A24] hover:bg-slate-800/90 border border-slate-700 hover:border-amber-400/50 text-slate-200 hover:text-amber-200 font-semibold text-sm inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
+                    >
+                      <Monitor className="w-4 h-4 text-amber-300" />
+                      <span>Layar Panggung</span>
+                    </button>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Main 100% lewat Wi-Fi atau Hotspot HP tanpa kuota internet dan tanpa login akun.
+                </p>
               </div>
-            </form>
+            )}
 
             <p className="text-xs text-slate-400 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1">
-              <span>Mau bikin ruang baru?</span>
+              <span>
+                {networkMode === 'lan'
+                  ? 'Mau jadi Host LAN Party?'
+                  : 'Mau bikin ruang baru?'}
+              </span>
               <a
                 href="#katalog"
                 className="inline-flex items-center gap-1 text-slate-200 hover:text-amber-300 font-medium transition-colors"
@@ -408,7 +562,9 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
                 Katalog Permainan Yuk Main
               </h2>
               <p className="text-sm text-slate-400 mt-1">
-                Pilih permainan untuk membuat ruang baru, lalu bagikan kode 6 huruf ke temanmu.
+                {networkMode === 'lan'
+                  ? 'Pilih permainan untuk langsung membuka ruang Host LAN Party (tanpa internet), lalu undang teman lewat QR.'
+                  : 'Pilih permainan untuk membuat ruang baru, lalu bagikan kode 6 huruf ke temanmu.'}
               </p>
             </div>
           </div>
@@ -504,11 +660,26 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
         </section>
       </main>
 
-      <footer className="border-t border-slate-800/80 py-6 px-4 text-center text-xs text-slate-500">
-        Yuk Main — Hub Permainan Pesta Indonesia
+      <footer className="border-t border-slate-800/80 py-6 px-4">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+          <span>Yuk Main — Hub Permainan Pesta Indonesia (Online &amp; LAN Party)</span>
+          <PwaInstallButton compact />
+        </div>
       </footer>
 
       <AuthDialog open={authOpen} onClose={() => setAuthOpen(false)} />
+
+      {lanGuestModal.open && (
+        <LanPairingModal
+          mode="guest"
+          initialStageDisplay={lanGuestModal.stage}
+          onClose={() => setLanGuestModal({ open: false, stage: false })}
+          onConnected={(roomId, stageFlag) => {
+            setLanGuestModal({ open: false, stage: false });
+            onEnterRoom(roomId, { isStageDisplay: stageFlag });
+          }}
+        />
+      )}
 
       {/* Rules Modal */}
       {rulesGame && (

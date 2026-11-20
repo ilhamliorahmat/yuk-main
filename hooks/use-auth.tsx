@@ -77,25 +77,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return () => window.clearTimeout(id);
     }
 
-    const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
+    // Offline failsafe: never stall the app splash screen if Firebase Auth is unreachable offline
+    const offlineTimer = window.setTimeout(() => {
+      setAuthReady(true);
+    }, 1500);
+
+    const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
+      window.clearTimeout(offlineTimer);
       setUser(nextUser);
       if (nextUser) {
         const fallback = buildFallbackProfile(nextUser);
         setProfile((prev) => (prev?.uid === nextUser.uid ? prev : fallback));
+        setAuthReady(true);
 
-        try {
-          const synced = await upsertUserProfile(nextUser, fallback.displayName);
-          setProfile(synced);
-        } catch (err) {
-          console.warn('[Yuk Main] Sinkronisasi profil Firestore tertunda:', err);
+        if (typeof navigator === 'undefined' || navigator.onLine) {
+          void upsertUserProfile(nextUser, fallback.displayName)
+            .then((synced) => setProfile(synced))
+            .catch((err) => {
+              console.warn('[Yuk Main] Sinkronisasi profil Firestore tertunda:', err);
+            });
         }
       } else {
         setProfile(null);
+        setAuthReady(true);
       }
-      setAuthReady(true);
     });
 
-    return () => unsubscribe();
+    return () => {
+      window.clearTimeout(offlineTimer);
+      unsubscribe();
+    };
   }, [configured]);
 
   const signInWithGoogle = useCallback(async (): Promise<boolean> => {

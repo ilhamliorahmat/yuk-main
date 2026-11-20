@@ -1,6 +1,6 @@
 # Yuk Main — Indonesian Multiplayer Party Game Hub
 
-> **Current Release:** `3.1.0` (`Version.Iteration.build`)  
+> **Current Release:** `4.0.0` (`Version.Iteration.build`)  
 > **License:** PolyForm Noncommercial License 1.0.0 — Copyright © 2026 **Ilham Liorahmat**
 
 [Read in English](#english) · [Baca dalam Bahasa Indonesia](#bahasa-indonesia)
@@ -42,9 +42,12 @@ It brings together **4 Indonesian party games** under one modular hub — **Game
   - **Selective `Numpang` (Pass-the-Phone Co-Seat Protocol):** Players with a dead battery can join via up to 2 co-seats on a friend's phone (`controllerUid`). Only shared phones show the **Seat Switcher Bar** and mandatory full-screen **Privacy Curtain** when switching seats during secret turns or Suit Duels.
   - **`BRB` Mechanism:** Toggle *Sebentar (BRB)* ↔ *Sudah Balik* anytime; BRB players are excluded from new rounds, voting, and scoring without being kicked or losing session stats.
   - **`Rekap Permainan` (Win-Count MVP + Best-of-3 Suit Duel + PNG Poster + 15s Auto-Reset):** Synchronized on every player's screen and `Layar Panggung`. Crowns **MVP Malam Ini** by **Most Games Won** → **Overall XP Tiebreaker** → live **Best-of-3 Batu–Gunting–Kertas (Suit) Sudden-Death Duel** (first to 2 wins). Displays isolated per-game point breakdowns, exports a `1080×1350` PNG share card purely client-side, and resets room stats automatically **15 seconds after the last real player leaves or disconnects**.
+- **v4.0.0 Offline-First PWA & Dual-Mode (`Online` + Zero-Internet `LAN Party`):**
+  - **Installable Offline-First PWA:** Static-export-safe Service Worker (`public/sw.js`), Web App Manifest (`public/manifest.webmanifest`), adaptive & maskable PNG icons, in-app Install button (Android/Desktop prompt + guided iOS Safari Add-to-Home-Screen modal), and automatic **Offline Notice Banner** that switches the Hub to LAN Party Mode when `!navigator.onLine`.
+  - **True Zero-Internet Wi-Fi / Hotspot LAN Party:** Star-topology **WebRTC `RTCDataChannel`** (`iceServers: []`, zero STUN/TURN/cloud signaling) paired via a **2-step QR Handshake** (`qrcode` + `jsqr` camera scanner + manual copy/paste fallback). All 4 games, *Layar Panggung*, *Numpang*, *BRB*, *Game Switcher*, *Rekap Permainan + Best-of-3 Suit Duel*, and in-room chat run 100% locally on the Host phone with strict per-peer secret isolation and zero Firebase login required.
 - **Pure Client-Side Static Export Architecture:**
-  - **Production (InfinityFree + Firebase Spark Free Plan):** Next.js static export (`STATIC_EXPORT=true` → `output: 'export'` → `./out/`) built with Bun and auto-deployed via FTPS. All game rounds, votes, dial locks, guesses, and atomic score updates run purely via Firestore transactions (`client-game-master.ts`) plus RTDB chat & `onDisconnect()` presence.
-  - **Local / Dev Preview:** Standard Next.js mode (`output: 'standalone'`) running the exact same client-side Firebase stack with zero backend Node.js API routes.
+  - **Production (InfinityFree + Firebase Spark Free Plan):** Next.js static export (`STATIC_EXPORT=true` → `output: 'export'` → `./out/`) built with Bun and auto-deployed via FTPS. All Online game rounds, votes, dial locks, guesses, and atomic score updates run purely via Firestore transactions (`client-game-master.ts`) plus RTDB chat & `onDisconnect()` presence; LAN Party runs 100% peer-to-peer over local Wi-Fi.
+  - **Local / Dev Preview:** Standard Next.js mode (`output: 'standalone'`) running the exact same client-side stack with zero backend Node.js API routes.
 
 ---
 
@@ -203,6 +206,11 @@ Yuk Main uses a 3-segment versioning format: **`Version.Iteration.build`**
 
 #### Changelog
 
+- **`4.0.0`** — Offline-First PWA & Dual-Mode Zero-Internet LAN Party Platform:
+  - **Installable Offline-First PWA:** Added `public/manifest.webmanifest`, `public/sw.js` offline-first Service Worker (precaching app shell + static chunks for Airplane Mode launches), `192×192`, `512×512`, `512×512` maskable, and `180×180` Apple touch PNG icons, `PwaInstallButton` (native prompt + iOS Safari guide), offline-safe `AuthProvider` failsafe, and warm Indonesian `OfflineNoticeBanner`.
+  - **Zero-Internet WebRTC LAN Party Mode:** Built `LanHostAuthority`, compressed QR SDP signaling codec (`YMLAN1:` deflate-raw + `YMLAN0:` fallback), star-topology browser `lanRuntime` (`iceServers: []`), live camera `QrScannerBox` (`jsqr`) with manual copy/paste fallback, and `LanPairingModal` (Host & Guest/Stage).
+  - **Zero-Duplicate-UI Transport Layer:** Intercepted `lan_*` room IDs in `useRoomSession`, `room-service.ts`, and `chat-presence.ts` so all 4 games, *Layar Panggung*, *Numpang*, *BRB*, *Game Switcher*, and *Rekap Permainan + Suit Duel* work seamlessly over Wi-Fi/Hotspot without internet or Firebase sign-in. Added 6 new Vitest LAN engine & codec specs (43 tests total).
+  - **Warm Hub Intro Revamp:** Rebuilt the top Hub header into a clean 3-zone top bar + centered warm tongkrongan intro with interactive **Liorahmat** creator cards (`https://github.com/ilhamliorahmat/` & `https://liorahmat.xo.je`) and segmented **Online | LAN Party** mode switcher.
 - **`3.1.0`** — Nongkrong-Grade Session Platform Upgrade (across all 4 games):
   - **In-Room Game Switcher & QR Lobby Invite:** Host switches seamlessly between all 4 games inside one persistent room code with an accidental-switch guard (`0` completed rounds = no match recorded) and isolated per-visit score history (`completedGames[]`), plus scannable QR codes (`qrcode`) for Player Join and Layar Panggung.
   - **Hybrid Table + Cast View (`Layar Panggung`):** Read-only big-screen TV/Laptop stage view (`?room=CODE&stage=1` or Hub button) with zero secret leakage and `isStage: true` RTDB presence exclusion.
@@ -266,9 +274,12 @@ Platform ini menyatukan **4 permainan pesta Indonesia** dalam satu hub modular �
   - **Mode `Numpang` Selektif (Berbagi HP):** Tambahkan hingga 2 kursi Numpang di HP teman (`controllerUid`). Hanya HP yang berbagi kursi yang memunculkan bilah pindah giliran dan **Tirai Privasi** penuh agar antar pemain tidak saling mengintip.
   - **Mekanisme `BRB`:** Pemain bisa menekan tombol *BRB* ↔ *Sudah Balik* kapan saja untuk dilewati sementara di ronde/voting baru tanpa dikeluarkan dari ruang.
   - **`Rekap Permainan` (MVP Menang Terbanyak + Duel Suit Bo3 + Kartu PNG + Reset Otomatis 15 Detik):** Tampil serentak di semua layar pemain & Layar Panggung. Penentuan **MVP Malam Ini** memakai **Menang Game Terbanyak** → **Total XP** → **Duel Suit (Batu–Gunting–Kertas) Best-of-3** langsung (cari 2 kemenangan), lengkap dengan rincian poin per game, ekspor poster PNG `1080×1350` langsung di browser, dan reset statistik ruang otomatis **15 detik setelah pemain terakhir keluar atau offline**.
+- **PWA Offline-First & Dual-Mode v4.0.0 (`Online` + `LAN Party` Tanpa Internet):**
+  - **PWA Siap Pasang (*Installable*) & Tahan Mode Pesawat:** Dilengkapi Service Worker offline-first (`public/sw.js`), Web App Manifest (`public/manifest.webmanifest`), ikon adaptif & maskable PNG, tombol *Pasang Aplikasi* (termasuk panduan khusus Safari iOS), serta **Offline Notice Banner** otomatis yang langsung mengarahkan ke Mode LAN Party saat perangkat offline.
+  - **LAN Party Tanpa Internet Lewat Wi-Fi / Hotspot:** Koneksi langsung antar-HP berbasis **WebRTC `RTCDataChannel`** (`iceServers: []`, tanpa server internet/STUN/TURN) dengan **Pairing QR 2 Langkah** (`qrcode` + pemindai kamera `jsqr` + opsi salin/tempel manual). Seluruh 4 game, *Layar Panggung*, *Numpang*, *BRB*, *Ganti Game*, *Rekap Permainan + Duel Suit*, dan obrolan ruang berjalan 100% lokal di HP Host dengan isolasi rahasia ketat dan tanpa perlu login Firebase.
 - **Arsitektur Ekspor Statis 100% Sisi Klien:**
-  - **Produksi (InfinityFree + Firebase Spark Gratis):** Ekspor statis Next.js (`STATIC_EXPORT=true` → `output: 'export'` → `./out/`) dibangun dengan Bun dan diunggah otomatis via FTPS. Seluruh logika ronde, voting, kunci dial, tebakan, dan pembaruan skor berjalan atomik melalui transaksi Firestore di browser (`client-game-master.ts`) dipadukan chat & kehadiran `onDisconnect()` RTDB.
-  - **Pratinjau / Pengembangan Lokal:** Mode Next.js standar (`output: 'standalone'`) yang menjalankan alur Firebase sisi klien yang persis sama tanpa rute API Node.js.
+  - **Produksi (InfinityFree + Firebase Spark Gratis):** Ekspor statis Next.js (`STATIC_EXPORT=true` → `output: 'export'` → `./out/`) dibangun dengan Bun dan diunggah otomatis via FTPS. Mode Online berjalan atomik melalui transaksi Firestore (`client-game-master.ts`) + RTDB, sementara Mode LAN Party berjalan 100% peer-to-peer lewat Wi-Fi lokal.
+  - **Pratinjau / Pengembangan Lokal:** Mode Next.js standar (`output: 'standalone'`) yang menjalankan alur sisi klien yang persis sama tanpa rute API Node.js.
 
 ---
 
@@ -407,6 +418,11 @@ Yuk Main menggunakan format penomoran 3 bagian: **`Version.Iteration.build`**
 
 #### Riwayat Pembaruan (Changelog)
 
+- **`4.0.0`** — PWA Offline-First & Platform Dual-Mode LAN Party Tanpa Internet:
+  - **PWA Offline-First:** Menambahkan `public/manifest.webmanifest`, Service Worker offline-first `public/sw.js`, ikon PNG (`192×192`, `512×512`, maskable `512×512`, Apple Touch `180×180`), `PwaInstallButton` (prompt bawaan + panduan iOS Safari), pengaman offline di `AuthProvider`, serta `OfflineNoticeBanner` otomatis.
+  - **Mode LAN Party Tanpa Internet (WebRTC):** Membangun `LanHostAuthority`, codec sinyal QR terkompresi (`YMLAN1:` / `YMLAN0:`), `lanRuntime` topologi bintang tanpa server internet (`iceServers: []`), pemindai kamera `QrScannerBox` (`jsqr`) dengan opsi tempel manual, dan `LanPairingModal`.
+  - **Transport Terpadu Tanpa Duplikasi UI:** Intersepsi otomatis ID ruang `lan_*` di `useRoomSession`, `room-service.ts`, dan `chat-presence.ts` sehingga seluruh 4 game, *Layar Panggung*, *Numpang*, *BRB*, *Ganti Game*, dan *Rekap Permainan + Duel Suit* berjalan mulus via Wi-Fi/Hotspot tanpa kuota dan tanpa login akun. Menambahkan 6 unit test Vitest untuk codec & mesin LAN (total 43 unit test).
+  - **Pembaruan Bagian Atas Hub:** Top bar 3 zona yang rapi, pengantar tongkrongan hangat dengan kartu kreator interaktif **Liorahmat** (`https://github.com/ilhamliorahmat/` & `https://liorahmat.xo.je`), serta tombol pengalih mode **Online | LAN Party**.
 - **`3.1.0`** — Peningkatan Platform Sesi Tongkrongan (berlaku di seluruh 4 game):
   - **Ganti Game Dalam Ruang & QR Undangan:** Host berpindah antar keempat game tanpa ganti kode ruang, lengkap dengan pengaman salah klik (`0` ronde = tidak dicatat), pencatatan terpisah per kunjungan (`completedGames[]`), dan QR Code untuk Gabung Pemain serta Layar Panggung.
   - **Layar Panggung (Hybrid Table + Cast View):** Mode panggung publik untuk TV/laptop (`?room=CODE&stage=1` atau tombol di Beranda) bebas rahasia dengan tanda `isStage: true` pada kehadiran RTDB.

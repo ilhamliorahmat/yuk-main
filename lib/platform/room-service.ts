@@ -42,6 +42,8 @@ import {
   executeClientGameMaster,
   type ClientGameMasterEndpoint,
 } from './client-game-master';
+import { isLanRoomId, type LanActionName } from '@/lib/lan/lan-protocol';
+import { lanRuntime } from '@/lib/lan/lan-runtime';
 import { pickAvatarColor, upsertUserProfile } from './user-profile';
 
 export { pickAvatarColor, upsertUserProfile };
@@ -54,10 +56,74 @@ interface SpyfallApiResponse {
 
 type GameMasterEndpoint = ClientGameMasterEndpoint;
 
+function mapEndpointToLanAction(
+  endpoint: GameMasterEndpoint,
+  payload: Record<string, unknown>,
+): LanActionName {
+  const sub = String(payload.action ?? '');
+  switch (endpoint) {
+    case '/api/spyfall/start':
+      return 'startSpyfallRound';
+    case '/api/spyfall/vote':
+      if (sub === 'initiate') return 'initiateAccusationVote';
+      if (sub === 'cancel') return 'cancelActiveVoteOrSpyGuess';
+      return 'castAccusationVote';
+    case '/api/spyfall/guess':
+      return 'submitSpyLocationGuess';
+    case '/api/spyfall/resolve':
+      return sub === 'return_lobby' ? 'returnRoomToLobby' : 'resolveRoundTimeout';
+    case '/api/kata-kata/start':
+      return 'startKataKataRound';
+    case '/api/kata-kata/vote':
+      if (sub === 'initiate') return 'initiateKataKataVote';
+      if (sub === 'cancel') return 'cancelKataKataVote';
+      return 'castKataKataVote';
+    case '/api/kata-kata/guess':
+      return 'submitKataKataLastChanceGuess';
+    case '/api/kata-kata/resolve':
+      return sub === 'return_lobby' ? 'returnKataKataToLobby' : 'resolveKataKataTimeout';
+    case '/api/satu-frekuensi/start':
+      return 'startSatuFrekuensiRound';
+    case '/api/satu-frekuensi/clue':
+      return 'submitSatuFrekuensiClue';
+    case '/api/satu-frekuensi/guess':
+      return 'submitSatuFrekuensiGuess';
+    case '/api/satu-frekuensi/next-phase':
+      return 'advanceSatuFrekuensiPhase';
+    case '/api/satu-frekuensi/return-lobby':
+      return 'returnSatuFrekuensiToLobby';
+    case '/api/fakta-hari-ini/start':
+      return 'startFaktaHariIniRound';
+    case '/api/fakta-hari-ini/next-phase':
+      return 'advanceFaktaHariIniPhase';
+    case '/api/fakta-hari-ini/guess':
+      return 'submitFaktaHariIniGuess';
+    case '/api/fakta-hari-ini/return-lobby':
+      return 'returnFaktaHariIniToLobby';
+    case '/api/session/switch-game':
+      return 'switchRoomGameType';
+    case '/api/session/open-recap':
+      return 'openSessionRecap';
+    case '/api/session/close-recap':
+      return 'closeSessionRecap';
+    case '/api/session/suit-pick':
+      return 'submitSuitDuelPick';
+    case '/api/session/suit-next':
+      return 'advanceSuitDuelClash';
+  }
+}
+
 async function callGameMasterApi(
   endpoint: GameMasterEndpoint,
   payload: Record<string, unknown>,
 ): Promise<SpyfallApiResponse> {
+  const roomId = String(payload.roomId ?? '');
+  if (isLanRoomId(roomId)) {
+    const action = mapEndpointToLanAction(endpoint, payload);
+    await lanRuntime.dispatchAction(roomId, action, payload);
+    return { ok: true, systemMessage: null };
+  }
+
   const { auth } = getFirebaseServices();
   if (!auth?.currentUser) {
     throw new Error('Sesi pemain belum aktif. Silakan masuk terlebih dahulu.');
@@ -453,6 +519,15 @@ export async function addNumpangPlayer(params: {
   avatarColor: string;
   existingPlayers: RoomPlayerDoc[];
 }): Promise<string> {
+  if (isLanRoomId(params.roomId)) {
+    const res = await lanRuntime.dispatchAction(params.roomId, 'addNumpangPlayer', {
+      guestName: params.displayName,
+      displayName: params.displayName,
+      avatarColor: params.avatarColor,
+    });
+    return String(res.numpangUid ?? '');
+  }
+
   const { auth, db } = getFirebaseServices();
   if (!db) throw new Error('Firebase belum terkonfigurasi.');
 
@@ -517,6 +592,14 @@ export async function removeNumpangPlayer(params: {
   hostDeviceUid: string;
   hostDeviceName: string;
 }): Promise<void> {
+  if (isLanRoomId(params.roomId)) {
+    await lanRuntime.dispatchAction(params.roomId, 'removeNumpangPlayer', {
+      numpangUid: params.seatUid,
+      seatUid: params.seatUid,
+    });
+    return;
+  }
+
   const { auth, db } = getFirebaseServices();
   if (!db) return;
 
@@ -547,6 +630,15 @@ export async function togglePlayerBrb(params: {
   actorUid: string;
   isBrb: boolean;
 }): Promise<void> {
+  if (isLanRoomId(params.roomId)) {
+    await lanRuntime.dispatchAction(params.roomId, 'togglePlayerBrb', {
+      uid: params.targetUid,
+      targetUid: params.targetUid,
+      isBrb: params.isBrb,
+    });
+    return;
+  }
+
   const { auth, db } = getFirebaseServices();
   if (!db) return;
 
@@ -581,6 +673,13 @@ export async function leaveRoom(params: {
   displayName: string;
   players: RoomPlayerDoc[];
 }): Promise<void> {
+  if (isLanRoomId(params.room.id)) {
+    await lanRuntime.dispatchAction(params.room.id, 'leaveRoom', {
+      uid: params.uid,
+    });
+    return;
+  }
+
   const { auth, db, rtdb } = getFirebaseServices();
   if (!db) return;
 
@@ -754,6 +853,16 @@ export async function updateSpyfallSettings(params: {
   enabledPacks: string[];
   customLocations: CustomLocation[];
 }): Promise<void> {
+  if (isLanRoomId(params.roomId)) {
+    await lanRuntime.dispatchAction(params.roomId, 'updateSpyfallSettings', {
+      roundDurationSec: params.roundDurationSec,
+      spyMode: params.spyMode,
+      enabledPacks: params.enabledPacks,
+      customLocations: params.customLocations,
+    });
+    return;
+  }
+
   const { auth, db } = getFirebaseServices();
   if (!db) throw new Error('Firebase belum terkonfigurasi.');
 
@@ -790,6 +899,16 @@ export async function updateKataKataSettings(params: {
   enabledPacks: string[];
   customWordPairs: CustomWordPair[];
 }): Promise<void> {
+  if (isLanRoomId(params.roomId)) {
+    await lanRuntime.dispatchAction(params.roomId, 'updateKataKataSettings', {
+      roundDurationSec: params.roundDurationSec,
+      spyMode: params.spyMode,
+      enabledPacks: params.enabledPacks,
+      customWordPairs: params.customWordPairs,
+    });
+    return;
+  }
+
   const { auth, db } = getFirebaseServices();
   if (!db) throw new Error('Firebase belum terkonfigurasi.');
 
@@ -824,6 +943,14 @@ export async function togglePlayerReady(params: {
   uid: string;
   isReady: boolean;
 }): Promise<void> {
+  if (isLanRoomId(params.roomId)) {
+    await lanRuntime.dispatchAction(params.roomId, 'togglePlayerReady', {
+      uid: params.uid,
+      isReady: params.isReady,
+    });
+    return;
+  }
+
   const { auth, db } = getFirebaseServices();
   if (!db) return;
 
@@ -1164,6 +1291,14 @@ export async function updateSatuFrekuensiSettings(params: {
   enabledPacks: string[];
   customSpectrums: CustomSpectrum[];
 }): Promise<void> {
+  if (isLanRoomId(params.roomId)) {
+    await lanRuntime.dispatchAction(params.roomId, 'updateSatuFrekuensiSettings', {
+      enabledPacks: params.enabledPacks,
+      customSpectrums: params.customSpectrums,
+    });
+    return;
+  }
+
   const { auth, db } = getFirebaseServices();
   if (!db) throw new Error('Firebase belum terkonfigurasi.');
 
@@ -1292,6 +1427,14 @@ export async function updateFaktaHariIniSettings(params: {
   enabledPacks: string[];
   customFacts: CustomFactItem[];
 }): Promise<void> {
+  if (isLanRoomId(params.roomId)) {
+    await lanRuntime.dispatchAction(params.roomId, 'updateFaktaHariIniSettings', {
+      enabledPacks: params.enabledPacks,
+      customFacts: params.customFacts,
+    });
+    return;
+  }
+
   const { auth, db } = getFirebaseServices();
   if (!db) throw new Error('Firebase belum terkonfigurasi.');
 
@@ -1516,6 +1659,10 @@ export async function fetchAllRoundSecrets(
   roundId: string,
   playerUids: string[],
 ): Promise<Record<string, PlayerSecretDoc>> {
+  if (isLanRoomId(roomId)) {
+    return lanRuntime.getSnapshot(roomId)?.revealedSecrets ?? {};
+  }
+
   const { auth, db } = getFirebaseServices();
   if (!db || !roundId) return {};
 

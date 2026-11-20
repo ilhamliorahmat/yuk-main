@@ -1,23 +1,43 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { PwaRegistrar } from '@/components/pwa/PwaRegistrar';
 import { AuthProvider } from '@/hooks/use-auth';
 import './globals.css';
+
+export const viewport: Viewport = {
+  themeColor: '#0B1018',
+  width: 'device-width',
+  initialScale: 1,
+};
 
 export const metadata: Metadata = {
   title: 'Yuk Main — Platform Game Tongkrongan Indonesia',
   description:
-    'Hidupkan tongkronganmu bareng Yuk Main: 4 permainan grup interaktif (Yang Bener Yang Mana, Kata-Kata Hari Ini, Satu Frekuensi, dan Fakta Hari Ini) yang 100% gratis dan open-source langsung dari browser.',
+    'Hidupkan tongkronganmu bareng Yuk Main: 4 permainan grup interaktif (Yang Bener Yang Mana, Kata-Kata Hari Ini, Satu Frekuensi, dan Fakta Hari Ini) yang 100% gratis, open-source, dan siap dimainkan Online maupun LAN Party tanpa internet.',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Yuk Main',
+  },
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
   openGraph: {
     title: 'Yuk Main — Platform Game Tongkrongan Indonesia',
     description:
-      '4 permainan grup interaktif berbahasa Indonesia untuk mengasah otak dan skill sosial di tongkrongan—100% gratis dan open-source langsung dari browser.',
+      '4 permainan grup interaktif berbahasa Indonesia untuk mengasah otak dan skill sosial di tongkrongan—100% gratis, open-source, Online & LAN Party tanpa internet.',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Yuk Main — Platform Game Tongkrongan Indonesia',
     description:
-      '4 permainan grup interaktif berbahasa Indonesia untuk mengasah otak dan skill sosial di tongkrongan—100% gratis dan open-source.',
+      '4 permainan grup interaktif berbahasa Indonesia—Online maupun LAN Party lewat Wi-Fi tanpa kuota internet.',
   },
 };
 
@@ -33,6 +53,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body suppressHydrationWarning className="min-h-screen bg-[#0B1018] text-slate-100 antialiased">
+        <PwaRegistrar />
         <ErrorBoundary>
           <AuthProvider>{children}</AuthProvider>
         </ErrorBoundary>

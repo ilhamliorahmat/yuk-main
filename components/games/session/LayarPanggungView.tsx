@@ -13,6 +13,7 @@ import {
   Timer,
   Trophy,
   Users,
+  Wifi,
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { FrequencyDial } from '@/components/games/satu-frekuensi/FrequencyDial';
@@ -23,6 +24,7 @@ import type {
   RoomDoc,
   RoomPlayerDoc,
 } from '@/lib/games/types';
+import { isLanRoomId } from '@/lib/lan/lan-protocol';
 import { RekapPermainanOverlay } from './RekapPermainanOverlay';
 
 interface LayarPanggungViewProps {
@@ -65,13 +67,15 @@ export function LayarPanggungView({
     return () => window.clearInterval(id);
   }, []);
 
+  const isLanRoom = isLanRoomId(room.id);
+
   const joinUrl =
-    typeof window !== 'undefined'
+    typeof window !== 'undefined' && !isLanRoom
       ? `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(room.code)}`
       : '';
 
   useEffect(() => {
-    if (room.status !== 'lobby') return;
+    if (isLanRoom || room.status !== 'lobby') return;
     const canvas = qrCanvasRef.current;
     if (!canvas || !joinUrl) return;
     void QRCode.toCanvas(canvas, joinUrl, {
@@ -79,7 +83,7 @@ export function LayarPanggungView({
       margin: 2,
       color: { dark: '#0B1018', light: '#F8FAFC' },
     }).catch(() => {});
-  }, [room.status, joinUrl]);
+  }, [isLanRoom, room.status, joinUrl]);
 
   const sortedPlayers = useMemo(
     () => [...players].sort((a, b) => b.score - a.score),
@@ -128,7 +132,9 @@ export function LayarPanggungView({
             </div>
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-400">
-                Layar Panggung · Mode Tanpa Rahasia
+                {isLanRoom
+                  ? 'Layar Panggung · LAN Tanpa Internet'
+                  : 'Layar Panggung · Mode Tanpa Rahasia'}
               </p>
               <div className="flex items-center gap-2.5 mt-0.5">
                 <GameIcon className={`w-5 h-5 ${meta.accent}`} />
@@ -168,23 +174,45 @@ export function LayarPanggungView({
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6 sm:py-8">
         {room.status === 'lobby' ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* Left: Giant Join QR */}
+            {/* Left: Giant Join QR (Online) or Wi-Fi LAN Stage Card */}
             <div className="lg:col-span-5 rounded-2xl bg-[#131A24] border border-slate-800 p-6 sm:p-8 flex flex-col items-center text-center space-y-5">
-              <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-400">
-                Scan untuk Gabung dari HP
-              </p>
-              <div className="p-4 rounded-2xl bg-slate-50 shadow-xl">
-                <canvas ref={qrCanvasRef} className="block rounded-md" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Atau masukkan kode ruang</p>
-                <p className="text-4xl sm:text-5xl font-black tracking-[0.24em] text-white tabular-nums mt-1">
-                  {room.code}
-                </p>
-              </div>
-              <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
-                Menunggu Host memulai ronde <strong className="text-white">{meta.title}</strong>. Semua rahasia peran hanya muncul di layar HP masing-masing.
-              </p>
+              {isLanRoom ? (
+                <>
+                  <div className="w-16 h-16 rounded-2xl bg-amber-500/15 border border-amber-400/40 flex items-center justify-center">
+                    <Wifi className="w-8 h-8 text-amber-400" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-400">
+                      Terhubung via LAN Party
+                    </p>
+                    <p className="text-4xl sm:text-5xl font-black tracking-[0.24em] text-white tabular-nums pt-1">
+                      {room.code}
+                    </p>
+                  </div>
+                  <p className="text-xs text-slate-300 max-w-xs leading-relaxed">
+                    Layar Panggung ini tersambung langsung ke HP Host lewat Wi-Fi lokal tanpa internet. Untuk menambah pemain lain, minta Host menekan tombol{' '}
+                    <strong className="text-amber-300">Undang LAN (QR)</strong>.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-400">
+                    Scan untuk Gabung dari HP
+                  </p>
+                  <div className="p-4 rounded-2xl bg-slate-50 shadow-xl">
+                    <canvas ref={qrCanvasRef} className="block rounded-md" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Atau masukkan kode ruang</p>
+                    <p className="text-4xl sm:text-5xl font-black tracking-[0.24em] text-white tabular-nums mt-1">
+                      {room.code}
+                    </p>
+                  </div>
+                  <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
+                    Menunggu Host memulai ronde <strong className="text-white">{meta.title}</strong>. Semua rahasia peran hanya muncul di layar HP masing-masing.
+                  </p>
+                </>
+              )}
             </div>
 
             {/* Right: Live Roster & Current Match Scores */}

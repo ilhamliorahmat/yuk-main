@@ -13,6 +13,9 @@ import {
 } from 'firebase/database';
 import { getFirebaseServices } from '../firebase/client';
 import type { ChatMessage, PresenceEntry } from '../games/types';
+import { isLanRoomId } from '../lan/lan-protocol';
+import { lanRuntime } from '../lan/lan-runtime';
+import { pickAvatarColor } from './user-profile';
 
 export async function sendRoomChatMessage(params: {
   roomId: string;
@@ -21,13 +24,25 @@ export async function sendRoomChatMessage(params: {
   text: string;
   type?: 'chat' | 'system';
 }): Promise<void> {
-  const { rtdb } = getFirebaseServices();
-  if (!rtdb) return;
-
   const trimmedText = params.text.trim().slice(0, 500);
   if (!trimmedText) return;
 
   const trimmedName = params.senderName.trim().slice(0, 40) || 'Pemain';
+
+  if (isLanRoomId(params.roomId)) {
+    if (params.type === 'system') return;
+    lanRuntime.sendChat(params.roomId, {
+      senderUid: params.senderUid,
+      senderName: trimmedName,
+      avatarColor: pickAvatarColor(params.senderUid),
+      text: trimmedText,
+    });
+    return;
+  }
+
+  const { rtdb } = getFirebaseServices();
+  if (!rtdb) return;
+
   const chatListRef = ref(rtdb, `chats/${params.roomId}`);
   const msgRef = push(chatListRef);
 

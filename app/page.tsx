@@ -6,6 +6,8 @@ import { ActiveRoomContainer } from '@/components/games/ActiveRoomContainer';
 import { AuthDialog } from '@/components/hub/AuthDialog';
 import { YukMainHub } from '@/components/hub/YukMainHub';
 import { useAuth } from '@/hooks/use-auth';
+import { getLocalLanProfile, isLanRoomId } from '@/lib/lan/lan-protocol';
+import { lanRuntime } from '@/lib/lan/lan-runtime';
 import {
   checkAndResetExpiredRoomSession,
   joinRoomAsStageDisplay,
@@ -22,7 +24,8 @@ function YukMainAppContent() {
 
   const [activeRoomId, setActiveRoomId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
-    return window.sessionStorage.getItem('yukmain_room_id');
+    const saved = window.sessionStorage.getItem('yukmain_room_id');
+    return isLanRoomId(saved) ? null : saved;
   });
   const [isStageDisplay, setIsStageDisplay] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -33,15 +36,17 @@ function YukMainAppContent() {
   const attemptedInviteRef = useRef<string>('');
   const checkedResumeRef = useRef<string>('');
 
-  // Check 15-second empty-room auto-reset when resuming a persisted room session
+  const isLanRoom = isLanRoomId(activeRoomId);
+
+  // Check 15-second empty-room auto-reset when resuming a persisted Online room session
   useEffect(() => {
-    if (!authReady || !activeRoomId || !user || isStageDisplay) return;
+    if (!authReady || !activeRoomId || isLanRoom || !user || isStageDisplay) return;
     const resumeKey = `${activeRoomId}:${user.uid}`;
     if (checkedResumeRef.current === resumeKey) return;
     checkedResumeRef.current = resumeKey;
 
     void checkAndResetExpiredRoomSession(activeRoomId, user.uid).catch(() => {});
-  }, [authReady, activeRoomId, user, isStageDisplay]);
+  }, [authReady, activeRoomId, isLanRoom, user, isStageDisplay]);
 
   // Auto-join when authenticated user arrives via ?room=XXXXXX or ?room=XXXXXX&stage=1
   useEffect(() => {
@@ -94,12 +99,20 @@ function YukMainAppContent() {
     setActiveRoomId(roomId);
     setIsStageDisplay(stageFlag);
     if (typeof window !== 'undefined') {
-      window.sessionStorage.setItem('yukmain_room_id', roomId);
-      window.sessionStorage.setItem('yukmain_room_stage', stageFlag ? '1' : '0');
+      if (isLanRoomId(roomId)) {
+        window.sessionStorage.removeItem('yukmain_room_id');
+        window.sessionStorage.removeItem('yukmain_room_stage');
+      } else {
+        window.sessionStorage.setItem('yukmain_room_id', roomId);
+        window.sessionStorage.setItem('yukmain_room_stage', stageFlag ? '1' : '0');
+      }
     }
   };
 
   const handleExitRoom = () => {
+    if (isLanRoomId(activeRoomId)) {
+      lanRuntime.teardown();
+    }
     setActiveRoomId(null);
     setIsStageDisplay(false);
     if (typeof window !== 'undefined') {
@@ -110,6 +123,19 @@ function YukMainAppContent() {
       }
     }
   };
+
+  if (activeRoomId && isLanRoom) {
+    const localLanProfile = getLocalLanProfile(profile?.displayName);
+    return (
+      <ActiveRoomContainer
+        roomId={activeRoomId}
+        myUid={localLanProfile.uid}
+        myName={localLanProfile.displayName}
+        isStageDisplay={isStageDisplay}
+        onExitToHub={handleExitRoom}
+      />
+    );
+  }
 
   if (!authReady || autoJoinBusy) {
     return (

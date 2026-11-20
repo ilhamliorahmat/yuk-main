@@ -1,8 +1,11 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { LanPairingModal } from '@/components/lan/LanPairingModal';
 import { useRoomSession } from '@/hooks/use-room-session';
 import type { RoomPlayerDoc } from '@/lib/games/types';
+import { isLanRoomId } from '@/lib/lan/lan-protocol';
+import { lanRuntime } from '@/lib/lan/lan-runtime';
 import { FaktaHariIniRoomView } from './fakta-hari-ini/FaktaHariIniRoomView';
 import { KataKataRoomView } from './kata-kata/KataKataRoomView';
 import { SatuFrekuensiRoomView } from './satu-frekuensi/SatuFrekuensiRoomView';
@@ -98,17 +101,30 @@ export function ActiveRoomContainer({
     );
   }
 
+  const isLanRoom = isLanRoomId(roomId);
+
+  const handleSafeExit = () => {
+    if (isLanRoom) {
+      lanRuntime.teardown();
+    }
+    onExitToHub();
+  };
+
   if (roomMissing || !room) {
     return (
       <div className="min-h-screen bg-[#0B1018] text-slate-100 flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-[#131A24] border border-slate-800 rounded-2xl p-6 text-center space-y-4">
-          <h2 className="text-lg font-bold text-white">Ruang Tidak Ditemukan</h2>
+          <h2 className="text-lg font-bold text-white">
+            {isLanRoom ? 'Koneksi LAN Terputus' : 'Ruang Tidak Ditemukan'}
+          </h2>
           <p className="text-sm text-slate-400">
-            Ruang permainan ini telah ditutup atau kode undangan sudah kedaluwarsa.
+            {isLanRoom
+              ? 'Host menutup ruang LAN Party atau sinyal Wi-Fi lokal terputus.'
+              : 'Ruang permainan ini telah ditutup atau kode undangan sudah kedaluwarsa.'}
           </p>
           <button
             type="button"
-            onClick={onExitToHub}
+            onClick={handleSafeExit}
             className="w-full min-h-[44px] rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold transition-colors"
           >
             Kembali ke Beranda Yuk Main
@@ -126,7 +142,7 @@ export function ActiveRoomContainer({
         players={players}
         revealedSecrets={revealedSecrets}
         presence={presence}
-        onExitStage={onExitToHub}
+        onExitStage={handleSafeExit}
       />
     );
   }
@@ -223,9 +239,18 @@ export function ActiveRoomContainer({
 
       {renderGameView()}
 
-      {qrModalOpen && (
-        <QrInviteModal roomCode={room.code} onClose={() => setQrModalOpen(false)} />
-      )}
+      {qrModalOpen &&
+        (isLanRoom ? (
+          room.hostUid === myUid ? (
+            <LanPairingModal
+              mode="host"
+              roomCode={room.code}
+              onClose={() => setQrModalOpen(false)}
+            />
+          ) : null
+        ) : (
+          <QrInviteModal roomCode={room.code} onClose={() => setQrModalOpen(false)} />
+        ))}
 
       {numpangModalOpen && (
         <NumpangModal

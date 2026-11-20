@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="112" fill="#0B1018"/>
+  <circle cx="256" cy="256" r="200" fill="#F59E0B" fill-opacity="0.1"/>
+  <g transform="rotate(-10 232 262)">
+    <rect x="116" y="102" width="232" height="316" rx="30" fill="#1E293B" stroke="#334155" stroke-width="8"/>
+    <path d="M116 132C116 115.431 129.431 102 146 102H318C334.569 102 348 115.431 348 132V162H116V132Z" fill="#E11D48"/>
+  </g>
+  <g transform="rotate(8 282 252)">
+    <rect x="166" y="94" width="232" height="316" rx="30" fill="url(#amberCard)" stroke="#FDE68A" stroke-width="6"/>
+    <path d="M282 174L356 252L282 330L208 252L282 174Z" fill="#0B1018"/>
+    <path d="M282 218L314 252L282 286L250 252L282 218Z" fill="#FBBF24"/>
+  </g>
+  <defs>
+    <linearGradient id="amberCard" x1="166" y1="94" x2="398" y2="410" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FBBF24"/>
+      <stop offset="1" stop-color="#D97706"/>
+    </linearGradient>
+  </defs>
+</svg>

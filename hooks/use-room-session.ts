@@ -11,6 +11,8 @@ import type {
   RoomDoc,
   RoomPlayerDoc,
 } from '../lib/games/types';
+import { isLanRoomId, type LanRoomSnapshot } from '../lib/lan/lan-protocol';
+import { lanRuntime } from '../lib/lan/lan-runtime';
 import {
   attachRoomPresence,
   subscribeToRoomChat,
@@ -34,8 +36,11 @@ export function useRoomSession(params: {
   isStageDisplay?: boolean;
 }) {
   const { roomId, uid, displayName, activeSeatUid, isStageDisplay = false } = params;
+  const isLan = isLanRoomId(roomId);
   const effectiveSecretUid = activeSeatUid || uid;
   const sessionKey = roomId && uid ? `${roomId}:${uid}` : '';
+
+  const [lanTick, setLanTick] = useState(0);
 
   const [roomState, setRoomState] = useState<{
     key: string;
@@ -68,9 +73,29 @@ export function useRoomSession(params: {
     presence: Record<string, PresenceEntry>;
   }>({ key: '', presence: {} });
 
-  // 1. Subscribe to Firestore Room & Players
+  // 0. Subscribe to Zero-Internet WebRTC LAN Runtime when roomId starts with `lan_`
   useEffect(() => {
-    if (!roomId || !uid) return;
+    if (!isLan || !roomId) return;
+    return lanRuntime.subscribe(() => {
+      setLanTick((t) => t + 1);
+    });
+  }, [isLan, roomId]);
+
+  const lanSnapshot: LanRoomSnapshot | null = useMemo(() => {
+    if (!isLan || !roomId) return null;
+    void lanTick;
+    return lanRuntime.getSnapshot(roomId);
+  }, [isLan, roomId, lanTick]);
+
+  const lanMissing = useMemo(() => {
+    if (!isLan || !roomId) return false;
+    void lanTick;
+    return lanRuntime.isRoomMissing(roomId);
+  }, [isLan, roomId, lanTick]);
+
+  // 1. Subscribe to Firestore Room & Players (Online Mode only)
+  useEffect(() => {
+    if (isLan || !roomId || !uid) return;
     const { auth, db } = getFirebaseServices();
     if (!db) return;
 
@@ -113,26 +138,42 @@ export function useRoomSession(params: {
       unsubRoom();
       unsubPlayers();
     };
-  }, [roomId, uid]);
+  }, [isLan, roomId, uid]);
 
-  const room = roomState.key === sessionKey ? roomState.room : null;
-  const roomMissing = roomState.key === sessionKey ? roomState.missing : false;
-  const loadingRoom = Boolean(sessionKey) && roomState.key !== sessionKey;
-  const players = useMemo(
-    () => (playersState.key === sessionKey ? playersState.players : []),
-    [playersState, sessionKey],
-  );
+  const room = isLan
+    ? (lanSnapshot?.room ?? null)
+    : roomState.key === sessionKey
+      ? roomState.room
+      : null;
+  const roomMissing = isLan
+    ? lanMissing
+    : roomState.key === sessionKey
+      ? roomState.missing
+      : false;
+  const loadingRoom = isLan
+    ? Boolean(roomId) && !lanSnapshot && !lanMissing
+    : Boolean(sessionKey) && roomState.key !== sessionKey;
+  const players = useMemo(() => {
+    if (isLan) return lanSnapshot?.players ?? [];
+    return playersState.key === sessionKey ? playersState.players : [];
+  }, [isLan, lanSnapshot, playersState, sessionKey]);
 
   // 2. Subscribe to isolated per-player secret for active round (NEVER on Layar Panggung)
   const activeRoundId = room?.currentRoundId ?? '';
   const activeStatus = room?.status ?? 'lobby';
   const secretKey =
-    !isStageDisplay && roomId && effectiveSecretUid && activeRoundId && activeStatus !== 'lobby'
+    !isLan &&
+    !isStageDisplay &&
+    roomId &&
+    effectiveSecretUid &&
+    activeRoundId &&
+    activeStatus !== 'lobby'
       ? `${roomId}:${activeRoundId}:${effectiveSecretUid}`
       : '';
 
   useEffect(() => {
     if (
+      isLan ||
       isStageDisplay ||
       !roomId ||
       !effectiveSecretUid ||
@@ -160,16 +201,22 @@ export function useRoomSession(params: {
     );
 
     return () => unsubSecret();
-  }, [isStageDisplay, roomId, effectiveSecretUid, activeRoundId, activeStatus]);
+  }, [isLan, isStageDisplay, roomId, effectiveSecretUid, activeRoundId, activeStatus]);
 
-  const mySecret = secretKey && secretState.key === secretKey ? secretState.secret : null;
+  const mySecret = isLan
+    ? !isStageDisplay && effectiveSecretUid
+      ? (lanSnapshot?.secretsByOwnedSeat[effectiveSecretUid] ?? null)
+      : null
+    : secretKey && secretState.key === secretKey
+      ? secretState.secret
+      : null;
 
-  // 3. Subscribe to RTDB Chat & Presence
+  // 3. Subscribe to RTDB Chat & Presence (Online Mode only)
   const presenceUid = isStageDisplay && uid ? `stage_${uid}` : uid;
-  const rtdbKey = roomId && presenceUid && displayName ? `${roomId}:${presenceUid}` : '';
+  const rtdbKey = !isLan && roomId && presenceUid && displayName ? `${roomId}:${presenceUid}` : '';
 
   useEffect(() => {
-    if (!roomId || !presenceUid || !displayName) return;
+    if (isLan || !roomId || !presenceUid || !displayName) return;
 
     const currentRtdbKey = `${roomId}:${presenceUid}`;
     const unsubChat = subscribeToRoomChat(roomId, (msgs) => {
@@ -190,19 +237,27 @@ export function useRoomSession(params: {
       detachPresence();
       unsubPresence();
     };
-  }, [roomId, presenceUid, displayName, isStageDisplay]);
+  }, [isLan, roomId, presenceUid, displayName, isStageDisplay]);
 
-  const messages = rtdbKey && chatState.key === rtdbKey ? chatState.messages : [];
-  const presence = rtdbKey && presenceState.key === rtdbKey ? presenceState.presence : {};
+  const messages = isLan
+    ? (lanSnapshot?.messages ?? [])
+    : rtdbKey && chatState.key === rtdbKey
+      ? chatState.messages
+      : [];
+  const presence = isLan
+    ? (lanSnapshot?.presence ?? {})
+    : rtdbKey && presenceState.key === rtdbKey
+      ? presenceState.presence
+      : {};
 
-  // 4. Post-round secret role reveal (read-only; server already finalized results & scores)
+  // 4. Post-round secret role reveal (Online Mode fetches Firestore; LAN reads snapshot directly)
   const revealKey =
-    room && room.status === 'round_end' && room.currentRoundId
+    !isLan && room && room.status === 'round_end' && room.currentRoundId
       ? `${room.id}:${room.currentRoundId}`
       : '';
 
   useEffect(() => {
-    if (!room || !uid || room.status !== 'round_end' || !room.currentRoundId) return;
+    if (isLan || !room || !uid || room.status !== 'round_end' || !room.currentRoundId) return;
     if (players.length === 0) return;
 
     const currentRevealKey = `${room.id}:${room.currentRoundId}`;
@@ -225,10 +280,13 @@ export function useRoomSession(params: {
     return () => {
       cancelled = true;
     };
-  }, [room, uid, players]);
+  }, [isLan, room, uid, players]);
 
-  const revealedSecrets =
-    revealKey && revealedState.key === revealKey ? revealedState.secrets : {};
+  const revealedSecrets = isLan
+    ? (lanSnapshot?.revealedSecrets ?? {})
+    : revealKey && revealedState.key === revealKey
+      ? revealedState.secrets
+      : {};
 
   return {
     room,

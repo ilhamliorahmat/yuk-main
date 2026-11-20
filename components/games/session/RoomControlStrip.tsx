@@ -9,9 +9,11 @@ import {
   QrCode,
   Smartphone,
   Trophy,
+  Wifi,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { RoomDoc, RoomPlayerDoc } from '@/lib/games/types';
+import { isLanRoomId } from '@/lib/lan/lan-protocol';
 import { openSessionRecap, togglePlayerBrb } from '@/lib/platform/room-service';
 
 interface RoomControlStripProps {
@@ -46,6 +48,7 @@ export function RoomControlStrip({
   const [stripError, setStripError] = useState<string | null>(null);
 
   const isHost = room.hostUid === deviceUid;
+  const isLanRoom = isLanRoomId(room.id);
   const deviceSeats = players.filter(
     (p) => p.uid === deviceUid || (p.isNumpang && p.controllerUid === deviceUid),
   );
@@ -141,6 +144,15 @@ export function RoomControlStrip({
               <span className="font-mono font-bold text-slate-200 tracking-wider">
                 {room.code}
               </span>
+              {isLanRoom && (
+                <>
+                  <span className="text-slate-600">•</span>
+                  <span className="inline-flex items-center gap-1 text-amber-300 font-semibold">
+                    <Wifi className="w-3.5 h-3.5" />
+                    <span>LAN · Tanpa Internet</span>
+                  </span>
+                </>
+              )}
               <span className="text-slate-600">•</span>
               <span className="tabular-nums">
                 {completedCount > 0
@@ -177,14 +189,22 @@ export function RoomControlStrip({
               <span>Numpang{hasSharedPhone ? ` (${deviceSeats.length - 1})` : ''}</span>
             </button>
 
-            <button
-              type="button"
-              onClick={onOpenQr}
-              className="min-h-[36px] px-2.5 rounded-lg text-xs font-semibold bg-[#131A24] text-slate-300 border border-slate-700/80 hover:text-white hover:border-slate-600 flex items-center gap-1.5 transition-colors"
-            >
-              <QrCode className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">QR / TV</span>
-            </button>
+            {(!isLanRoom || isHost) && (
+              <button
+                type="button"
+                onClick={onOpenQr}
+                className={`min-h-[36px] px-2.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-colors ${
+                  isLanRoom
+                    ? 'bg-amber-500/15 text-amber-200 border-amber-400/50 hover:bg-amber-500/25'
+                    : 'bg-[#131A24] text-slate-300 border-slate-700/80 hover:text-white hover:border-slate-600'
+                }`}
+              >
+                <QrCode className="w-3.5 h-3.5 text-amber-400" />
+                <span className={isLanRoom ? '' : 'hidden sm:inline'}>
+                  {isLanRoom ? 'Undang LAN (QR)' : 'QR / TV'}
+                </span>
+              </button>
+            )}
 
             {isHost && (
               <button
