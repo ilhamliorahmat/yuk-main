@@ -51,6 +51,8 @@ interface KataKataRoomViewProps {
   presence: Record<string, PresenceEntry>;
   myUid: string;
   myName: string;
+  deviceUid?: string;
+  deviceName?: string;
   onBeforeLeave: () => void;
   onExitToHub: () => void;
 }
@@ -66,9 +68,13 @@ export function KataKataRoomView({
   presence,
   myUid,
   myName,
+  deviceUid,
+  deviceName,
   onBeforeLeave,
   onExitToHub,
 }: KataKataRoomViewProps) {
+  const actualDeviceUid = deviceUid ?? myUid;
+  const actualDeviceName = deviceName ?? myName;
   const [mobileTab, setMobileTab] = useState<MobileTab>('kartu');
   const [revealedRoundKey, setRevealedRoundKey] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
@@ -78,7 +84,7 @@ export function KataKataRoomView({
   const [actionError, setActionError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
-  const roundStateKey = `${room.id}:${room.roundNumber}:${room.status}`;
+  const roundStateKey = `${room.id}:${room.roundNumber}:${room.status}:${myUid}`;
   const cardRevealed = revealedRoundKey === roundStateKey;
 
   useEffect(() => {
@@ -98,7 +104,8 @@ export function KataKataRoomView({
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   }, [remainingSec]);
 
-  const isHost = room.hostUid === myUid;
+  const isHost = room.hostUid === actualDeviceUid;
+  const activePlayersCount = players.filter((p) => !p.isBrb).length;
   const eliminatedSet = new Set(room.eliminatedUids ?? []);
   const amIEliminated = room.status !== 'lobby' && eliminatedSet.has(myUid);
   const eliminationLog = room.eliminationLog ?? [];
@@ -123,7 +130,7 @@ export function KataKataRoomView({
     onBeforeLeave();
     setActionBusy(true);
     try {
-      await leaveRoom({ room, uid: myUid, displayName: myName, players });
+      await leaveRoom({ room, uid: actualDeviceUid, displayName: actualDeviceName, players });
     } finally {
       setActionBusy(false);
       onExitToHub();
@@ -135,7 +142,11 @@ export function KataKataRoomView({
     setActionError(null);
     setGuessInput('');
     try {
-      await startKataKataRound({ roomId: room.id, actorUid: myUid, actorName: myName });
+      await startKataKataRound({
+        roomId: room.id,
+        actorUid: actualDeviceUid,
+        actorName: actualDeviceName,
+      });
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Gagal memulai ronde.');
     } finally {
@@ -252,7 +263,7 @@ export function KataKataRoomView({
   const aliveNonTargetCount = Math.max(
     1,
     players.filter(
-      (p) => !eliminatedSet.has(p.uid) && p.uid !== activeVote?.targetUid,
+      (p) => !p.isBrb && !eliminatedSet.has(p.uid) && p.uid !== activeVote?.targetUid,
     ).length,
   );
   const yesVoteCount = activeVote
@@ -515,7 +526,7 @@ export function KataKataRoomView({
                   {isHost ? (
                     <button
                       type="button"
-                      disabled={actionBusy || players.length < 3}
+                      disabled={actionBusy || activePlayersCount < 3}
                       onClick={handleStartRound}
                       className="w-full min-h-[48px] rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-40"
                     >
@@ -523,8 +534,8 @@ export function KataKataRoomView({
                       <span>
                         {actionBusy
                           ? 'Menyiapkan Ronde...'
-                          : players.length < 3
-                            ? `Menunggu Pemain (${players.length}/3 Minimal)`
+                          : activePlayersCount < 3
+                            ? `Menunggu Pemain Aktif (${activePlayersCount}/3 Minimal)`
                             : 'Mulai Kata-Kata Hari Ini'}
                       </span>
                     </button>
@@ -750,7 +761,7 @@ export function KataKataRoomView({
                   <div className="flex flex-col sm:flex-row gap-2.5">
                     <button
                       type="button"
-                      disabled={actionBusy || players.length < 3}
+                      disabled={actionBusy || activePlayersCount < 3}
                       onClick={handleStartRound}
                       className="flex-1 min-h-[46px] rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-40"
                     >

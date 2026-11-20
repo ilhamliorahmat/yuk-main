@@ -49,6 +49,8 @@ interface SpyfallRoomViewProps {
   presence: Record<string, PresenceEntry>;
   myUid: string;
   myName: string;
+  deviceUid?: string;
+  deviceName?: string;
   onBeforeLeave: () => void;
   onExitToHub: () => void;
 }
@@ -64,9 +66,13 @@ export function SpyfallRoomView({
   presence,
   myUid,
   myName,
+  deviceUid,
+  deviceName,
   onBeforeLeave,
   onExitToHub,
 }: SpyfallRoomViewProps) {
+  const actualDeviceUid = deviceUid ?? myUid;
+  const actualDeviceName = deviceName ?? myName;
   const [mobileTab, setMobileTab] = useState<MobileTab>('kartu');
   const [revealedRoundKey, setRevealedRoundKey] = useState<string | null>(null);
   const [crossedByRound, setCrossedByRound] = useState<Record<string, Record<string, boolean>>>({});
@@ -77,7 +83,7 @@ export function SpyfallRoomView({
   const [actionError, setActionError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
-  const roundStateKey = `${room.id}:${room.roundNumber}:${room.status}`;
+  const roundStateKey = `${room.id}:${room.roundNumber}:${room.status}:${myUid}`;
   const cardRevealed = revealedRoundKey === roundStateKey;
   const crossedLocations = crossedByRound[roundStateKey] ?? {};
 
@@ -99,7 +105,8 @@ export function SpyfallRoomView({
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   }, [remainingSec]);
 
-  const isHost = room.hostUid === myUid;
+  const isHost = room.hostUid === actualDeviceUid;
+  const activePlayersCount = players.filter((p) => !p.isBrb).length;
   const isTimerExpired = room.status === 'playing' && remainingSec === 0 && room.roundEndsAtMs > 0;
 
   const handleCopyCode = async () => {
@@ -120,7 +127,7 @@ export function SpyfallRoomView({
     onBeforeLeave();
     setActionBusy(true);
     try {
-      await leaveRoom({ room, uid: myUid, displayName: myName, players });
+      await leaveRoom({ room, uid: actualDeviceUid, displayName: actualDeviceName, players });
     } finally {
       setActionBusy(false);
       onExitToHub();
@@ -131,7 +138,11 @@ export function SpyfallRoomView({
     setActionBusy(true);
     setActionError(null);
     try {
-      await startSpyfallRound({ roomId: room.id, actorUid: myUid, actorName: myName });
+      await startSpyfallRound({
+        roomId: room.id,
+        actorUid: actualDeviceUid,
+        actorName: actualDeviceName,
+      });
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Gagal memulai ronde.');
     } finally {
@@ -225,7 +236,7 @@ export function SpyfallRoomView({
   const activeVote = room.activeVote;
   const isTargetOfVote = activeVote?.targetUid === myUid;
   const myVoteChoice = activeVote?.votes[myUid];
-  const eligibleCount = Math.max(1, players.length - 1);
+  const eligibleCount = Math.max(1, activePlayersCount - 1);
   const yesVoteCount = activeVote
     ? Object.values(activeVote.votes).filter((v) => v === 'yes').length
     : 0;
@@ -463,7 +474,7 @@ export function SpyfallRoomView({
                   {isHost ? (
                     <button
                       type="button"
-                      disabled={actionBusy || players.length < 3}
+                      disabled={actionBusy || activePlayersCount < 3}
                       onClick={handleStartRound}
                       className="w-full min-h-[48px] rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-40"
                     >
@@ -471,8 +482,8 @@ export function SpyfallRoomView({
                       <span>
                         {actionBusy
                           ? 'Menyiapkan Ronde...'
-                          : players.length < 3
-                            ? `Menunggu Pemain (${players.length}/3 Minimal)`
+                          : activePlayersCount < 3
+                            ? `Menunggu Pemain Aktif (${activePlayersCount}/3 Minimal)`
                             : 'Mulai Yang Bener Yang Mana'}
                       </span>
                     </button>
@@ -711,7 +722,7 @@ export function SpyfallRoomView({
                   <div className="flex flex-col sm:flex-row gap-2.5">
                     <button
                       type="button"
-                      disabled={actionBusy || players.length < 3}
+                      disabled={actionBusy || activePlayersCount < 3}
                       onClick={handleStartRound}
                       className="flex-1 min-h-[46px] rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-40"
                     >

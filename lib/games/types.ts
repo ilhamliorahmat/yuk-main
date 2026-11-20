@@ -161,6 +161,60 @@ export interface ServerRoundStateDoc {
   createdAtMs: number;
 }
 
+export type SuitPick = 'batu' | 'gunting' | 'kertas';
+
+export interface SuitClashRecord {
+  clashNumber: number;
+  picksByUid: Record<string, SuitPick>;
+  winnerUids: string[];
+  isDraw: boolean;
+}
+
+export interface SuitDuelState {
+  duelId: string;
+  status: 'picking' | 'clash_reveal' | 'finished';
+  duelistUids: string[];
+  duelistNames: Record<string, string>;
+  clashNumber: number;
+  targetWins: number;
+  winsByUid: Record<string, number>;
+  submittedUids: string[];
+  lastClash: SuitClashRecord | null;
+  history: SuitClashRecord[];
+  championUids: string[];
+}
+
+export interface CompletedGameRecord {
+  matchIndex: number;
+  gameType: GameType;
+  roundsPlayed: number;
+  scoresByUid: Record<string, number>;
+  playerNamesByUid: Record<string, string>;
+  winnerUids: string[];
+  winnerNames: string[];
+  finishedAtMs: number;
+}
+
+export interface SessionPlayerStanding {
+  uid: string;
+  displayName: string;
+  avatarColor: string;
+  gamesWon: number;
+  overallXp: number;
+  wonGameTypes: GameType[];
+}
+
+export interface SessionRecapDoc {
+  recapId: string;
+  generatedAtMs: number;
+  completedGames: CompletedGameRecord[];
+  standings: SessionPlayerStanding[];
+  mvpUids: string[];
+  mvpNames: string[];
+  resolvedBy: 'games_won' | 'overall_xp' | 'suit_duel' | 'none';
+  tiebreakerDuel: SuitDuelState | null;
+}
+
 export interface RoomDoc {
   id: string;
   code: string;
@@ -168,6 +222,7 @@ export interface RoomDoc {
   hostUid: string;
   status: RoomStatus;
   roundNumber: number;
+  currentMatchRounds?: number;
   currentRoundId: string;
   roundDurationSec: number;
   roundEndsAtMs: number;
@@ -186,6 +241,9 @@ export interface RoomDoc {
   activeVote: VoteState | null;
   pendingSpyGuess: PendingSpyGuess | null;
   lastRoundResult: RoundResult | null;
+  completedGames?: CompletedGameRecord[];
+  activeRecap?: SessionRecapDoc | null;
+  lastEmptyAtMs?: number | null;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -198,6 +256,9 @@ export interface RoomPlayerDoc {
   isHost: boolean;
   score: number;
   isReady: boolean;
+  controllerUid?: string;
+  isNumpang?: boolean;
+  isBrb?: boolean;
   joinedAt?: unknown;
   updatedAt?: unknown;
 }
@@ -235,8 +296,9 @@ export interface PlayerSecretDoc {
 export interface PlayerSubmissionDoc {
   uid: string;
   roundId: string;
-  gameType: GameType;
-  guessValue: number;
+  gameType: GameType | 'suit_duel';
+  guessValue?: number;
+  suitPick?: SuitPick;
   updatedAt?: unknown;
 }
 
@@ -265,6 +327,7 @@ export interface PresenceEntry {
   online: boolean;
   displayName: string;
   lastSeen: number;
+  isStage?: boolean;
 }
 
 export interface PartyGameDefinition {

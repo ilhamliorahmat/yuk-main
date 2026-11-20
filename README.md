@@ -1,6 +1,6 @@
 # Yuk Main — Indonesian Multiplayer Party Game Hub
 
-> **Current Release:** `3.0.0` (`Version.Iteration.build`)  
+> **Current Release:** `3.1.0` (`Version.Iteration.build`)  
 > **License:** PolyForm Noncommercial License 1.0.0 — Copyright © 2026 **Ilham Liorahmat**
 
 [Read in English](#english) · [Baca dalam Bahasa Indonesia](#bahasa-indonesia)
@@ -36,6 +36,12 @@ It brings together **4 Indonesian party games** under one modular hub — **Game
   - **Team-Aligned Scoring:** If the **Penebak** picks the Pembawa Fakta, Penebak wins `+(N - 1)` points (`N` = total players, Bluffers get `0`). If the Penebak guesses wrong, **all `N - 1` Bluffers** (including the Pembawa Fakta) earn `+1` point together as a unified team.
   - **Endless Pacing + Host-Is-Guesser Safeguard:** No countdown timer. Normally the Host presses **Fase Selanjutnya**, except when the **Host is the Penebak**—the button is locked for the Host and a random non-guesser Bluffer is appointed as **Pengendali Fase** (with automatic failover if they leave).
   - 75 curated fun facts across 3 packs (*Hukum & Sejarah*, *Nusantara Unik*, *Sains & Alam*) plus a Host **Custom Fact Builder**.
+- **v3.1.0 Nongkrong-Grade Session Platform (Across All 4 Games):**
+  - **In-Room Game Switcher & QR Lobby Invite:** Host switches seamlessly between all 4 games inside the same room without changing the 6-letter code or kicking players. Switching with `0` completed rounds records no phantom match, and returning to a game played earlier in the night logs as a separate match starting fresh at `0` points. Includes scannable QR codes for both Player Join (`?room=CODE`) and Layar Panggung (`?room=CODE&stage=1`).
+  - **Hybrid Table + Cast View (`Layar Panggung`):** Open the room on a TV or laptop in read-only public stage mode (zero secrets ever read or displayed until `round_end`; marked `isStage: true` in RTDB presence so an unattended TV never blocks the 15-second empty-room auto-reset).
+  - **Selective `Numpang` (Pass-the-Phone Co-Seat Protocol):** Players with a dead battery can join via up to 2 co-seats on a friend's phone (`controllerUid`). Only shared phones show the **Seat Switcher Bar** and mandatory full-screen **Privacy Curtain** when switching seats during secret turns or Suit Duels.
+  - **`BRB` Mechanism:** Toggle *Sebentar (BRB)* ↔ *Sudah Balik* anytime; BRB players are excluded from new rounds, voting, and scoring without being kicked or losing session stats.
+  - **`Rekap Permainan` (Win-Count MVP + Best-of-3 Suit Duel + PNG Poster + 15s Auto-Reset):** Synchronized on every player's screen and `Layar Panggung`. Crowns **MVP Malam Ini** by **Most Games Won** → **Overall XP Tiebreaker** → live **Best-of-3 Batu–Gunting–Kertas (Suit) Sudden-Death Duel** (first to 2 wins). Displays isolated per-game point breakdowns, exports a `1080×1350` PNG share card purely client-side, and resets room stats automatically **15 seconds after the last real player leaves or disconnects**.
 - **Pure Client-Side Static Export Architecture:**
   - **Production (InfinityFree + Firebase Spark Free Plan):** Next.js static export (`STATIC_EXPORT=true` → `output: 'export'` → `./out/`) built with Bun and auto-deployed via FTPS. All game rounds, votes, dial locks, guesses, and atomic score updates run purely via Firestore transactions (`client-game-master.ts`) plus RTDB chat & `onDisconnect()` presence.
   - **Local / Dev Preview:** Standard Next.js mode (`output: 'standalone'`) running the exact same client-side Firebase stack with zero backend Node.js API routes.
@@ -148,7 +154,7 @@ Yuk Main splits persistent structured game state (**Cloud Firestore**) from high
 2. Run tests, lint, and dev server:
    ```bash
    bun install
-   bun run test   # Runs 31 Vitest engine unit tests across all 4 games
+   bun run test   # Runs 37 Vitest engine unit tests across all 4 games + session engine
    bun run lint   # Runs ESLint + @firebase/eslint-plugin-security-rules on firestore.rules
    bun run dev    # Starts Next.js on http://localhost:3000
    ```
@@ -197,6 +203,12 @@ Yuk Main uses a 3-segment versioning format: **`Version.Iteration.build`**
 
 #### Changelog
 
+- **`3.1.0`** — Nongkrong-Grade Session Platform Upgrade (across all 4 games):
+  - **In-Room Game Switcher & QR Lobby Invite:** Host switches seamlessly between all 4 games inside one persistent room code with an accidental-switch guard (`0` completed rounds = no match recorded) and isolated per-visit score history (`completedGames[]`), plus scannable QR codes (`qrcode`) for Player Join and Layar Panggung.
+  - **Hybrid Table + Cast View (`Layar Panggung`):** Read-only big-screen TV/Laptop stage view (`?room=CODE&stage=1` or Hub button) with zero secret leakage and `isStage: true` RTDB presence exclusion.
+  - **Selective `Numpang` Co-Seat Protocol:** Up to 2 co-seats per shared phone (`controllerUid`) with a selective Seat Switcher Bar and full-screen Privacy Curtain across all 4 games and Suit Duels, plus independent-device Bluffer preference for `Fakta Hari Ini` phase controller selection.
+  - **`BRB` Mechanism:** Non-destructive *BRB* toggle excluding stepped-away players from new rounds/votes without kicking them or resetting their stats.
+  - **`Rekap Permainan` + Best-of-3 Suit Duel + 15s Empty-Room Auto-Reset:** Synchronized session recap crowning MVP by **Most Games Won** → **Overall XP** → live **Best-of-3 Batu–Gunting–Kertas (Suit) Sudden-Death Duel**, isolated per-game scorecards, client-side `1080×1350` PNG poster export, 6 new Vitest session tests (37 total), and zero-Cloud-Function 15-second empty-room auto-reset.
 - **`3.0.0`** — Dual-game platform expansion (4 games total):
   - Launched **Game #3: Satu Frekuensi** (2–12 players, interactive 180° Frequency Dial with proximity scoring `±4 / ±10 / ±16`, Host-paced endless turns, 80 Indonesian spectrums across 3 packs + custom spectrum builder, per-player `/submissions/{playerId}` dial isolation, and 6 Vitest specs).
   - Launched **Game #4: Fakta Hari Ini** (3–12 players, sequential Guesser rotation, 2-step Announcement → Parenthetical Fact card sequence, 75 curated fun facts across 3 packs + custom fact builder, random Pembawa Fakta with full Bluffer Team Awareness and zero leak to Penebak, team-aligned `+(N-1)` vs `+1` scoring, endless Host/Phase-Controller pacing with Host-is-Guesser random Bluffer safeguard + disconnect failover, and 7 Vitest specs).
@@ -248,6 +260,12 @@ Platform ini menyatukan **4 permainan pesta Indonesia** dalam satu hub modular �
   - **Skor Berbasis Tim:** Jika **Penebak** berhasil menunjuk Pembawa Fakta, Penebak mendapat `+(N - 1)` poin (`N` = total pemain, Tim Bluffer `0`). Jika Penebak salah pilih, **seluruh `N - 1` anggota Tim Bluffer** (termasuk Pembawa Fakta) kompak mendapat `+1` poin.
   - **Tanpa Timer + Pengaman *Host-is-Guesser*:** Normalnya Host menekan **Fase Selanjutnya**, namun jika **Host sedang menjadi Penebak**, tombol tersebut dikunci bagi Host dan satu Bluffer acak ditunjuk sebagai **Pengendali Fase** (lengkap dengan pengalihan otomatis bila ia keluar ruang).
   - 75 fakta unik dalam 3 paket (*Hukum & Sejarah*, *Nusantara Unik*, *Sains & Alam*) ditambah **Pembuat Fakta Kustom**.
+- **Platform Sesi Tongkrongan v3.1.0 (Berlaku di Seluruh 4 Game):**
+  - **Ganti Game Dalam Ruang & QR Undangan Lobi:** Host dapat berpindah antar keempat game di ruang yang sama tanpa mengganti kode 6 huruf atau mengeluarkan pemain. Pengaman salah klik (`0` ronde = tidak dicatat), kunjungan ulang ke game yang sama dicatat sebagai sesi terpisah mulai dari `0` poin, lengkap dengan QR Code untuk Gabung Pemain (`?room=CODE`) dan Layar Panggung (`?room=CODE&stage=1`).
+  - **Tampilan Hibrida Meja + TV (`Layar Panggung`):** Buka ruang di TV atau laptop dalam mode panggung publik bebas rahasia (`isStage: true` di RTDB presence agar TV yang tidak dijaga tidak menghalangi reset otomatis 15 detik).
+  - **Mode `Numpang` Selektif (Berbagi HP):** Tambahkan hingga 2 kursi Numpang di HP teman (`controllerUid`). Hanya HP yang berbagi kursi yang memunculkan bilah pindah giliran dan **Tirai Privasi** penuh agar antar pemain tidak saling mengintip.
+  - **Mekanisme `BRB`:** Pemain bisa menekan tombol *BRB* ↔ *Sudah Balik* kapan saja untuk dilewati sementara di ronde/voting baru tanpa dikeluarkan dari ruang.
+  - **`Rekap Permainan` (MVP Menang Terbanyak + Duel Suit Bo3 + Kartu PNG + Reset Otomatis 15 Detik):** Tampil serentak di semua layar pemain & Layar Panggung. Penentuan **MVP Malam Ini** memakai **Menang Game Terbanyak** → **Total XP** → **Duel Suit (Batu–Gunting–Kertas) Best-of-3** langsung (cari 2 kemenangan), lengkap dengan rincian poin per game, ekspor poster PNG `1080×1350` langsung di browser, dan reset statistik ruang otomatis **15 detik setelah pemain terakhir keluar atau offline**.
 - **Arsitektur Ekspor Statis 100% Sisi Klien:**
   - **Produksi (InfinityFree + Firebase Spark Gratis):** Ekspor statis Next.js (`STATIC_EXPORT=true` → `output: 'export'` → `./out/`) dibangun dengan Bun dan diunggah otomatis via FTPS. Seluruh logika ronde, voting, kunci dial, tebakan, dan pembaruan skor berjalan atomik melalui transaksi Firestore di browser (`client-game-master.ts`) dipadukan chat & kehadiran `onDisconnect()` RTDB.
   - **Pratinjau / Pengembangan Lokal:** Mode Next.js standar (`output: 'standalone'`) yang menjalankan alur Firebase sisi klien yang persis sama tanpa rute API Node.js.
@@ -360,7 +378,7 @@ Yuk Main memisahkan status permainan terstruktur (**Cloud Firestore**) dari obro
 2. Jalankan pengujian, lint, dan server lokal:
    ```bash
    bun install
-   bun run test   # Menjalankan 31 unit test Vitest untuk seluruh 4 game
+   bun run test   # Menjalankan 37 unit test Vitest untuk seluruh 4 game + mesin sesi
    bun run lint   # Menjalankan ESLint + validasi keamanan firestore.rules
    bun run dev    # Menjalankan Next.js di http://localhost:3000
    ```
@@ -389,6 +407,12 @@ Yuk Main menggunakan format penomoran 3 bagian: **`Version.Iteration.build`**
 
 #### Riwayat Pembaruan (Changelog)
 
+- **`3.1.0`** — Peningkatan Platform Sesi Tongkrongan (berlaku di seluruh 4 game):
+  - **Ganti Game Dalam Ruang & QR Undangan:** Host berpindah antar keempat game tanpa ganti kode ruang, lengkap dengan pengaman salah klik (`0` ronde = tidak dicatat), pencatatan terpisah per kunjungan (`completedGames[]`), dan QR Code untuk Gabung Pemain serta Layar Panggung.
+  - **Layar Panggung (Hybrid Table + Cast View):** Mode panggung publik untuk TV/laptop (`?room=CODE&stage=1` atau tombol di Beranda) bebas rahasia dengan tanda `isStage: true` pada kehadiran RTDB.
+  - **Mode `Numpang` Selektif:** Hingga 2 kursi Numpang per HP (`controllerUid`) dilengkapi bilah pindah kursi selektif, Tirai Privasi penuh di semua 4 game & Duel Suit, serta preferensi Bluffer perangkat terpisah sebagai Pengendali Fase di *Fakta Hari Ini*.
+  - **Mekanisme `BRB`:** Toggle *BRB* tanpa mengeluarkan pemain atau menghapus statistik sesi.
+  - **`Rekap Permainan` + Duel Suit Best-of-3 + Reset Otomatis 15 Detik:** Rekap serentak di semua layar dengan penentuan MVP berbasis **Menang Game Terbanyak** → **Total XP** → **Duel Suit (Batu–Gunting–Kertas) Best-of-3**, rincian poin terpisah tiap game, unduh kartu poster PNG `1080×1350`, 6 unit test sesi baru (total 37 test), dan reset ruang otomatis 15 detik setelah pemain terakhir pergi/offline.
 - **`3.0.0`** — Ekspansi ganda platform (total 4 permainan):
   - Peluncuran **Game #3: Satu Frekuensi** (2–12 pemain, Dial Frekuensi 180° interaktif dengan skor proksimitas `±4 / ±10 / ±16`, ritme tanpa timer kendali Host, 80 spektrum Indonesia dalam 3 paket + pembuat spektrum kustom, isolasi submisi dial `/submissions/{playerId}`, dan 6 unit test Vitest).
   - Peluncuran **Game #4: Fakta Hari Ini** (3–12 pemain, rotasi Penebak berurutan, kartu 2 tahap Pengumuman → Fakta Berkurung, 75 fakta unik dalam 3 paket + pembuat fakta kustom, Pembawa Fakta acak dengan kesadaran penuh Tim Bluffer dan nol kebocoran ke Penebak, skor tim `+(N-1)` vs `+1`, ritme tanpa timer dengan pengaman *Host-is-Guesser* + pengalihan Pengendali Fase otomatis, dan 7 unit test Vitest).

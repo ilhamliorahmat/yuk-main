@@ -1,13 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Image, { type StaticImageData } from 'next/image';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   ArrowRight,
+  ArrowUpRight,
   BookOpen,
-  BookOpenCheck,
+  ChevronDown,
   Compass,
-  Radio,
+  Github,
+  Globe,
+  Monitor,
   ShieldAlert,
   Users,
   X,
@@ -23,64 +27,47 @@ import spyfallCover from '@/src/assets/images/yukmain_spyfall_cover_179500142385
 import { useAuth } from '@/hooks/use-auth';
 import { PARTY_GAMES } from '@/lib/games/registry';
 import type { GameType, PartyGameDefinition } from '@/lib/games/types';
-import { createRoom, joinRoomByCode } from '@/lib/platform/room-service';
+import {
+  createRoom,
+  joinRoomAsStageDisplay,
+  joinRoomByCode,
+} from '@/lib/platform/room-service';
 import { AuthDialog } from './AuthDialog';
+
+const CREATOR_GITHUB_URL = 'https://github.com/Liorahmat';
+const CREATOR_WEBSITE_URL = 'https://liorahmat.xo.je';
 
 interface YukMainHubProps {
   initialRoomCode?: string;
-  onEnterRoom: (roomId: string) => void;
+  onEnterRoom: (roomId: string, options?: { isStageDisplay?: boolean }) => void;
 }
 
 interface GameVisualMeta {
   cover: StaticImageData;
   emblem: StaticImageData;
-  coverAlt: string;
-  heroTagline: string;
   ctaClass: string;
-  tabActiveClass: string;
-  accentTextClass: string;
 }
 
 const GAME_VISUALS: Record<GameType, GameVisualMeta> = {
   spyfall: {
     cover: spyfallCover,
     emblem: spyEmblem,
-    coverAlt:
-      'Ilustrasi meja investigasi Yang Bener Yang Mana dengan peta Nusantara dan kartu rahasia',
-    heroTagline: 'Game #1 · Favorit Tongkrongan',
     ctaClass: 'bg-rose-600 hover:bg-rose-500 text-white',
-    tabActiveClass: 'bg-rose-600 text-white',
-    accentTextClass: 'text-rose-400',
   },
   kata_kata: {
     cover: kataCover,
     emblem: kataEmblem,
-    coverAlt:
-      'Ilustrasi meja tongkrongan Kata-Kata Hari Ini dengan kartu kata rahasia dan kopi hangat',
-    heroTagline: 'Game #2 · Penyusup Kata Buta',
     ctaClass: 'bg-amber-500 hover:bg-amber-400 text-slate-950',
-    tabActiveClass: 'bg-amber-500 text-slate-950',
-    accentTextClass: 'text-amber-300',
   },
   satu_frekuensi: {
     cover: frekuensiCover,
     emblem: frekuensiEmblem,
-    coverAlt:
-      'Ilustrasi meja kafe malam Satu Frekuensi dengan dial frekuensi analog bercahaya biru sian dan kopi hangat',
-    heroTagline: 'Game #3 · Baru · Santai Tanpa Timer',
     ctaClass: 'bg-cyan-500 hover:bg-cyan-400 text-slate-950',
-    tabActiveClass: 'bg-cyan-500 text-slate-950',
-    accentTextClass: 'text-cyan-300',
   },
   fakta_hari_ini: {
     cover: faktaCover,
     emblem: faktaEmblem,
-    coverAlt:
-      'Ilustrasi meja kayu malam Fakta Hari Ini dengan kartu fakta ungu keemasan dan kaca pembesar kuningan',
-    heroTagline: 'Game #4 · Baru · Fakta vs Tim Bluffer',
     ctaClass: 'bg-violet-600 hover:bg-violet-500 text-white',
-    tabActiveClass: 'bg-violet-600 text-white',
-    accentTextClass: 'text-violet-300',
   },
 };
 
@@ -91,11 +78,31 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [rulesGame, setRulesGame] = useState<PartyGameDefinition | null>(null);
-  const [featuredGame, setFeaturedGame] = useState<GameType>('fakta_hari_ini');
+  const [creatorCardsOpen, setCreatorCardsOpen] = useState(false);
+  const creatorAnchorRef = useRef<HTMLDivElement | null>(null);
 
-  const activeFeaturedDef =
-    PARTY_GAMES.find((g) => g.id === featuredGame) ?? PARTY_GAMES[0];
-  const activeFeaturedVisual = GAME_VISUALS[featuredGame];
+  useEffect(() => {
+    if (!creatorCardsOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (
+        creatorAnchorRef.current &&
+        !creatorAnchorRef.current.contains(event.target as Node)
+      ) {
+        setCreatorCardsOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setCreatorCardsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [creatorCardsOpen]);
 
   const handleCreateGame = async (gameType: GameType) => {
     setErrorMsg(null);
@@ -144,7 +151,7 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
         displayName: profile.displayName,
         avatarColor: profile.avatarColor,
       });
-      onEnterRoom(roomId);
+      onEnterRoom(roomId, { isStageDisplay: false });
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Gagal bergabung ke ruang.');
     } finally {
@@ -152,14 +159,37 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
     }
   };
 
+  const handleJoinAsStage = async () => {
+    setErrorMsg(null);
+    if (!configured) {
+      setErrorMsg('Konfigurasi Firebase belum tersedia di environment.');
+      return;
+    }
+    if (!user || !profile) {
+      setAuthOpen(true);
+      return;
+    }
+    if (joinCode.trim().length !== 6) return;
+
+    setBusyAction('stage');
+    try {
+      const { roomId } = await joinRoomAsStageDisplay({ code: joinCode });
+      onEnterRoom(roomId, { isStageDisplay: true });
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Gagal membuka Layar Panggung.');
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0B1018] text-slate-100 flex flex-col">
-      {/* Zone-3 Top Bar Contract */}
+      {/* 3-Zone Top Bar Contract */}
       <header className="sticky top-0 z-30 bg-[#0B1018]/90 backdrop-blur-md border-b border-slate-800/80">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-8">
           <a
             href="#beranda"
-            className="text-xl font-bold tracking-tight text-white whitespace-nowrap shrink-0"
+            className="font-display text-xl font-bold tracking-tight text-white whitespace-nowrap shrink-0"
           >
             Yuk Main
           </a>
@@ -169,11 +199,17 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
               href="#katalog"
               className="hover:text-white transition-colors whitespace-nowrap shrink-0"
             >
-              Katalog Game ({PARTY_GAMES.length})
+              Katalog Game
+            </a>
+            <a
+              href="#gabung-ruang"
+              className="hover:text-white transition-colors whitespace-nowrap shrink-0"
+            >
+              Gabung Ruang
             </a>
             <button
               type="button"
-              onClick={() => setRulesGame(activeFeaturedDef)}
+              onClick={() => setRulesGame(PARTY_GAMES[0])}
               className="hover:text-white transition-colors whitespace-nowrap shrink-0"
             >
               Cara Bermain
@@ -184,7 +220,7 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
             <button
               type="button"
               onClick={() => setAuthOpen(true)}
-              className="min-h-[42px] px-4 py-2 rounded-xl bg-[#131A24] border border-slate-800 hover:border-slate-700 text-xs sm:text-sm font-medium text-white whitespace-nowrap shrink-0 transition-colors"
+              className="min-h-[42px] px-4 py-2 rounded-xl bg-[#131A24] border border-slate-800 hover:border-amber-400/50 text-xs sm:text-sm font-medium text-white whitespace-nowrap shrink-0 transition-colors"
             >
               {profile ? profile.displayName : 'Masuk'}
             </button>
@@ -194,7 +230,7 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
 
       <main
         id="beranda"
-        className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-12"
+        className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 pt-10 pb-12 sm:pt-14 sm:pb-16 space-y-12"
       >
         {!configured && (
           <div className="rounded-2xl bg-amber-950/40 border border-amber-700/60 p-4 flex items-start gap-3 text-sm text-amber-200">
@@ -209,151 +245,163 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
           </div>
         )}
 
-        {/* Hero Split */}
-        <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-          <div className="lg:col-span-6 flex flex-col justify-between space-y-6">
-            <div className="space-y-4">
-              <div className="text-xs font-medium text-violet-300 flex flex-wrap items-center gap-2">
-                <span>Koleksi Game Pesta Indonesia</span>
-                <span aria-hidden="true">·</span>
-                <span>{PARTY_GAMES.length} Permainan Aktif</span>
-              </div>
+        {/* Centered Warm Platform Intro Hero (Option 1) */}
+        <section className="relative text-center max-w-3xl mx-auto space-y-7">
+          {/* Subtle warm ambient glow behind headline */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-10 left-1/2 -translate-x-1/2 w-[520px] max-w-full h-56 rounded-full bg-amber-500/[0.07] blur-3xl"
+          />
 
-              <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-white leading-[1.12] text-balance">
-                Adu insting, tebak frekuensi, &amp; bongkar karangan temanmu.
-              </h1>
+          <div className="relative space-y-4">
+            <p className="text-xs sm:text-sm font-medium text-amber-300/90 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+              <span>100% Gratis &amp; Open-Source</span>
+              <span aria-hidden="true" className="text-slate-600">·</span>
+              <span>{PARTY_GAMES.length} Permainan Grup</span>
+              <span aria-hidden="true" className="text-slate-600">·</span>
+              <span>Langsung Main di Browser</span>
+            </p>
 
-              <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-xl">
-                Nikmati 2 game santai terbaru{' '}
-                <strong className="text-cyan-300">Satu Frekuensi</strong> &amp;{' '}
-                <strong className="text-violet-300">Fakta Hari Ini</strong> bersama{' '}
-                <strong className="text-white">Yang Bener Yang Mana</strong> dan{' '}
-                <strong className="text-amber-300">Kata-Kata Hari Ini</strong> langsung dari
-                peramban tanpa unduh aplikasi.
+            <h1 className="font-display text-3xl sm:text-5xl font-bold tracking-tight text-white leading-[1.12] text-balance">
+              Hidupkan tongkronganmu bareng Yuk Main.
+            </h1>
+
+            <div ref={creatorAnchorRef} className="relative max-w-2xl mx-auto">
+              <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
+                Ada{' '}
+                <strong className="text-white font-semibold">
+                  {PARTY_GAMES.length} permainan grup
+                </strong>{' '}
+                yang bakal mengasah otak dan skill sosial kalian, loh—tanpa ribet instal
+                aplikasi. Platform ini 100% gratis dan open-source, dikembangkan oleh{' '}
+                <button
+                  type="button"
+                  onClick={() => setCreatorCardsOpen((prev) => !prev)}
+                  aria-expanded={creatorCardsOpen}
+                  aria-controls="liorahmat-creator-cards"
+                  className="inline-flex items-baseline font-semibold text-amber-300 hover:text-amber-200 underline decoration-amber-400/60 decoration-dashed underline-offset-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 rounded"
+                >
+                  Liorahmat
+                </button>
+                .
               </p>
+
+              {/* 2 Tiny Summoned Creator Cards (GitHub + Website) */}
+              <AnimatePresence>
+                {creatorCardsOpen && (
+                  <motion.div
+                    id="liorahmat-creator-cards"
+                    initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                    transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                    className="mt-4 inline-grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-md mx-auto text-left"
+                  >
+                    <a
+                      href={CREATOR_GITHUB_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group min-h-[56px] px-3.5 py-2.5 rounded-xl bg-[#131A24] border border-slate-700/90 hover:border-amber-400/60 flex items-center justify-between gap-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-[#0B1018] border border-slate-800 flex items-center justify-center shrink-0 text-slate-200 group-hover:text-amber-300 transition-colors">
+                          <Github className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-white truncate">GitHub</p>
+                          <p className="text-[11px] text-slate-400 truncate">
+                            github.com/Liorahmat
+                          </p>
+                        </div>
+                      </div>
+                      <ArrowUpRight className="w-4 h-4 text-slate-500 group-hover:text-amber-300 shrink-0 transition-colors" />
+                    </a>
+
+                    <a
+                      href={CREATOR_WEBSITE_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group min-h-[56px] px-3.5 py-2.5 rounded-xl bg-[#131A24] border border-slate-700/90 hover:border-amber-400/60 flex items-center justify-between gap-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-[#0B1018] border border-slate-800 flex items-center justify-center shrink-0 text-slate-200 group-hover:text-amber-300 transition-colors">
+                          <Globe className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-white truncate">Website</p>
+                          <p className="text-[11px] text-slate-400 truncate">
+                            liorahmat.xo.je
+                          </p>
+                        </div>
+                      </div>
+                      <ArrowUpRight className="w-4 h-4 text-slate-500 group-hover:text-amber-300 shrink-0 transition-colors" />
+                    </a>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
+          </div>
 
-            {errorMsg && (
-              <div className="rounded-xl bg-rose-950/60 border border-rose-800/70 px-4 py-3 text-xs text-rose-200">
-                {errorMsg}
-              </div>
-            )}
+          {errorMsg && (
+            <div className="max-w-xl mx-auto rounded-xl bg-rose-950/60 border border-rose-800/70 px-4 py-3 text-xs text-rose-200 text-left">
+              {errorMsg}
+            </div>
+          )}
 
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <button
-                  type="button"
-                  disabled={busyAction !== null}
-                  onClick={() => void handleCreateGame('fakta_hari_ini')}
-                  className="min-h-[48px] px-5 py-3 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50"
-                >
-                  <BookOpenCheck className="w-4 h-4" />
-                  <span>
-                    {busyAction === 'create:fakta_hari_ini'
-                      ? 'Membuat Ruang...'
-                      : 'Main Fakta Hari Ini'}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  disabled={busyAction !== null}
-                  onClick={() => void handleCreateGame('satu_frekuensi')}
-                  className="min-h-[48px] px-5 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50"
-                >
-                  <Radio className="w-4 h-4" />
-                  <span>
-                    {busyAction === 'create:satu_frekuensi'
-                      ? 'Membuat Ruang...'
-                      : 'Main Satu Frekuensi'}
-                  </span>
-                </button>
-              </div>
-
-              <form onSubmit={handleJoinRoom} className="flex items-stretch gap-2.5 max-w-md">
-                <input
-                  type="text"
-                  maxLength={6}
-                  value={joinCode}
-                  onChange={(e) =>
-                    setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))
-                  }
-                  placeholder="KODE 6 HURUF"
-                  aria-label="Kode Ruang"
-                  className="flex-1 min-h-[48px] px-4 rounded-xl bg-[#131A24] border border-slate-800 text-white font-mono-tabular text-sm tracking-widest uppercase placeholder:text-slate-500 placeholder:tracking-normal focus:outline-none focus:border-violet-500"
-                />
+          {/* Focused Room Entry Dock (Join by Code or Open Stage Display) */}
+          <div id="gabung-ruang" className="max-w-xl mx-auto space-y-2.5 scroll-mt-24">
+            <form
+              onSubmit={handleJoinRoom}
+              className="flex flex-col sm:flex-row items-stretch gap-2.5"
+            >
+              <input
+                type="text"
+                maxLength={6}
+                value={joinCode}
+                onChange={(e) =>
+                  setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))
+                }
+                placeholder="KODE 6 HURUF"
+                aria-label="Kode Ruang"
+                className="flex-1 min-h-[48px] px-4 rounded-xl bg-[#131A24] border border-slate-800 text-white font-mono-tabular text-sm tracking-widest uppercase text-center sm:text-left placeholder:text-slate-500 placeholder:tracking-normal focus:outline-none focus:border-amber-400/70"
+              />
+              <div className="flex items-stretch gap-2.5">
                 <button
                   type="submit"
                   disabled={busyAction !== null || joinCode.trim().length !== 6}
-                  className="min-h-[48px] px-5 rounded-xl bg-slate-100 hover:bg-white text-slate-900 font-semibold text-sm inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors disabled:opacity-40"
+                  className="flex-1 sm:flex-none min-h-[48px] px-5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-sm inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 transition-colors disabled:opacity-40"
                 >
                   <span>{busyAction === 'join' ? 'Masuk...' : 'Gabung'}</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
-              </form>
-            </div>
-          </div>
-
-          {/* Hero Artwork Showcase */}
-          <div className="lg:col-span-6">
-            <div className="relative h-full min-h-[280px] sm:min-h-[360px] rounded-2xl overflow-hidden border border-slate-800 bg-gradient-to-br from-[#131A24] via-[#0F172A] to-[#0B1018]">
-              <Image
-                src={activeFeaturedVisual.cover}
-                alt={activeFeaturedVisual.coverAlt}
-                fill
-                priority
-                referrerPolicy="no-referrer"
-                sizes="(max-width: 1024px) 100vw, 50vw"
-                className="object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0B1018]/95 via-[#0B1018]/40 to-transparent" />
-              <div className="absolute bottom-4 left-4 right-4 space-y-3">
-                <div className="flex items-end justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className={`text-xs font-medium ${activeFeaturedVisual.accentTextClass}`}>
-                      {activeFeaturedVisual.heroTagline}
-                    </p>
-                    <p className="text-lg font-semibold text-white truncate">
-                      {activeFeaturedDef.title}
-                    </p>
-                  </div>
-                  <span className="text-xs text-slate-300 font-mono-tabular shrink-0">
-                    {activeFeaturedDef.minPlayers}–{activeFeaturedDef.maxPlayers} Pemain
-                  </span>
-                </div>
-
-                <div
-                  className="flex flex-wrap items-center gap-1 p-1 rounded-xl bg-[#0B1018]/85 backdrop-blur-sm border border-slate-700/70"
-                  role="tablist"
-                  aria-label="Pratinjau sampul permainan"
+                <button
+                  type="button"
+                  disabled={busyAction !== null || joinCode.trim().length !== 6}
+                  onClick={() => void handleJoinAsStage()}
+                  title="Buka di TV/Laptop tanpa menampilkan rahasia pemain"
+                  className="flex-1 sm:flex-none min-h-[48px] px-4 rounded-xl bg-[#131A24] hover:bg-slate-800/90 border border-slate-700 hover:border-amber-400/50 text-slate-200 hover:text-amber-200 font-semibold text-sm inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 transition-colors disabled:opacity-40"
                 >
-                  {PARTY_GAMES.map((g) => {
-                    const isSelected = featuredGame === g.id;
-                    return (
-                      <button
-                        key={g.id}
-                        type="button"
-                        role="tab"
-                        aria-selected={isSelected}
-                        onClick={() => setFeaturedGame(g.id)}
-                        className={`px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
-                          isSelected
-                            ? GAME_VISUALS[g.id].tabActiveClass
-                            : 'text-slate-300 hover:text-white'
-                        }`}
-                      >
-                        {g.title}
-                      </button>
-                    );
-                  })}
-                </div>
+                  <Monitor className="w-4 h-4 text-amber-300" />
+                  <span>{busyAction === 'stage' ? 'Membuka...' : 'Layar Panggung'}</span>
+                </button>
               </div>
-            </div>
+            </form>
+
+            <p className="text-xs text-slate-400 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1">
+              <span>Mau bikin ruang baru?</span>
+              <a
+                href="#katalog"
+                className="inline-flex items-center gap-1 text-slate-200 hover:text-amber-300 font-medium transition-colors"
+              >
+                <span>Pilih permainannya di bawah</span>
+                <ChevronDown className="w-3.5 h-3.5" />
+              </a>
+            </p>
           </div>
         </section>
 
-        {/* Game Catalog Section (2x2 Balanced Grid) */}
-        <section id="katalog" className="space-y-5 pt-4 border-t border-slate-800/80">
+        {/* Game Catalog Section (2x2 Balanced Grid — Preserved As-Is) */}
+        <section id="katalog" className="space-y-5 pt-6 border-t border-slate-800/80 scroll-mt-20">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
             <div>
               <h2 className="text-xl sm:text-2xl font-bold text-white">

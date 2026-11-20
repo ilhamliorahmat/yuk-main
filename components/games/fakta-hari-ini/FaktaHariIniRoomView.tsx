@@ -47,6 +47,8 @@ interface FaktaHariIniRoomViewProps {
   presence: Record<string, PresenceEntry>;
   myUid: string;
   myName: string;
+  deviceUid?: string;
+  deviceName?: string;
   onBeforeLeave: () => void;
   onExitToHub: () => void;
 }
@@ -61,9 +63,13 @@ export function FaktaHariIniRoomView({
   presence,
   myUid,
   myName,
+  deviceUid,
+  deviceName,
   onBeforeLeave,
   onExitToHub,
 }: FaktaHariIniRoomViewProps) {
+  const actualDeviceUid = deviceUid ?? myUid;
+  const actualDeviceName = deviceName ?? myName;
   const [mobileTab, setMobileTab] = useState<MobileTab>('kartu');
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -73,9 +79,11 @@ export function FaktaHariIniRoomView({
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const isHost = room.hostUid === myUid;
+  const isHost = room.hostUid === actualDeviceUid;
+  const activePlayers = players.filter((p) => !p.isBrb);
+  const activePlayersCount = activePlayers.length;
   const fakta = room.faktaState;
-  const roundKey = `${room.id}:${room.currentRoundId}`;
+  const roundKey = `${room.id}:${room.currentRoundId}:${myUid}`;
 
   const isGuesser = Boolean(fakta && fakta.guesserUid === myUid);
   const isPhaseController = Boolean(fakta && fakta.phaseControllerUid === myUid);
@@ -84,8 +92,8 @@ export function FaktaHariIniRoomView({
   const announcementClosed = dismissedAnnouncementKey === roundKey;
   const isFactHidden = hiddenCardKey === roundKey;
 
-  const bluffers = players.filter((p) => p.uid !== fakta?.guesserUid);
-  const potentialGuesserPoints = Math.max(1, players.length - 1);
+  const bluffers = activePlayers.filter((p) => p.uid !== fakta?.guesserUid);
+  const potentialGuesserPoints = Math.max(1, activePlayersCount - 1);
 
   const phaseLabel =
     room.status === 'lobby'
@@ -114,7 +122,7 @@ export function FaktaHariIniRoomView({
     onBeforeLeave();
     setActionBusy(true);
     try {
-      await leaveRoom({ room, uid: myUid, displayName: myName, players });
+      await leaveRoom({ room, uid: actualDeviceUid, displayName: actualDeviceName, players });
     } finally {
       setActionBusy(false);
       onExitToHub();
@@ -126,7 +134,11 @@ export function FaktaHariIniRoomView({
     setActionError(null);
     setSelectedSuspectUid(null);
     try {
-      await startFaktaHariIniRound({ roomId: room.id, actorUid: myUid, actorName: myName });
+      await startFaktaHariIniRound({
+        roomId: room.id,
+        actorUid: actualDeviceUid,
+        actorName: actualDeviceName,
+      });
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Gagal memulai ronde.');
     } finally {
@@ -328,7 +340,7 @@ export function FaktaHariIniRoomView({
                   {isHost ? (
                     <button
                       type="button"
-                      disabled={actionBusy || players.length < 3}
+                      disabled={actionBusy || activePlayersCount < 3}
                       onClick={() => void handleStartRound()}
                       className="w-full min-h-[48px] rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-40"
                     >
@@ -336,8 +348,8 @@ export function FaktaHariIniRoomView({
                       <span>
                         {actionBusy
                           ? 'Menyiapkan Ronde...'
-                          : players.length < 3
-                            ? `Menunggu Pemain (${players.length}/3 Minimal)`
+                          : activePlayersCount < 3
+                            ? `Menunggu Pemain Aktif (${activePlayersCount}/3 Minimal)`
                             : 'Mulai Fakta Hari Ini'}
                       </span>
                     </button>
@@ -711,7 +723,7 @@ export function FaktaHariIniRoomView({
                   <div className="flex flex-col sm:flex-row gap-2.5">
                     <button
                       type="button"
-                      disabled={actionBusy || players.length < 3}
+                      disabled={actionBusy || activePlayersCount < 3}
                       onClick={() => void handleStartRound()}
                       className="flex-1 min-h-[46px] rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-40"
                     >

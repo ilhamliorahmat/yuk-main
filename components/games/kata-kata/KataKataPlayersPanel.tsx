@@ -80,7 +80,7 @@ export function KataKataPlayersPanel({
       <div className="divide-y divide-slate-800/80 rounded-xl bg-[#0B1018] border border-slate-800">
         {sortedPlayers.map((player) => {
           const isMe = player.uid === myUid;
-          const isOnline = presence[player.uid]?.online ?? true;
+          const isOnline = presence[player.controllerUid ?? player.uid]?.online ?? true;
           const isEliminated =
             room.status !== 'lobby' && eliminatedSet.has(player.uid);
           const elimEntry = eliminationByUid.get(player.uid);
@@ -94,7 +94,7 @@ export function KataKataPlayersPanel({
             <div
               key={player.uid}
               className={`p-3.5 flex items-center justify-between gap-3 ${
-                isEliminated ? 'opacity-65' : ''
+                isEliminated || player.isBrb ? 'opacity-65' : ''
               }`}
             >
               <div className="flex items-center gap-3 min-w-0">
@@ -131,12 +131,19 @@ export function KataKataPlayersPanel({
                         aria-label="Host Ruang"
                       />
                     )}
+                    {player.isNumpang && (
+                      <span className="text-[11px] font-medium text-emerald-400 shrink-0">
+                        Numpang
+                      </span>
+                    )}
                   </div>
 
                   <div className="text-xs text-slate-400 flex flex-wrap items-center gap-x-2">
                     <span className="font-mono-tabular">{player.score} Poin</span>
                     <span aria-hidden="true">·</span>
-                    {isEliminated && elimEntry ? (
+                    {player.isBrb ? (
+                      <span className="text-amber-400 font-semibold">BRB</span>
+                    ) : isEliminated && elimEntry ? (
                       <span
                         className={`font-semibold inline-flex items-center gap-1 ${
                           elimEntry.wasSpy ? 'text-rose-400' : 'text-emerald-300'
@@ -163,7 +170,7 @@ export function KataKataPlayersPanel({
                 </div>
               </div>
 
-              {room.status === 'playing' && !isMe && !isEliminated && !amIEliminated && (
+              {room.status === 'playing' && !isMe && !isEliminated && !amIEliminated && !player.isBrb && (
                 <button
                   type="button"
                   disabled={accusingUid !== null}

@@ -65,14 +65,16 @@ export function PlayersAndVotePanel({
       <div className="divide-y divide-slate-800/80 rounded-xl bg-[#0B1018] border border-slate-800">
         {sortedPlayers.map((player) => {
           const isMe = player.uid === myUid;
-          const isOnline = presence[player.uid]?.online ?? true;
+          const isOnline = presence[player.controllerUid ?? player.uid]?.online ?? true;
           const isFirstSpeaker =
             room.status !== 'lobby' && room.firstSpeakerUid === player.uid;
 
           return (
             <div
               key={player.uid}
-              className="p-3.5 flex items-center justify-between gap-3"
+              className={`p-3.5 flex items-center justify-between gap-3 ${
+                player.isBrb ? 'opacity-65' : ''
+              }`}
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div
@@ -100,12 +102,19 @@ export function PlayersAndVotePanel({
                         aria-label="Host Ruang"
                       />
                     )}
+                    {player.isNumpang && (
+                      <span className="text-[11px] font-medium text-emerald-400 shrink-0">
+                        Numpang
+                      </span>
+                    )}
                   </div>
 
                   <div className="text-xs text-slate-400 flex flex-wrap items-center gap-x-2">
                     <span className="font-mono-tabular">{player.score} Poin</span>
                     <span aria-hidden="true">·</span>
-                    <span>{isOnline ? 'Aktif' : 'Offline'}</span>
+                    <span className={player.isBrb ? 'text-amber-400 font-semibold' : ''}>
+                      {player.isBrb ? 'BRB' : isOnline ? 'Aktif' : 'Offline'}
+                    </span>
                     {isFirstSpeaker && (
                       <>
                         <span aria-hidden="true">·</span>
@@ -119,7 +128,7 @@ export function PlayersAndVotePanel({
                 </div>
               </div>
 
-              {room.status === 'playing' && !isMe && (
+              {room.status === 'playing' && !isMe && !player.isBrb && (
                 <button
                   type="button"
                   disabled={accusingUid !== null}

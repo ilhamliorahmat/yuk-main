@@ -30,8 +30,11 @@ export function useRoomSession(params: {
   roomId: string | null;
   uid: string | null;
   displayName: string | null;
+  activeSeatUid?: string | null;
+  isStageDisplay?: boolean;
 }) {
-  const { roomId, uid, displayName } = params;
+  const { roomId, uid, displayName, activeSeatUid, isStageDisplay = false } = params;
+  const effectiveSecretUid = activeSeatUid || uid;
   const sessionKey = roomId && uid ? `${roomId}:${uid}` : '';
 
   const [roomState, setRoomState] = useState<{
@@ -120,23 +123,31 @@ export function useRoomSession(params: {
     [playersState, sessionKey],
   );
 
-  // 2. Subscribe to isolated per-player secret for active round
+  // 2. Subscribe to isolated per-player secret for active round (NEVER on Layar Panggung)
   const activeRoundId = room?.currentRoundId ?? '';
   const activeStatus = room?.status ?? 'lobby';
   const secretKey =
-    roomId && uid && activeRoundId && activeStatus !== 'lobby'
-      ? `${roomId}:${activeRoundId}:${uid}`
+    !isStageDisplay && roomId && effectiveSecretUid && activeRoundId && activeStatus !== 'lobby'
+      ? `${roomId}:${activeRoundId}:${effectiveSecretUid}`
       : '';
 
   useEffect(() => {
-    if (!roomId || !uid || !activeRoundId || activeStatus === 'lobby') return;
+    if (
+      isStageDisplay ||
+      !roomId ||
+      !effectiveSecretUid ||
+      !activeRoundId ||
+      activeStatus === 'lobby'
+    ) {
+      return;
+    }
     const { auth, db } = getFirebaseServices();
     if (!db) return;
 
-    const currentSecretKey = `${roomId}:${activeRoundId}:${uid}`;
-    const secretPath = `rooms/${roomId}/rounds/${activeRoundId}/secrets/${uid}`;
+    const currentSecretKey = `${roomId}:${activeRoundId}:${effectiveSecretUid}`;
+    const secretPath = `rooms/${roomId}/rounds/${activeRoundId}/secrets/${effectiveSecretUid}`;
     const unsubSecret = onSnapshot(
-      doc(db, 'rooms', roomId, 'rounds', activeRoundId, 'secrets', uid),
+      doc(db, 'rooms', roomId, 'rounds', activeRoundId, 'secrets', effectiveSecretUid),
       (snap) => {
         setSecretState({
           key: currentSecretKey,
@@ -149,21 +160,27 @@ export function useRoomSession(params: {
     );
 
     return () => unsubSecret();
-  }, [roomId, uid, activeRoundId, activeStatus]);
+  }, [isStageDisplay, roomId, effectiveSecretUid, activeRoundId, activeStatus]);
 
   const mySecret = secretKey && secretState.key === secretKey ? secretState.secret : null;
 
   // 3. Subscribe to RTDB Chat & Presence
-  const rtdbKey = roomId && uid && displayName ? `${roomId}:${uid}` : '';
+  const presenceUid = isStageDisplay && uid ? `stage_${uid}` : uid;
+  const rtdbKey = roomId && presenceUid && displayName ? `${roomId}:${presenceUid}` : '';
 
   useEffect(() => {
-    if (!roomId || !uid || !displayName) return;
+    if (!roomId || !presenceUid || !displayName) return;
 
-    const currentRtdbKey = `${roomId}:${uid}`;
+    const currentRtdbKey = `${roomId}:${presenceUid}`;
     const unsubChat = subscribeToRoomChat(roomId, (msgs) => {
       setChatState({ key: currentRtdbKey, messages: msgs });
     });
-    const detachPresence = attachRoomPresence({ roomId, uid, displayName });
+    const detachPresence = attachRoomPresence({
+      roomId,
+      uid: presenceUid,
+      displayName: isStageDisplay ? 'Layar Panggung' : displayName,
+      isStage: isStageDisplay,
+    });
     const unsubPresence = subscribeToRoomPresence(roomId, (entries) => {
       setPresenceState({ key: currentRtdbKey, presence: entries });
     });
@@ -173,7 +190,7 @@ export function useRoomSession(params: {
       detachPresence();
       unsubPresence();
     };
-  }, [roomId, uid, displayName]);
+  }, [roomId, presenceUid, displayName, isStageDisplay]);
 
   const messages = rtdbKey && chatState.key === rtdbKey ? chatState.messages : [];
   const presence = rtdbKey && presenceState.key === rtdbKey ? presenceState.presence : {};

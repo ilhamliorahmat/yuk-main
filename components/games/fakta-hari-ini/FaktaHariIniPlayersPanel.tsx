@@ -49,7 +49,7 @@ export function FaktaHariIniPlayersPanel({
       <div className="divide-y divide-slate-800/80 rounded-xl bg-[#0B1018] border border-slate-800">
         {players.map((player, index) => {
           const isMe = player.uid === myUid;
-          const isOnline = presence[player.uid]?.online ?? true;
+          const isOnline = presence[player.controllerUid ?? player.uid]?.online ?? true;
           const isGuesser = room.status !== 'lobby' && fakta?.guesserUid === player.uid;
           const isPhaseController =
             room.status === 'playing' && fakta?.phaseControllerUid === player.uid;
@@ -59,7 +59,9 @@ export function FaktaHariIniPlayersPanel({
           return (
             <div
               key={player.uid}
-              className="px-3.5 py-3 flex items-center justify-between gap-3"
+              className={`px-3.5 py-3 flex items-center justify-between gap-3 ${
+                player.isBrb ? 'opacity-65' : ''
+              }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 <div
@@ -75,9 +77,16 @@ export function FaktaHariIniPlayersPanel({
                     {player.isHost && (
                       <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" aria-label="Host" />
                     )}
+                    {player.isNumpang && (
+                      <span className="text-[11px] font-medium text-emerald-400 shrink-0">
+                        Numpang
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs text-slate-400 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                    {isGuesser ? (
+                    {player.isBrb ? (
+                      <span className="text-amber-400 font-semibold">BRB</span>
+                    ) : isGuesser ? (
                       <span className="text-amber-300 font-medium inline-flex items-center gap-1">
                         <Search className="w-3 h-3" />
                         <span>Penebak</span>

@@ -87,11 +87,13 @@ export function attachRoomPresence(params: {
   roomId: string;
   uid: string;
   displayName: string;
+  isStage?: boolean;
 }): () => void {
   const { rtdb } = getFirebaseServices();
   if (!rtdb) return () => {};
 
   const safeName = params.displayName.trim().slice(0, 40) || 'Pemain';
+  const isStage = Boolean(params.isStage);
   const connectedRef = ref(rtdb, '.info/connected');
   const userPresenceRef = ref(rtdb, `presence/${params.roomId}/${params.uid}`);
 
@@ -102,12 +104,14 @@ export function attachRoomPresence(params: {
       .set({
         online: false,
         displayName: safeName,
+        isStage,
         lastSeen: rtdbServerTimestamp(),
       })
       .then(() =>
         set(userPresenceRef, {
           online: true,
           displayName: safeName,
+          isStage,
           lastSeen: rtdbServerTimestamp(),
         }),
       );
@@ -118,6 +122,7 @@ export function attachRoomPresence(params: {
     void set(userPresenceRef, {
       online: false,
       displayName: safeName,
+      isStage,
       lastSeen: rtdbServerTimestamp(),
     }).catch(() => {
       // Ignore cleanup errors on sign-out or leave
@@ -142,6 +147,7 @@ export function subscribeToRoomPresence(
       const val = child.val() as {
         online?: boolean;
         displayName?: string;
+        isStage?: boolean;
         lastSeen?: number;
       } | null;
       if (child.key && val) {
@@ -149,6 +155,7 @@ export function subscribeToRoomPresence(
           uid: child.key,
           online: Boolean(val.online),
           displayName: val.displayName ?? 'Pemain',
+          isStage: Boolean(val.isStage),
           lastSeen: typeof val.lastSeen === 'number' ? val.lastSeen : 0,
         };
       }

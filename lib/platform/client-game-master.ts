@@ -37,15 +37,25 @@ import {
   evaluateVoteProgress,
   mergeLocationPool,
 } from '@/lib/games/spyfall/engine';
+import {
+  buildSessionRecap,
+  evaluateSuitClash,
+  filterActivePlayers,
+  finalizeCompletedGameRecord,
+  getDefaultPacksForGame,
+} from '@/lib/games/session/engine';
 import type {
+  CompletedGameRecord,
   EliminationEntry,
   FaktaState,
   FrequencyState,
+  GameType,
   PlayerSubmissionDoc,
   RoomDoc,
   RoomPlayerDoc,
   RoundResult,
   ServerRoundStateDoc,
+  SuitPick,
 } from '@/lib/games/types';
 
 export type ClientGameMasterEndpoint =
@@ -65,7 +75,12 @@ export type ClientGameMasterEndpoint =
   | '/api/fakta-hari-ini/start'
   | '/api/fakta-hari-ini/next-phase'
   | '/api/fakta-hari-ini/guess'
-  | '/api/fakta-hari-ini/return-lobby';
+  | '/api/fakta-hari-ini/return-lobby'
+  | '/api/session/switch-game'
+  | '/api/session/open-recap'
+  | '/api/session/close-recap'
+  | '/api/session/suit-pick'
+  | '/api/session/suit-next';
 
 export interface ClientGameMasterResponse {
   ok: boolean;
@@ -108,6 +123,24 @@ async function fetchOrderedRoomPlayers(db: Firestore, roomId: string): Promise<R
     .sort((a, b) => getTimestampMillis(a.joinedAt) - getTimestampMillis(b.joinedAt));
 }
 
+function resolveActorPlayer(
+  players: RoomPlayerDoc[],
+  callerUid: string,
+  rawActAsUid?: unknown,
+): RoomPlayerDoc {
+  const actAsUid =
+    typeof rawActAsUid === 'string' && rawActAsUid.trim() ? rawActAsUid.trim() : callerUid;
+  const target = players.find((p) => p.uid === actAsUid);
+  if (!target) {
+    throw new Error('Pemain tidak ditemukan di ruang permainan ini.');
+  }
+  const ownerDeviceUid = target.controllerUid ?? target.uid;
+  if (target.uid !== callerUid && ownerDeviceUid !== callerUid) {
+    throw new Error('Perangkat ini tidak memiliki izin mengendalikan kursi pemain tersebut.');
+  }
+  return target;
+}
+
 function formatClientFirestoreError(err: unknown): string {
   const code = (err as { code?: unknown })?.code;
   const msg = err instanceof Error ? err.message : String(err);
@@ -145,8 +178,11 @@ async function handleSpyfallStart(
     if (room.status !== 'lobby' && room.status !== 'round_end') {
       throw new Error('Ronde sedang berlangsung.');
     }
-    if (players.length < 3) {
-      throw new Error('Minimal 3 pemain dibutuhkan untuk memulai Yang Bener Yang Mana.');
+    const activePlayers = filterActivePlayers(players);
+    if (activePlayers.length < 3) {
+      throw new Error(
+        'Minimal 3 pemain aktif (tidak sedang BRB) dibutuhkan untuk memulai Yang Bener Yang Mana.',
+      );
     }
 
     const pool = mergeLocationPool(room.enabledPacks ?? ['nusantara'], room.customLocations ?? []);
@@ -164,14 +200,14 @@ async function handleSpyfallStart(
     const roundId = `round_${nextRoundNumber}_${Date.now()}`;
 
     const dealt = dealSpyfallRound({
-      playerUids: players.map((p) => p.uid),
+      playerUids: activePlayers.map((p) => p.uid),
       pool,
       previousLocationName,
       spyMode: room.spyMode ?? 'single',
       roundId,
     });
 
-    const playerMap = new Map(players.map((p) => [p.uid, p]));
+    const playerMap = new Map(activePlayers.map((p) => [p.uid, p]));
     const spyNames = dealt.spyUids.map((spyUid) => playerMap.get(spyUid)?.displayName ?? 'Pemain');
     const firstSpeakerName = playerMap.get(dealt.firstSpeakerUid)?.displayName ?? 'Pemain';
 
@@ -241,33 +277,35 @@ async function handleSpyfallVote(
     }
 
     const room = roomSnap.data() as RoomDoc;
-    const callerPlayer = players.find((p) => p.uid === callerUid);
-    if (!callerPlayer) {
-      throw new Error('Kamu bukan anggota ruang permainan ini.');
-    }
+    const callerPlayer = resolveActorPlayer(players, callerUid, payload.actAsUid);
+    const actorUid = callerPlayer.uid;
+    const activePlayers = filterActivePlayers(players);
 
     if (action === 'initiate') {
       if (room.status !== 'playing') {
         throw new Error('Pemungutan suara hanya bisa dimulai saat permainan berlangsung.');
       }
-      const targetUid = typeof payload.targetUid === 'string' ? payload.targetUid.trim() : '';
-      const targetPlayer = players.find((p) => p.uid === targetUid);
-      if (!targetPlayer) {
-        throw new Error('Pemain tertuduh tidak ditemukan di ruang ini.');
+      if (callerPlayer.isBrb) {
+        throw new Error('Pemain yang sedang BRB tidak dapat memulai voting ronde ini.');
       }
-      if (targetPlayer.uid === callerUid) {
+      const targetUid = typeof payload.targetUid === 'string' ? payload.targetUid.trim() : '';
+      const targetPlayer = activePlayers.find((p) => p.uid === targetUid);
+      if (!targetPlayer) {
+        throw new Error('Pemain tertuduh tidak ditemukan atau sedang BRB.');
+      }
+      if (targetPlayer.uid === actorUid) {
         throw new Error('Kamu tidak bisa menuduh dirimu sendiri.');
       }
 
       tx.update(roomRef, {
         status: 'voting',
         activeVote: {
-          initiatorUid: callerUid,
+          initiatorUid: actorUid,
           initiatorName: callerPlayer.displayName.slice(0, 40),
           targetUid: targetPlayer.uid,
           targetName: targetPlayer.displayName.slice(0, 40),
           startedAtMs: Date.now(),
-          votes: { [callerUid]: 'yes' },
+          votes: { [actorUid]: 'yes' },
         },
         pendingSpyGuess: null,
         updatedAt: serverTimestamp(),
@@ -304,7 +342,10 @@ async function handleSpyfallVote(
     if (room.status !== 'voting' || !room.activeVote) {
       throw new Error('Tidak ada pemungutan suara yang sedang berlangsung.');
     }
-    if (room.activeVote.targetUid === callerUid) {
+    if (callerPlayer.isBrb) {
+      throw new Error('Pemain yang sedang BRB tidak memiliki hak suara di ronde ini.');
+    }
+    if (room.activeVote.targetUid === actorUid) {
       throw new Error('Pemain yang sedang dituduh tidak memiliki hak suara.');
     }
 
@@ -315,9 +356,9 @@ async function handleSpyfallVote(
 
     const nextVotes: Record<string, 'yes' | 'no'> = {
       ...room.activeVote.votes,
-      [callerUid]: choice,
+      [actorUid]: choice,
     };
-    const eligibleVoters = players
+    const eligibleVoters = activePlayers
       .map((p) => p.uid)
       .filter((uid) => uid !== room.activeVote?.targetUid);
 
@@ -346,7 +387,7 @@ async function handleSpyfallVote(
       const winnerTeam = targetIsSpy ? 'warga' : 'mata_mata';
 
       const deltas = calculateRoundScoreDeltas({
-        playerUids: players.map((p) => p.uid),
+        playerUids: activePlayers.map((p) => p.uid),
         spyUids: serverState.spyUids,
         winnerTeam,
         initiatorUid: room.activeVote.initiatorUid,
@@ -371,13 +412,14 @@ async function handleSpyfallVote(
 
       tx.update(roomRef, {
         status: 'round_end',
+        currentMatchRounds: (room.currentMatchRounds ?? 0) + 1,
         activeVote: null,
         pendingSpyGuess: null,
         lastRoundResult: roundResult,
         updatedAt: serverTimestamp(),
       });
 
-      for (const player of players) {
+      for (const player of activePlayers) {
         const delta = deltas[player.uid] ?? 0;
         if (delta > 0) {
           tx.update(doc(db, 'rooms', roomId, 'players', player.uid), {
@@ -429,10 +471,10 @@ async function handleSpyfallGuess(
     }
 
     const room = roomSnap.data() as RoomDoc;
-    const callerPlayer = players.find((p) => p.uid === callerUid);
-    if (!callerPlayer) {
-      throw new Error('Kamu bukan anggota ruang permainan ini.');
-    }
+    const callerPlayer = resolveActorPlayer(players, callerUid, payload.actAsUid);
+    const actorUid = callerPlayer.uid;
+    const activePlayers = filterActivePlayers(players);
+
     if (room.status !== 'playing' && room.status !== 'voting' && room.status !== 'spy_guess') {
       throw new Error('Tebakan lokasi hanya bisa dilakukan saat ronde aktif.');
     }
@@ -441,7 +483,7 @@ async function handleSpyfallGuess(
     }
 
     const serverState = serverStateSnap.data() as ServerRoundStateDoc;
-    if (!serverState.spyUids.includes(callerUid)) {
+    if (!serverState.spyUids.includes(actorUid)) {
       throw new Error('Hanya Mata-Mata yang dapat menebak lokasi rahasia.');
     }
 
@@ -449,7 +491,7 @@ async function handleSpyfallGuess(
     const winnerTeam = isCorrect ? 'mata_mata' : 'warga';
 
     const deltas = calculateRoundScoreDeltas({
-      playerUids: players.map((p) => p.uid),
+      playerUids: activePlayers.map((p) => p.uid),
       spyUids: serverState.spyUids,
       winnerTeam,
       initiatorUid: room.activeVote?.initiatorUid ?? null,
@@ -474,13 +516,14 @@ async function handleSpyfallGuess(
 
     tx.update(roomRef, {
       status: 'round_end',
+      currentMatchRounds: (room.currentMatchRounds ?? 0) + 1,
       activeVote: null,
       pendingSpyGuess: null,
       lastRoundResult: roundResult,
       updatedAt: serverTimestamp(),
     });
 
-    for (const player of players) {
+    for (const player of activePlayers) {
       const delta = deltas[player.uid] ?? 0;
       if (delta > 0) {
         tx.update(doc(db, 'rooms', roomId, 'players', player.uid), {
@@ -553,9 +596,10 @@ async function handleSpyfallResolve(
       throw new Error('Status rahasia ronde tidak ditemukan.');
     }
     const serverState = serverStateSnap.data() as ServerRoundStateDoc;
+    const activePlayers = filterActivePlayers(players);
 
     const deltas = calculateRoundScoreDeltas({
-      playerUids: players.map((p) => p.uid),
+      playerUids: activePlayers.map((p) => p.uid),
       spyUids: serverState.spyUids,
       winnerTeam: 'mata_mata',
       victoryType: 'timeout',
@@ -576,13 +620,14 @@ async function handleSpyfallResolve(
 
     tx.update(roomRef, {
       status: 'round_end',
+      currentMatchRounds: (room.currentMatchRounds ?? 0) + 1,
       activeVote: null,
       pendingSpyGuess: null,
       lastRoundResult: roundResult,
       updatedAt: serverTimestamp(),
     });
 
-    for (const player of players) {
+    for (const player of activePlayers) {
       const delta = deltas[player.uid] ?? 0;
       if (delta > 0) {
         tx.update(doc(db, 'rooms', roomId, 'players', player.uid), {
@@ -627,8 +672,11 @@ async function handleKataKataStart(
     if (room.status !== 'lobby' && room.status !== 'round_end') {
       throw new Error('Ronde sedang berlangsung.');
     }
-    if (players.length < 3) {
-      throw new Error('Minimal 3 pemain dibutuhkan untuk memulai Kata-Kata Hari Ini.');
+    const activePlayers = filterActivePlayers(players);
+    if (activePlayers.length < 3) {
+      throw new Error(
+        'Minimal 3 pemain aktif (tidak sedang BRB) dibutuhkan untuk memulai Kata-Kata Hari Ini.',
+      );
     }
 
     const pool = mergeWordPairPool(
@@ -649,14 +697,14 @@ async function handleKataKataStart(
     const roundId = `round_${nextRoundNumber}_${Date.now()}`;
 
     const dealt = dealKataKataRound({
-      playerUids: players.map((p) => p.uid),
+      playerUids: activePlayers.map((p) => p.uid),
       pool,
       previousCitizenWord,
       spyMode: room.spyMode ?? 'single',
       roundId,
     });
 
-    const playerMap = new Map(players.map((p) => [p.uid, p]));
+    const playerMap = new Map(activePlayers.map((p) => [p.uid, p]));
     const spyNames = dealt.spyUids.map((spyUid) => playerMap.get(spyUid)?.displayName ?? 'Pemain');
     const firstSpeakerName = playerMap.get(dealt.firstSpeakerUid)?.displayName ?? 'Pemain';
 
@@ -735,10 +783,9 @@ async function handleKataKataVote(
       throw new Error('Ruang ini bukan permainan Kata-Kata Hari Ini.');
     }
 
-    const callerPlayer = players.find((p) => p.uid === callerUid);
-    if (!callerPlayer) {
-      throw new Error('Kamu bukan anggota ruang permainan ini.');
-    }
+    const callerPlayer = resolveActorPlayer(players, callerUid, payload.actAsUid);
+    const actorUid = callerPlayer.uid;
+    const activePlayers = filterActivePlayers(players);
 
     const eliminatedUids = room.eliminatedUids ?? [];
     const eliminatedSet = new Set(eliminatedUids);
@@ -747,16 +794,19 @@ async function handleKataKataVote(
       if (room.status !== 'playing') {
         throw new Error('Pemungutan suara hanya bisa dimulai saat permainan berlangsung.');
       }
-      if (eliminatedSet.has(callerUid)) {
+      if (callerPlayer.isBrb) {
+        throw new Error('Pemain yang sedang BRB tidak dapat memulai voting ronde ini.');
+      }
+      if (eliminatedSet.has(actorUid)) {
         throw new Error('Pemain yang sudah tereliminasi hanya bisa menonton hingga ronde selesai.');
       }
 
       const targetUid = typeof payload.targetUid === 'string' ? payload.targetUid.trim() : '';
-      const targetPlayer = players.find((p) => p.uid === targetUid);
+      const targetPlayer = activePlayers.find((p) => p.uid === targetUid);
       if (!targetPlayer) {
-        throw new Error('Pemain tertuduh tidak ditemukan di ruang ini.');
+        throw new Error('Pemain tertuduh tidak ditemukan atau sedang BRB.');
       }
-      if (targetPlayer.uid === callerUid) {
+      if (targetPlayer.uid === actorUid) {
         throw new Error('Kamu tidak bisa menuduh dirimu sendiri.');
       }
       if (eliminatedSet.has(targetPlayer.uid)) {
@@ -766,12 +816,12 @@ async function handleKataKataVote(
       tx.update(roomRef, {
         status: 'voting',
         activeVote: {
-          initiatorUid: callerUid,
+          initiatorUid: actorUid,
           initiatorName: callerPlayer.displayName.slice(0, 40),
           targetUid: targetPlayer.uid,
           targetName: targetPlayer.displayName.slice(0, 40),
           startedAtMs: Date.now(),
-          votes: { [callerUid]: 'yes' },
+          votes: { [actorUid]: 'yes' },
         },
         pendingSpyGuess: null,
         updatedAt: serverTimestamp(),
@@ -808,10 +858,13 @@ async function handleKataKataVote(
     if (room.status !== 'voting' || !room.activeVote) {
       throw new Error('Tidak ada pemungutan suara yang sedang berlangsung.');
     }
-    if (eliminatedSet.has(callerUid)) {
+    if (callerPlayer.isBrb) {
+      throw new Error('Pemain yang sedang BRB tidak memiliki hak suara di ronde ini.');
+    }
+    if (eliminatedSet.has(actorUid)) {
       throw new Error('Pemain yang sudah tereliminasi tidak memiliki hak suara.');
     }
-    if (room.activeVote.targetUid === callerUid) {
+    if (room.activeVote.targetUid === actorUid) {
       throw new Error('Pemain yang sedang dituduh tidak memiliki hak suara.');
     }
 
@@ -822,9 +875,9 @@ async function handleKataKataVote(
 
     const nextVotes: Record<string, 'yes' | 'no'> = {
       ...room.activeVote.votes,
-      [callerUid]: choice,
+      [actorUid]: choice,
     };
-    const eligibleAliveVoters = players
+    const eligibleAliveVoters = activePlayers
       .map((p) => p.uid)
       .filter((uid) => !eliminatedSet.has(uid) && uid !== room.activeVote?.targetUid);
 
@@ -855,7 +908,7 @@ async function handleKataKataVote(
       const targetName = room.activeVote.targetName;
 
       const elimEval = evaluateKataKataAfterElimination({
-        allPlayerUids: players.map((p) => p.uid),
+        allPlayerUids: activePlayers.map((p) => p.uid),
         previouslyEliminatedUids: eliminatedUids,
         eliminatedUid: targetUid,
         spyUids: serverState.spyUids,
@@ -898,7 +951,7 @@ async function handleKataKataVote(
 
       if (elimEval.outcome === 'spies_outnumber') {
         const deltas = calculateKataKataScoreDeltas({
-          playerUids: players.map((p) => p.uid),
+          playerUids: activePlayers.map((p) => p.uid),
           spyUids: serverState.spyUids,
           winnerTeam: 'mata_mata',
           initiatorUid: room.activeVote.initiatorUid,
@@ -924,6 +977,7 @@ async function handleKataKataVote(
 
         tx.update(roomRef, {
           status: 'round_end',
+          currentMatchRounds: (room.currentMatchRounds ?? 0) + 1,
           eliminatedUids: nextEliminatedUids,
           eliminationLog: nextEliminationLog,
           activeVote: null,
@@ -932,7 +986,7 @@ async function handleKataKataVote(
           updatedAt: serverTimestamp(),
         });
 
-        for (const player of players) {
+        for (const player of activePlayers) {
           const delta = deltas[player.uid] ?? 0;
           if (delta > 0) {
             tx.update(doc(db, 'rooms', roomId, 'players', player.uid), {
@@ -1010,14 +1064,14 @@ async function handleKataKataGuess(
       throw new Error('Ruang ini bukan permainan Kata-Kata Hari Ini.');
     }
 
-    const callerPlayer = players.find((p) => p.uid === callerUid);
-    if (!callerPlayer) {
-      throw new Error('Kamu bukan anggota ruang permainan ini.');
-    }
+    const callerPlayer = resolveActorPlayer(players, callerUid, payload.actAsUid);
+    const actorUid = callerPlayer.uid;
+    const activePlayers = filterActivePlayers(players);
+
     if (room.status !== 'spy_guess' || !room.pendingSpyGuess) {
       throw new Error('Tidak ada fase Kesempatan Terakhir yang aktif.');
     }
-    if (room.pendingSpyGuess.spyUid !== callerUid) {
+    if (room.pendingSpyGuess.spyUid !== actorUid) {
       throw new Error('Hanya Penyusup terakhir yang tertangkap yang dapat mengirimkan tebakan.');
     }
     if (!serverStateSnap.exists()) {
@@ -1033,7 +1087,7 @@ async function handleKataKataGuess(
     const winnerTeam = isCorrect ? 'mata_mata' : 'warga';
 
     const deltas = calculateKataKataScoreDeltas({
-      playerUids: players.map((p) => p.uid),
+      playerUids: activePlayers.map((p) => p.uid),
       spyUids: serverState.spyUids,
       winnerTeam,
       initiatorUid: room.activeVote?.initiatorUid ?? null,
@@ -1063,13 +1117,14 @@ async function handleKataKataGuess(
 
     tx.update(roomRef, {
       status: 'round_end',
+      currentMatchRounds: (room.currentMatchRounds ?? 0) + 1,
       activeVote: null,
       pendingSpyGuess: null,
       lastRoundResult: roundResult,
       updatedAt: serverTimestamp(),
     });
 
-    for (const player of players) {
+    for (const player of activePlayers) {
       const delta = deltas[player.uid] ?? 0;
       if (delta > 0) {
         tx.update(doc(db, 'rooms', roomId, 'players', player.uid), {
@@ -1158,8 +1213,9 @@ async function handleKataKataResolve(
       ? 'Penyusup terakhir tertangkap dan tidak berhasil menebak Kata Warga tepat waktu!'
       : 'Waktu habis! Penyusup berhasil menyamar hingga akhir ronde.';
 
+    const activePlayers = filterActivePlayers(players);
     const deltas = calculateKataKataScoreDeltas({
-      playerUids: players.map((p) => p.uid),
+      playerUids: activePlayers.map((p) => p.uid),
       spyUids: serverState.spyUids,
       winnerTeam,
       initiatorUid: room.activeVote?.initiatorUid ?? null,
@@ -1183,13 +1239,14 @@ async function handleKataKataResolve(
 
     tx.update(roomRef, {
       status: 'round_end',
+      currentMatchRounds: (room.currentMatchRounds ?? 0) + 1,
       activeVote: null,
       pendingSpyGuess: null,
       lastRoundResult: roundResult,
       updatedAt: serverTimestamp(),
     });
 
-    for (const player of players) {
+    for (const player of activePlayers) {
       const delta = deltas[player.uid] ?? 0;
       if (delta > 0) {
         tx.update(doc(db, 'rooms', roomId, 'players', player.uid), {
@@ -1230,8 +1287,11 @@ async function handleSatuFrekuensiStart(
     if (room.status !== 'lobby' && room.status !== 'round_end') {
       throw new Error('Ronde sedang berlangsung.');
     }
-    if (players.length < 2) {
-      throw new Error('Minimal 2 pemain dibutuhkan untuk memulai Satu Frekuensi.');
+    const activePlayers = filterActivePlayers(players);
+    if (activePlayers.length < 2) {
+      throw new Error(
+        'Minimal 2 pemain aktif (tidak sedang BRB) dibutuhkan untuk memulai Satu Frekuensi.',
+      );
     }
 
     const pool = mergeSpectrumPool(
@@ -1248,14 +1308,15 @@ async function handleSatuFrekuensiStart(
     const roundId = `round_${nextRoundNumber}_${Date.now()}`;
 
     const dealt = dealSatuFrekuensiRound({
-      playerUids: players.map((p) => p.uid),
+      playerUids: activePlayers.map((p) => p.uid),
       pool,
       previousSpectrumKey,
       previousRotationIndex,
       roundId,
     });
 
-    const psychicPlayer = players.find((p) => p.uid === dealt.psychicUid) ?? players[0];
+    const psychicPlayer =
+      activePlayers.find((p) => p.uid === dealt.psychicUid) ?? activePlayers[0];
 
     const nextFrequencyState: FrequencyState = {
       phase: 'clue',
@@ -1323,6 +1384,9 @@ async function handleSatuFrekuensiClue(
     throw new Error('Ketik petunjuk singkat terlebih dahulu.');
   }
 
+  const players = await fetchOrderedRoomPlayers(db, roomId);
+  const actorPlayer = resolveActorPlayer(players, callerUid, payload.actAsUid);
+  const actorUid = actorPlayer.uid;
   const roomRef = doc(db, 'rooms', roomId);
 
   return runTransaction(db, async (tx) => {
@@ -1338,7 +1402,7 @@ async function handleSatuFrekuensiClue(
     if (room.status !== 'playing' || room.frequencyState.phase !== 'clue') {
       throw new Error('Petunjuk hanya dapat dikirim pada fase Penerawang.');
     }
-    if (room.frequencyState.psychicUid !== callerUid) {
+    if (room.frequencyState.psychicUid !== actorUid) {
       throw new Error('Hanya Penerawang ronde ini yang dapat mengirim petunjuk.');
     }
 
@@ -1370,6 +1434,13 @@ async function handleSatuFrekuensiGuess(
   }
   const guessValue = Math.min(100, Math.max(0, Math.round(rawVal)));
 
+  const players = await fetchOrderedRoomPlayers(db, roomId);
+  const actorPlayer = resolveActorPlayer(players, callerUid, payload.actAsUid);
+  const actorUid = actorPlayer.uid;
+  if (actorPlayer.isBrb) {
+    throw new Error('Pemain yang sedang BRB tidak ikut menebak di ronde ini.');
+  }
+
   const roomRef = doc(db, 'rooms', roomId);
 
   return runTransaction(db, async (tx) => {
@@ -1385,13 +1456,13 @@ async function handleSatuFrekuensiGuess(
     if (room.status !== 'playing' || room.frequencyState.phase !== 'dialing') {
       throw new Error('Jarum hanya bisa dikunci saat fase tebakan berlangsung.');
     }
-    if (room.frequencyState.psychicUid === callerUid) {
+    if (room.frequencyState.psychicUid === actorUid) {
       throw new Error('Penerawang tidak ikut menebak jarum.');
     }
 
-    const subRef = doc(db, 'rooms', roomId, 'rounds', room.currentRoundId, 'submissions', callerUid);
+    const subRef = doc(db, 'rooms', roomId, 'rounds', room.currentRoundId, 'submissions', actorUid);
     const subDoc: PlayerSubmissionDoc = {
-      uid: callerUid,
+      uid: actorUid,
       roundId: room.currentRoundId,
       gameType: 'satu_frekuensi',
       guessValue,
@@ -1400,9 +1471,9 @@ async function handleSatuFrekuensiGuess(
     tx.set(subRef, subDoc);
 
     const existingLocked = room.frequencyState.lockedUids ?? [];
-    const nextLocked = existingLocked.includes(callerUid)
+    const nextLocked = existingLocked.includes(actorUid)
       ? existingLocked
-      : [...existingLocked, callerUid];
+      : [...existingLocked, actorUid];
 
     tx.update(roomRef, {
       frequencyState: {
@@ -1477,8 +1548,9 @@ async function handleSatuFrekuensiNextPhase(
     const targetValue =
       typeof serverState.targetValue === 'number' ? serverState.targetValue : 50;
 
-    // Read all non-psychic submissions inside the same transaction
-    const guesserPlayers = players.filter((p) => p.uid !== freq.psychicUid);
+    // Read all non-psychic active submissions inside the same transaction
+    const activePlayers = filterActivePlayers(players);
+    const guesserPlayers = activePlayers.filter((p) => p.uid !== freq.psychicUid);
     const submissionSnaps = await Promise.all(
       guesserPlayers.map((p) =>
         tx.get(doc(db, 'rooms', roomId, 'rounds', room.currentRoundId, 'submissions', p.uid)),
@@ -1499,7 +1571,7 @@ async function handleSatuFrekuensiNextPhase(
     const scored = scoreSatuFrekuensiRound({
       psychicUid: freq.psychicUid,
       targetValue,
-      players: players.map((p) => ({
+      players: activePlayers.map((p) => ({
         uid: p.uid,
         displayName: p.displayName,
         avatarColor: p.avatarColor,
@@ -1535,12 +1607,13 @@ async function handleSatuFrekuensiNextPhase(
 
     tx.update(roomRef, {
       status: 'round_end',
+      currentMatchRounds: (room.currentMatchRounds ?? 0) + 1,
       frequencyState: nextFrequencyState,
       lastRoundResult: roundResult,
       updatedAt: serverTimestamp(),
     });
 
-    for (const player of players) {
+    for (const player of activePlayers) {
       const delta = scored.deltas[player.uid] ?? 0;
       if (delta > 0) {
         tx.update(doc(db, 'rooms', roomId, 'players', player.uid), {
@@ -1615,8 +1688,11 @@ async function handleFaktaHariIniStart(
     if (room.status !== 'lobby' && room.status !== 'round_end') {
       throw new Error('Ronde sedang berlangsung.');
     }
-    if (players.length < 3) {
-      throw new Error('Minimal 3 pemain dibutuhkan untuk memulai Fakta Hari Ini.');
+    const activePlayers = filterActivePlayers(players);
+    if (activePlayers.length < 3) {
+      throw new Error(
+        'Minimal 3 pemain aktif (tidak sedang BRB) dibutuhkan untuk memulai Fakta Hari Ini.',
+      );
     }
 
     const pool = mergeFactPool(
@@ -1637,7 +1713,11 @@ async function handleFaktaHariIniStart(
     const roundId = `round_${nextRoundNumber}_${Date.now()}`;
 
     const dealt = dealFaktaHariIniRound({
-      players: players.map((p) => ({ uid: p.uid, displayName: p.displayName })),
+      players: activePlayers.map((p) => ({
+        uid: p.uid,
+        displayName: p.displayName,
+        controllerUid: p.controllerUid ?? p.uid,
+      })),
       hostUid: room.hostUid,
       pool,
       previousFactTwist,
@@ -1713,6 +1793,9 @@ async function handleFaktaHariIniNextPhase(
 ): Promise<ClientGameMasterResponse> {
   const roomId = assertRoomId(payload.roomId);
   const direction = payload.direction === 'back' ? 'back' : 'advance';
+  const players = await fetchOrderedRoomPlayers(db, roomId);
+  const actorPlayer = resolveActorPlayer(players, callerUid, payload.actAsUid);
+  const actorUid = actorPlayer.uid;
   const roomRef = doc(db, 'rooms', roomId);
 
   return runTransaction(db, async (tx) => {
@@ -1730,8 +1813,8 @@ async function handleFaktaHariIniNextPhase(
     }
 
     const fakta = room.faktaState;
-    if (fakta.phaseControllerUid !== callerUid) {
-      if (callerUid === fakta.guesserUid) {
+    if (fakta.phaseControllerUid !== actorUid) {
+      if (actorUid === fakta.guesserUid) {
         throw new Error(
           `Penebak tidak boleh menekan Fase Selanjutnya! Hanya ${fakta.phaseControllerName} (Pengendali Fase) yang dapat melanjutkan.`,
         );
@@ -1790,6 +1873,10 @@ async function handleFaktaHariIniGuess(
   }
 
   const players = await fetchOrderedRoomPlayers(db, roomId);
+  const actorPlayer = resolveActorPlayer(players, callerUid, payload.actAsUid);
+  const actorUid = actorPlayer.uid;
+  const activePlayers = filterActivePlayers(players);
+
   const roomRef = doc(db, 'rooms', roomId);
   const serverStateRef = doc(db, 'rooms', roomId, 'serverState', 'current');
 
@@ -1810,16 +1897,16 @@ async function handleFaktaHariIniGuess(
     if (room.status !== 'playing' || room.faktaState.phase !== 'guessing') {
       throw new Error('Tebakan Penebak hanya bisa dikirim saat fase tebakan aktif.');
     }
-    if (room.faktaState.guesserUid !== callerUid) {
+    if (room.faktaState.guesserUid !== actorUid) {
       throw new Error('Hanya Penebak ronde ini yang dapat memilih tersangka.');
     }
-    if (pickedUid === callerUid) {
+    if (pickedUid === actorUid) {
       throw new Error('Kamu tidak bisa memilih dirimu sendiri.');
     }
 
-    const pickedPlayer = players.find((p) => p.uid === pickedUid);
+    const pickedPlayer = activePlayers.find((p) => p.uid === pickedUid);
     if (!pickedPlayer) {
-      throw new Error('Pemain yang dipilih tidak ditemukan di ruang ini.');
+      throw new Error('Pemain yang dipilih tidak ditemukan atau sedang BRB.');
     }
     if (!serverStateSnap.exists()) {
       throw new Error('Status rahasia fakta ronde tidak ditemukan.');
@@ -1830,7 +1917,7 @@ async function handleFaktaHariIniGuess(
     const truthTellerName = serverState.truthTellerName ?? 'Pemain';
 
     const scoring = calculateFaktaHariIniScoreDeltas({
-      playerUids: players.map((p) => p.uid),
+      playerUids: activePlayers.map((p) => p.uid),
       guesserUid: room.faktaState.guesserUid,
       truthTellerUid,
       pickedUid,
@@ -1870,12 +1957,13 @@ async function handleFaktaHariIniGuess(
 
     tx.update(roomRef, {
       status: 'round_end',
+      currentMatchRounds: (room.currentMatchRounds ?? 0) + 1,
       faktaState: nextFaktaState,
       lastRoundResult: roundResult,
       updatedAt: serverTimestamp(),
     });
 
-    for (const player of players) {
+    for (const player of activePlayers) {
       const delta = scoring.deltas[player.uid] ?? 0;
       if (delta > 0) {
         tx.update(doc(db, 'rooms', roomId, 'players', player.uid), {
@@ -1916,6 +2004,376 @@ async function handleFaktaHariIniReturnLobby(
     });
 
     return { ok: true, systemMessage: 'Host mengembalikan ruang Fakta Hari Ini ke lobi.' };
+  });
+}
+
+// --- v3.1.0 Session Actions (Game Switcher, Rekap Permainan, Best-of-3 Suit Duel) ---
+
+const VALID_GAME_TYPES: GameType[] = ['spyfall', 'kata_kata', 'satu_frekuensi', 'fakta_hari_ini'];
+const GAME_TITLE_MAP: Record<GameType, string> = {
+  spyfall: 'Yang Bener Yang Mana',
+  kata_kata: 'Kata-Kata Hari Ini',
+  satu_frekuensi: 'Satu Frekuensi',
+  fakta_hari_ini: 'Fakta Hari Ini',
+};
+
+async function handleSessionSwitchGame(
+  db: Firestore,
+  callerUid: string,
+  payload: Record<string, unknown>,
+): Promise<ClientGameMasterResponse> {
+  const roomId = assertRoomId(payload.roomId);
+  const targetGameType = payload.targetGameType as GameType;
+  if (!VALID_GAME_TYPES.includes(targetGameType)) {
+    throw new Error('Jenis permainan tujuan tidak valid.');
+  }
+
+  const players = await fetchOrderedRoomPlayers(db, roomId);
+  const roomRef = doc(db, 'rooms', roomId);
+
+  return runTransaction(db, async (tx) => {
+    const roomSnap = await tx.get(roomRef);
+    if (!roomSnap.exists()) {
+      throw new Error('Ruang permainan tidak ditemukan.');
+    }
+
+    const room = roomSnap.data() as RoomDoc;
+    if (room.hostUid !== callerUid) {
+      throw new Error('Hanya Host yang dapat mengganti permainan di dalam ruang.');
+    }
+    if (room.status !== 'lobby' && room.status !== 'round_end') {
+      throw new Error('Selesaikan atau akhiri ronde berjalan sebelum mengganti permainan.');
+    }
+
+    const existingCompleted: CompletedGameRecord[] = room.completedGames ?? [];
+    const roundsPlayed = room.currentMatchRounds ?? 0;
+
+    // Accidental switch guard: only archive match if >=1 round was completed
+    const archivedMatch = finalizeCompletedGameRecord({
+      matchIndex: existingCompleted.length + 1,
+      gameType: room.gameType,
+      roundsPlayed,
+      players,
+    });
+
+    const nextCompletedGames = archivedMatch
+      ? [...existingCompleted, archivedMatch].slice(-25)
+      : existingCompleted;
+
+    tx.update(roomRef, {
+      gameType: targetGameType,
+      status: 'lobby',
+      currentMatchRounds: 0,
+      enabledPacks: getDefaultPacksForGame(targetGameType),
+      selectedLocationNames: [],
+      eliminatedUids: [],
+      eliminationLog: [],
+      frequencyState: null,
+      faktaState: null,
+      activeVote: null,
+      pendingSpyGuess: null,
+      lastRoundResult: null,
+      completedGames: nextCompletedGames,
+      updatedAt: serverTimestamp(),
+    });
+
+    // Reset active game score to 0 for the new visit/game so each game keeps its own points
+    if (archivedMatch || room.gameType !== targetGameType) {
+      for (const player of players) {
+        if ((player.score ?? 0) !== 0) {
+          tx.update(doc(db, 'rooms', roomId, 'players', player.uid), {
+            score: 0,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+    }
+
+    const archiveNote = archivedMatch
+      ? ` Hasil ${GAME_TITLE_MAP[room.gameType]} disimpan ke Rekap Permainan (${archivedMatch.winnerNames.length > 0 ? `Juara: ${archivedMatch.winnerNames.join(', ')}` : 'tanpa pemenang'}).`
+      : '';
+
+    return {
+      ok: true,
+      systemMessage: `Host mengganti permainan ke ${GAME_TITLE_MAP[targetGameType]}.${archiveNote}`,
+    };
+  });
+}
+
+async function handleSessionOpenRecap(
+  db: Firestore,
+  callerUid: string,
+  payload: Record<string, unknown>,
+): Promise<ClientGameMasterResponse> {
+  const roomId = assertRoomId(payload.roomId);
+  const players = await fetchOrderedRoomPlayers(db, roomId);
+  const roomRef = doc(db, 'rooms', roomId);
+
+  return runTransaction(db, async (tx) => {
+    const roomSnap = await tx.get(roomRef);
+    if (!roomSnap.exists()) {
+      throw new Error('Ruang permainan tidak ditemukan.');
+    }
+
+    const room = roomSnap.data() as RoomDoc;
+    if (room.hostUid !== callerUid) {
+      throw new Error('Hanya Host yang dapat membuka Rekap Permainan.');
+    }
+    if (room.status !== 'lobby' && room.status !== 'round_end') {
+      throw new Error('Selesaikan ronde yang sedang berjalan sebelum membuka Rekap Permainan.');
+    }
+
+    const existingCompleted: CompletedGameRecord[] = room.completedGames ?? [];
+    const roundsPlayed = room.currentMatchRounds ?? 0;
+
+    const archivedMatch = finalizeCompletedGameRecord({
+      matchIndex: existingCompleted.length + 1,
+      gameType: room.gameType,
+      roundsPlayed,
+      players,
+    });
+
+    const nextCompletedGames = archivedMatch
+      ? [...existingCompleted, archivedMatch].slice(-25)
+      : existingCompleted;
+
+    if (nextCompletedGames.length === 0) {
+      throw new Error('Selesaikan minimal 1 ronde permainan sebelum membuka Rekap Permainan.');
+    }
+
+    const recap = buildSessionRecap({
+      completedGames: nextCompletedGames,
+      players,
+    });
+
+    tx.update(roomRef, {
+      status: 'lobby',
+      currentMatchRounds: 0,
+      eliminatedUids: [],
+      eliminationLog: [],
+      frequencyState: null,
+      faktaState: null,
+      activeVote: null,
+      pendingSpyGuess: null,
+      completedGames: nextCompletedGames,
+      activeRecap: recap,
+      updatedAt: serverTimestamp(),
+    });
+
+    // Clear active-game score after archiving into completedGames so returning to play starts clean
+    if (archivedMatch) {
+      for (const player of players) {
+        if ((player.score ?? 0) !== 0) {
+          tx.update(doc(db, 'rooms', roomId, 'players', player.uid), {
+            score: 0,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+    }
+
+    const msg =
+      recap.resolvedBy === 'suit_duel' && recap.tiebreakerDuel
+        ? `Rekap Permainan dibuka! Skor seri — Duel Penentuan MVP (Suit Best of 3) dimulai antara ${Object.values(recap.tiebreakerDuel.duelistNames).join(' vs ')}!`
+        : `Rekap Permainan dibuka! MVP sesi ini: ${recap.mvpNames.join(', ') || 'Belum ada'}.`;
+
+    return { ok: true, systemMessage: msg };
+  });
+}
+
+async function handleSessionCloseRecap(
+  db: Firestore,
+  callerUid: string,
+  payload: Record<string, unknown>,
+): Promise<ClientGameMasterResponse> {
+  const roomId = assertRoomId(payload.roomId);
+  const roomRef = doc(db, 'rooms', roomId);
+
+  return runTransaction(db, async (tx) => {
+    const roomSnap = await tx.get(roomRef);
+    if (!roomSnap.exists()) {
+      throw new Error('Ruang permainan tidak ditemukan.');
+    }
+
+    const room = roomSnap.data() as RoomDoc;
+    if (room.hostUid !== callerUid) {
+      throw new Error('Hanya Host yang dapat menutup layar Rekap Permainan.');
+    }
+
+    tx.update(roomRef, {
+      activeRecap: null,
+      updatedAt: serverTimestamp(),
+    });
+
+    return { ok: true, systemMessage: 'Host menutup layar Rekap Permainan.' };
+  });
+}
+
+async function handleSessionSuitPick(
+  db: Firestore,
+  callerUid: string,
+  payload: Record<string, unknown>,
+): Promise<ClientGameMasterResponse> {
+  const roomId = assertRoomId(payload.roomId);
+  const suitPick = payload.suitPick as SuitPick;
+  if (suitPick !== 'batu' && suitPick !== 'gunting' && suitPick !== 'kertas') {
+    throw new Error('Pilihan suit harus Batu, Gunting, atau Kertas.');
+  }
+
+  const players = await fetchOrderedRoomPlayers(db, roomId);
+  const actorPlayer = resolveActorPlayer(players, callerUid, payload.actAsUid);
+  const actorUid = actorPlayer.uid;
+  const roomRef = doc(db, 'rooms', roomId);
+
+  return runTransaction(db, async (tx) => {
+    const roomSnap = await tx.get(roomRef);
+    if (!roomSnap.exists()) {
+      throw new Error('Ruang permainan tidak ditemukan.');
+    }
+
+    const room = roomSnap.data() as RoomDoc;
+    const recap = room.activeRecap;
+    const duel = recap?.tiebreakerDuel;
+    if (!recap || !duel || duel.status !== 'picking') {
+      throw new Error('Duel Penentuan Suit sedang tidak menerima pilihan.');
+    }
+    if (!duel.duelistUids.includes(actorUid)) {
+      throw new Error('Hanya finalis yang seri yang dapat memilih di Duel Suit.');
+    }
+
+    const clashRoundId = `${duel.duelId}_c${duel.clashNumber}`;
+    const existingSubSnaps = await Promise.all(
+      duel.duelistUids.map((uid) =>
+        tx.get(doc(db, 'rooms', roomId, 'rounds', clashRoundId, 'submissions', uid)),
+      ),
+    );
+
+    const subRef = doc(db, 'rooms', roomId, 'rounds', clashRoundId, 'submissions', actorUid);
+    const subDoc: PlayerSubmissionDoc = {
+      uid: actorUid,
+      roundId: clashRoundId,
+      gameType: 'suit_duel',
+      suitPick,
+      updatedAt: serverTimestamp(),
+    };
+    tx.set(subRef, subDoc);
+
+    const picksByUid: Record<string, SuitPick> = {};
+    duel.duelistUids.forEach((uid, idx) => {
+      if (uid === actorUid) {
+        picksByUid[uid] = suitPick;
+      } else {
+        const snap = existingSubSnaps[idx];
+        if (snap?.exists()) {
+          const data = snap.data() as PlayerSubmissionDoc;
+          if (
+            data.suitPick === 'batu' ||
+            data.suitPick === 'gunting' ||
+            data.suitPick === 'kertas'
+          ) {
+            picksByUid[uid] = data.suitPick;
+          }
+        }
+      }
+    });
+
+    const submittedUids = Object.keys(picksByUid);
+    const allSubmitted = duel.duelistUids.every((uid) => Boolean(picksByUid[uid]));
+
+    if (!allSubmitted) {
+      tx.update(roomRef, {
+        activeRecap: {
+          ...recap,
+          tiebreakerDuel: {
+            ...duel,
+            submittedUids,
+          },
+        },
+        updatedAt: serverTimestamp(),
+      });
+      return { ok: true, systemMessage: null };
+    }
+
+    const evaluated = evaluateSuitClash({ duel, picksByUid });
+    const nextMvpUids =
+      evaluated.status === 'finished' ? evaluated.championUids : recap.mvpUids;
+    const nextMvpNames =
+      evaluated.status === 'finished'
+        ? evaluated.championUids.map((uid) => duel.duelistNames[uid] ?? 'Pemain')
+        : recap.mvpNames;
+
+    tx.update(roomRef, {
+      activeRecap: {
+        ...recap,
+        mvpUids: nextMvpUids,
+        mvpNames: nextMvpNames,
+        tiebreakerDuel: evaluated,
+      },
+      updatedAt: serverTimestamp(),
+    });
+
+    if (evaluated.status === 'finished') {
+      return {
+        ok: true,
+        systemMessage: `Duel Suit Best of 3 selesai! ${nextMvpNames.join(', ')} resmi dinobatkan sebagai MVP Malam Ini!`,
+      };
+    }
+
+    const clashMsg = evaluated.lastClash?.isDraw
+      ? `Suit Ronde #${duel.clashNumber} SERI! Siap tanding ulang!`
+      : `Suit Ronde #${duel.clashNumber} dimenangkan oleh ${evaluated.lastClash?.winnerUids.map((u) => duel.duelistNames[u] ?? 'Pemain').join(', ')}!`;
+
+    return { ok: true, systemMessage: clashMsg };
+  });
+}
+
+async function handleSessionSuitNext(
+  db: Firestore,
+  callerUid: string,
+  payload: Record<string, unknown>,
+): Promise<ClientGameMasterResponse> {
+  const roomId = assertRoomId(payload.roomId);
+  const players = await fetchOrderedRoomPlayers(db, roomId);
+  const roomRef = doc(db, 'rooms', roomId);
+
+  return runTransaction(db, async (tx) => {
+    const roomSnap = await tx.get(roomRef);
+    if (!roomSnap.exists()) {
+      throw new Error('Ruang permainan tidak ditemukan.');
+    }
+
+    const room = roomSnap.data() as RoomDoc;
+    const recap = room.activeRecap;
+    const duel = recap?.tiebreakerDuel;
+    if (!recap || !duel || duel.status !== 'clash_reveal') {
+      throw new Error('Duel Suit tidak berada pada fase hasil ronde.');
+    }
+
+    const controlledUids = players
+      .filter((p) => p.uid === callerUid || p.controllerUid === callerUid)
+      .map((p) => p.uid);
+    const isAuthorized =
+      room.hostUid === callerUid ||
+      controlledUids.some((uid) => duel.duelistUids.includes(uid));
+
+    if (!isAuthorized) {
+      throw new Error('Hanya Host atau finalis yang dapat melanjutkan ronde Suit berikutnya.');
+    }
+
+    tx.update(roomRef, {
+      activeRecap: {
+        ...recap,
+        tiebreakerDuel: {
+          ...duel,
+          status: 'picking',
+          clashNumber: duel.clashNumber + 1,
+          submittedUids: [],
+        },
+      },
+      updatedAt: serverTimestamp(),
+    });
+
+    return { ok: true, systemMessage: null };
   });
 }
 
@@ -1965,6 +2423,16 @@ export async function executeClientGameMaster(
         return await handleFaktaHariIniGuess(db, currentUser.uid, payload);
       case '/api/fakta-hari-ini/return-lobby':
         return await handleFaktaHariIniReturnLobby(db, currentUser.uid, payload);
+      case '/api/session/switch-game':
+        return await handleSessionSwitchGame(db, currentUser.uid, payload);
+      case '/api/session/open-recap':
+        return await handleSessionOpenRecap(db, currentUser.uid, payload);
+      case '/api/session/close-recap':
+        return await handleSessionCloseRecap(db, currentUser.uid, payload);
+      case '/api/session/suit-pick':
+        return await handleSessionSuitPick(db, currentUser.uid, payload);
+      case '/api/session/suit-next':
+        return await handleSessionSuitNext(db, currentUser.uid, payload);
       default:
         throw new Error('Aksi permainan tidak dikenali.');
     }

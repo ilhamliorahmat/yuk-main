@@ -123,6 +123,22 @@
           "minLength": 0,
           "maxLength": 64
         },
+        "currentMatchRounds": {
+          "type": "number",
+          "description": "Completed rounds in the current game visit; 0 guards accidental game switches from recording empty matches."
+        },
+        "completedGames": {
+          "type": "array",
+          "description": "Chronological isolated per-game match results and point breakdowns for Rekap Permainan (max 25)."
+        },
+        "activeRecap": {
+          "type": "object",
+          "description": "Synchronized Rekap Permainan overlay state including win-count MVP, standings, and optional Best-of-3 Suit Duel tiebreaker."
+        },
+        "lastEmptyAtMs": {
+          "type": "number",
+          "description": "Timestamp (ms) when the last real player left; triggers auto-reset on re-entry after 15 seconds."
+        },
         "roundDurationSec": {
           "type": "number"
         },
@@ -256,6 +272,20 @@
         "isReady": {
           "type": "boolean"
         },
+        "controllerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Firebase Auth UID of the physical device controlling this seat (equals uid for normal players, host device uid for Numpang seats)."
+        },
+        "isNumpang": {
+          "type": "boolean",
+          "description": "True when this seat shares another player's phone via selective Numpang protocol."
+        },
+        "isBrb": {
+          "type": "boolean",
+          "description": "True when the player is temporarily stepped away (excluded from new rounds/votes without being kicked)."
+        },
         "joinedAt": {
           "type": "string",
           "format": "date-time"
@@ -360,7 +390,7 @@
     },
     "PlayerSubmission": {
       "title": "PlayerSubmission",
-      "description": "Isolated per-player hidden guess submission for Satu Frekuensi dial values.",
+      "description": "Isolated per-player hidden submission for Satu Frekuensi dial values or Rekap Permainan Best-of-3 Suit Duel picks.",
       "type": "object",
       "properties": {
         "uid": {
@@ -377,17 +407,21 @@
         },
         "gameType": {
           "type": "string",
-          "enum": ["satu_frekuensi"]
+          "enum": ["satu_frekuensi", "suit_duel"]
         },
         "guessValue": {
           "type": "number"
+        },
+        "suitPick": {
+          "type": "string",
+          "enum": ["batu", "gunting", "kertas"]
         },
         "updatedAt": {
           "type": "string",
           "format": "date-time"
         }
       },
-      "required": ["uid", "roundId", "gameType", "guessValue", "updatedAt"]
+      "required": ["uid", "roundId", "gameType", "updatedAt"]
     },
     "ServerRoundState": {
       "title": "ServerRoundState",

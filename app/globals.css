@@ -10,6 +10,10 @@
   }
 }
 
+.font-display {
+  font-family: "Bricolage Grotesque", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
 .font-mono-tabular {
   font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   font-variant-numeric: tabular-nums;

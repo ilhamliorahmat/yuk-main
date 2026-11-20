@@ -85,6 +85,7 @@ export function selectFaktaPhaseController(params: {
   playerUids: string[];
   hostUid: string;
   guesserUid: string;
+  controllerByUid?: Record<string, string>;
   rng?: () => number;
 }): string {
   const rng = params.rng ?? Math.random;
@@ -97,12 +98,24 @@ export function selectFaktaPhaseController(params: {
     return params.hostUid;
   }
 
+  // If Host is sharing a device via Numpang, prefer a Bluffer on a different device
+  if (params.controllerByUid) {
+    const hostDeviceUid = params.controllerByUid[params.hostUid] ?? params.hostUid;
+    const independentDeviceBluffers = nonGuessers.filter(
+      (uid) => (params.controllerByUid?.[uid] ?? uid) !== hostDeviceUid,
+    );
+    if (independentDeviceBluffers.length > 0) {
+      const idx = Math.floor(rng() * independentDeviceBluffers.length);
+      return independentDeviceBluffers[idx] ?? independentDeviceBluffers[0];
+    }
+  }
+
   const idx = Math.floor(rng() * nonGuessers.length);
   return nonGuessers[idx] ?? nonGuessers[0];
 }
 
 export function dealFaktaHariIniRound(params: {
-  players: Array<{ uid: string; displayName: string }>;
+  players: Array<{ uid: string; displayName: string; controllerUid?: string }>;
   hostUid: string;
   pool: FactItem[];
   previousFactTwist?: string | null;
@@ -146,11 +159,17 @@ export function dealFaktaHariIniRound(params: {
   const bluffers = params.players.filter((p) => p.uid !== guesser.uid);
   const truthTeller = bluffers[Math.floor(rng() * bluffers.length)] ?? bluffers[0];
 
-  // 3. Phase Controller selection (Host normally; random Bluffer if Host is Guesser)
+  // 3. Phase Controller selection (Host normally; random Bluffer on separate device if Host is Guesser)
+  const controllerByUid: Record<string, string> = {};
+  for (const p of params.players) {
+    controllerByUid[p.uid] = p.controllerUid ?? p.uid;
+  }
+
   const phaseControllerUid = selectFaktaPhaseController({
     playerUids: params.players.map((p) => p.uid),
     hostUid: params.hostUid,
     guesserUid: guesser.uid,
+    controllerByUid,
     rng,
   });
   const phaseController =

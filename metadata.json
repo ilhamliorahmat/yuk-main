@@ -1,6 +1,6 @@
 {
   "name": "Yuk Main",
-  "description": "Platform permainan pesta multipemain berbahasa Indonesia: Game #1 Yang Bener Yang Mana & Game #2 Kata-Kata Hari Ini dengan obrolan waktu nyata dan pembuat konten kustom.",
+  "description": "Hidupkan tongkronganmu bareng Yuk Main: 4 permainan grup interaktif (Yang Bener Yang Mana, Kata-Kata Hari Ini, Satu Frekuensi, dan Fakta Hari Ini) yang 100% gratis dan open-source langsung dari browser.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

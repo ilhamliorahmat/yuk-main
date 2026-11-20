@@ -46,6 +46,8 @@ interface SatuFrekuensiRoomViewProps {
   presence: Record<string, PresenceEntry>;
   myUid: string;
   myName: string;
+  deviceUid?: string;
+  deviceName?: string;
   onBeforeLeave: () => void;
   onExitToHub: () => void;
 }
@@ -67,9 +69,13 @@ export function SatuFrekuensiRoomView({
   presence,
   myUid,
   myName,
+  deviceUid,
+  deviceName,
   onBeforeLeave,
   onExitToHub,
 }: SatuFrekuensiRoomViewProps) {
+  const actualDeviceUid = deviceUid ?? myUid;
+  const actualDeviceName = deviceName ?? myName;
   const [mobileTab, setMobileTab] = useState<MobileTab>('dial');
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -79,15 +85,16 @@ export function SatuFrekuensiRoomView({
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const isHost = room.hostUid === myUid;
+  const isHost = room.hostUid === actualDeviceUid;
+  const activePlayersCount = players.filter((p) => !p.isBrb).length;
   const freq = room.frequencyState;
   const isPsychic = Boolean(freq && freq.psychicUid === myUid);
-  const roundKey = `${room.id}:${room.currentRoundId}`;
+  const roundKey = `${room.id}:${room.currentRoundId}:${myUid}`;
   const myDialValue = dialValueByRound[roundKey] ?? 50;
   const hasLockedMyGuess = Boolean(freq?.lockedUids?.includes(myUid));
   const psychicSeesTarget = psychicShieldRound === roundKey;
 
-  const guesserTotal = Math.max(1, players.length - 1);
+  const guesserTotal = Math.max(1, activePlayersCount - 1);
   const lockedCount = freq?.lockedUids?.length ?? 0;
 
   const phaseLabel =
@@ -117,7 +124,7 @@ export function SatuFrekuensiRoomView({
     onBeforeLeave();
     setActionBusy(true);
     try {
-      await leaveRoom({ room, uid: myUid, displayName: myName, players });
+      await leaveRoom({ room, uid: actualDeviceUid, displayName: actualDeviceName, players });
     } finally {
       setActionBusy(false);
       onExitToHub();
@@ -129,7 +136,11 @@ export function SatuFrekuensiRoomView({
     setActionError(null);
     setClueInput('');
     try {
-      await startSatuFrekuensiRound({ roomId: room.id, actorUid: myUid, actorName: myName });
+      await startSatuFrekuensiRound({
+        roomId: room.id,
+        actorUid: actualDeviceUid,
+        actorName: actualDeviceName,
+      });
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Gagal memulai ronde.');
     } finally {
@@ -183,6 +194,7 @@ export function SatuFrekuensiRoomView({
       await submitSatuFrekuensiGuess({
         roomId: room.id,
         guessValue: myDialValue,
+        actAsUid: myUid,
       });
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Gagal mengunci jarum.');
@@ -362,7 +374,7 @@ export function SatuFrekuensiRoomView({
                   {isHost ? (
                     <button
                       type="button"
-                      disabled={actionBusy || players.length < 2}
+                      disabled={actionBusy || activePlayersCount < 2}
                       onClick={() => void handleStartRound()}
                       className="w-full min-h-[48px] rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-40"
                     >
@@ -370,8 +382,8 @@ export function SatuFrekuensiRoomView({
                       <span>
                         {actionBusy
                           ? 'Menyiapkan Ronde...'
-                          : players.length < 2
-                            ? `Menunggu Pemain (${players.length}/2 Minimal)`
+                          : activePlayersCount < 2
+                            ? `Menunggu Pemain Aktif (${activePlayersCount}/2 Minimal)`
                             : 'Mulai Satu Frekuensi'}
                       </span>
                     </button>
@@ -620,7 +632,7 @@ export function SatuFrekuensiRoomView({
                   <div className="flex flex-col sm:flex-row gap-2.5">
                     <button
                       type="button"
-                      disabled={actionBusy || players.length < 2}
+                      disabled={actionBusy || activePlayersCount < 2}
                       onClick={() => void handleStartRound()}
                       className="flex-1 min-h-[46px] rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-40"
                     >
