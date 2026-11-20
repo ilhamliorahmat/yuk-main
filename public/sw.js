@@ -1,5 +1,5 @@
-// Yuk Main v4.0.0 — Offline-First Static-Export-Safe Service Worker
-const CACHE_VERSION = 'yukmain-v4.0.0';
+// Yuk Main v4.0.1 — Offline-First Static-Export-Safe Service Worker
+const CACHE_VERSION = 'yukmain-v4.0.1';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const ASSET_CACHE = `${CACHE_VERSION}-assets`;
 const FONT_CACHE = `${CACHE_VERSION}-fonts`;

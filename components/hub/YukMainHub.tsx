@@ -28,7 +28,6 @@ import spyEmblem from '@/src/assets/images/yukmain_spy_emblem_1795001425384.jpg'
 import spyfallCover from '@/src/assets/images/yukmain_spyfall_cover_1795001423851.jpg';
 import { LanPairingModal } from '@/components/lan/LanPairingModal';
 import { OfflineNoticeBanner } from '@/components/pwa/OfflineNoticeBanner';
-import { PwaInstallButton } from '@/components/pwa/PwaInstallButton';
 import { useAuth } from '@/hooks/use-auth';
 import { useOnlineStatus } from '@/hooks/use-pwa';
 import { PARTY_GAMES } from '@/lib/games/registry';
@@ -665,9 +664,8 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
       </main>
 
       <footer className="border-t border-slate-800/80 py-6 px-4">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+        <div className="max-w-6xl mx-auto flex items-center justify-center text-center text-xs text-slate-500">
           <span>Yuk Main — Hub Permainan Pesta Indonesia (Online &amp; LAN Party)</span>
-          <PwaInstallButton compact />
         </div>
       </footer>
 

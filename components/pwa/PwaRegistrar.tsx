@@ -11,7 +11,7 @@ export function PwaRegistrar() {
 
     const registerSw = () => {
       void navigator.serviceWorker
-        .register('/sw.js', { scope: '/' })
+        .register('/sw.js', { scope: '/', updateViaCache: 'none' })
         .catch(() => {
           // Silently ignore in restricted preview or non-HTTPS contexts
         });

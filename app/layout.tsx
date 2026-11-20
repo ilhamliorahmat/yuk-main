@@ -14,19 +14,6 @@ export const metadata: Metadata = {
   title: 'Yuk Main — Platform Game Tongkrongan Indonesia',
   description:
     'Hidupkan tongkronganmu bareng Yuk Main: 4 permainan grup interaktif (Yang Bener Yang Mana, Kata-Kata Hari Ini, Satu Frekuensi, dan Fakta Hari Ini) yang 100% gratis, open-source, dan siap dimainkan Online maupun LAN Party tanpa internet.',
-  manifest: '/manifest.webmanifest',
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'black-translucent',
-    title: 'Yuk Main',
-  },
-  icons: {
-    icon: [
-      { url: '/icon.svg', type: 'image/svg+xml' },
-      { url: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-    ],
-    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
-  },
   openGraph: {
     title: 'Yuk Main — Platform Game Tongkrongan Indonesia',
     description:
@@ -45,6 +32,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="id" className="scroll-smooth">
       <head>
+        <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
+        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+        <link rel="icon" href="/pwa-192x192.png" sizes="192x192" type="image/png" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Yuk Main" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
