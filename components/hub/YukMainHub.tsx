@@ -13,7 +13,6 @@ import {
   Globe,
   Monitor,
   QrCode,
-  ShieldAlert,
   Users,
   Wifi,
   X,
@@ -97,7 +96,7 @@ const GAME_VISUALS: Record<GameType, GameVisualMeta> = {
 };
 
 export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProps) {
-  const { user, profile, configured } = useAuth();
+  const { user, profile } = useAuth();
   const isOnline = useOnlineStatus();
   const [networkMode, setNetworkMode] = useState<NetworkMode>(() =>
     typeof navigator !== 'undefined' && !navigator.onLine ? 'lan' : 'online',
@@ -179,10 +178,6 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
       setErrorMsg('Kamu sedang offline. Pindah ke Mode LAN Party untuk main tanpa internet.');
       return;
     }
-    if (!configured) {
-      setErrorMsg('Konfigurasi Firebase belum tersedia di environment.');
-      return;
-    }
     if (!user || !profile) {
       setAuthOpen(true);
       return;
@@ -207,10 +202,6 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
   const handleJoinRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    if (!configured) {
-      setErrorMsg('Konfigurasi Firebase belum tersedia di environment.');
-      return;
-    }
     if (!user || !profile) {
       setAuthOpen(true);
       return;
@@ -234,10 +225,6 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
 
   const handleJoinAsStage = async () => {
     setErrorMsg(null);
-    if (!configured) {
-      setErrorMsg('Konfigurasi Firebase belum tersedia di environment.');
-      return;
-    }
     if (!user || !profile) {
       setAuthOpen(true);
       return;
@@ -309,20 +296,6 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
           isLanModeActive={networkMode === 'lan'}
           onSwitchToLan={() => setNetworkMode('lan')}
         />
-
-        {!configured && networkMode === 'online' && (
-          <div className="rounded-2xl bg-amber-950/40 border border-amber-700/60 p-4 flex items-start gap-3 text-sm text-amber-200">
-            <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5 text-amber-400" />
-            <div>
-              <p className="font-semibold">Konfigurasi Firebase Belum Terdeteksi</p>
-              <p className="text-xs text-amber-200/80 mt-1">
-                Pastikan variabel <code className="font-mono-tabular">NEXT_PUBLIC_FIREBASE_*</code>{' '}
-                telah diisi di <code className="font-mono-tabular">.env.local</code>, atau gunakan{' '}
-                <strong className="text-white">Mode LAN Party</strong> tanpa internet.
-              </p>
-            </div>
-          </div>
-        )}
 
         {/* Centered Warm Platform Intro Hero (Option 1) */}
         <section className="relative text-center max-w-3xl mx-auto space-y-7">

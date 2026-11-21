@@ -1,5 +1,5 @@
-// Yuk Main v4.0.1 — Offline-First Static-Export-Safe Service Worker
-const CACHE_VERSION = 'yukmain-v4.0.1';
+// Yuk Main v4.0.2 — Offline-First Static-Export-Safe Service Worker
+const CACHE_VERSION = 'yukmain-v4.0.2';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const ASSET_CACHE = `${CACHE_VERSION}-assets`;
 const FONT_CACHE = `${CACHE_VERSION}-fonts`;
@@ -53,12 +53,12 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // Never cache Firebase Auth / Firestore / RTDB traffic
+  // Never cache live PHP/MySQL API polling or external non-font traffic
   if (
-    url.hostname.includes('firebaseio.com') ||
-    url.hostname.includes('firebasedatabase.app') ||
-    url.hostname.includes('googleapis.com') && !url.hostname.startsWith('fonts.') ||
-    url.hostname.includes('gstatic.com') && !url.hostname.startsWith('fonts.')
+    url.pathname.startsWith('/api/') ||
+    url.pathname.endsWith('.php') ||
+    (url.hostname.includes('googleapis.com') && !url.hostname.startsWith('fonts.')) ||
+    (url.hostname.includes('gstatic.com') && !url.hostname.startsWith('fonts.'))
   ) {
     return;
   }

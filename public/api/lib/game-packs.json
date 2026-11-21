@@ -1,0 +1,2688 @@
+{
+  "spyfall": {
+    "packs": [
+      "nusantara",
+      "klasik",
+      "ekstra"
+    ],
+    "items": [
+      {
+        "id": "stasiun-gambir",
+        "name": "Stasiun Gambir",
+        "category": "Transportasi",
+        "packId": "nusantara",
+        "packLabel": "Nusantara & Kota",
+        "roles": [
+          "Masinis",
+          "Petugas Loket",
+          "Penumpang Eksekutif",
+          "Kondektur",
+          "Penjaga Peron",
+          "Pelayan Kafe Stasiun",
+          "Petugas Keamanan",
+          "Porter Bagasi"
+        ]
+      },
+      {
+        "id": "pasar-tanah-abang",
+        "name": "Pasar Tanah Abang",
+        "category": "Belanja",
+        "packId": "nusantara",
+        "packLabel": "Nusantara & Kota",
+        "roles": [
+          "Pedagang Grosir Batik",
+          "Pembeli Borongan",
+          "Kuli Panggul",
+          "Tukang Parkir",
+          "Penjual Es Teh",
+          "Penjahit Kilat",
+          "Satpam Blok A",
+          "Kurir Ekspedisi"
+        ]
+      },
+      {
+        "id": "restoran-padang",
+        "name": "Restoran Padang",
+        "category": "Kuliner",
+        "packId": "nusantara",
+        "packLabel": "Nusantara & Kota",
+        "roles": [
+          "Prakirawan Piring Bertumpuk",
+          "Koki Rendang",
+          "Kasir",
+          "Pelanggan Setia",
+          "Pencuci Piring",
+          "Pengantar Ojek Online",
+          "Manajer Restoran",
+          "Tukang Sambal Ijo"
+        ]
+      },
+      {
+        "id": "pantai-kuta",
+        "name": "Pantai Kuta",
+        "category": "Wisata",
+        "packId": "nusantara",
+        "packLabel": "Nusantara & Kota",
+        "roles": [
+          "Instruktur Selancar",
+          "Penjaga Pantai (Balawista)",
+          "Turis Mancanegara",
+          "Penjual Kelapa Muda",
+          "Fotografer Sunset",
+          "Pemain Layang-Layang",
+          "Penyewa Payung Pantai",
+          "Musisi Akustik"
+        ]
+      },
+      {
+        "id": "kereta-cepat",
+        "name": "Kereta Cepat Whoosh",
+        "category": "Transportasi",
+        "packId": "nusantara",
+        "packLabel": "Nusantara & Kota",
+        "roles": [
+          "Masinis Kereta Cepat",
+          "Pramugari Kereta",
+          "Eksekutif Bisnis",
+          "Vlogger Perjalanan",
+          "Teknisi Jalur",
+          "Petugas Pemeriksa Tiket",
+          "Penumpang First Class",
+          "Petugas Kebersihan"
+        ]
+      },
+      {
+        "id": "museum-nasional",
+        "name": "Museum Nasional",
+        "category": "Budaya",
+        "packId": "nusantara",
+        "packLabel": "Nusantara & Kota",
+        "roles": [
+          "Kurator Sejarah",
+          "Pemandu Wisata",
+          "Pelajar Study Tour",
+          "Arkeolog",
+          "Penjaga Galeri",
+          "Restorator Artefak",
+          "Fotografer Dokumentasi",
+          "Petugas Resepsionis"
+        ]
+      },
+      {
+        "id": "kampung-nelayan",
+        "name": "Kampung Nelayan",
+        "category": "Maritim",
+        "packId": "nusantara",
+        "packLabel": "Nusantara & Kota",
+        "roles": [
+          "Nakhoda Kapal Kayu",
+          "Penjala Ikan",
+          "Tengkulak Pelelangan",
+          "Pembuat Jaring",
+          "Penjual Es Balok",
+          "Montir Mesin Perahu",
+          "Pengasap Ikan",
+          "Anak Buah Kapal"
+        ]
+      },
+      {
+        "id": "mal-jakarta",
+        "name": "Mal Grand Indonesia",
+        "category": "Gaya Hidup",
+        "packId": "nusantara",
+        "packLabel": "Nusantara & Kota",
+        "roles": [
+          "Barista Kopi Kekinian",
+          "Penjaga Butik",
+          "Pengunjung Akhir Pekan",
+          "Petugas Valet",
+          "Teknisi Eskalator",
+          "Petugas Informasi",
+          "Kasir Bioskop",
+          "Security Patroli"
+        ]
+      },
+      {
+        "id": "kebun-raya",
+        "name": "Kebun Raya Bogor",
+        "category": "Alam",
+        "packId": "nusantara",
+        "packLabel": "Nusantara & Kota",
+        "roles": [
+          "Ahli Botani",
+          "Pengunjung Piknik",
+          "Pesepeda Pagi",
+          "Penjual Bakso Keliling",
+          "Tukang Kebun",
+          "Fotografer Prewedding",
+          "Pemandu Edukasi",
+          "Penjaga Gerbang"
+        ]
+      },
+      {
+        "id": "warkop-malam",
+        "name": "Warkop 24 Jam",
+        "category": "Kuliner",
+        "packId": "nusantara",
+        "packLabel": "Nusantara & Kota",
+        "roles": [
+          "Peracik Indomie & Kopi",
+          "Mahasiswa Begadang",
+          "Supir Taksi Online",
+          "Pemain Catur",
+          "Pelanggan Langganan",
+          "Musisi Jalanan",
+          "Kasir Shift Malam",
+          "Teman Nongkrong"
+        ]
+      },
+      {
+        "id": "rumah-sakit",
+        "name": "Rumah Sakit",
+        "category": "Medis",
+        "packId": "klasik",
+        "packLabel": "Klasik & Profesi",
+        "roles": [
+          "Dokter Bedah",
+          "Perawat IGD",
+          "Pasien Rawat Jalan",
+          "Apoteker",
+          "Supir Ambulans",
+          "Dokter Anak",
+          "Petugas Laboratorium",
+          "Resepsionis Pendaftaran"
+        ]
+      },
+      {
+        "id": "bank-sentral",
+        "name": "Bank Sentral",
+        "category": "Keuangan",
+        "packId": "klasik",
+        "packLabel": "Klasik & Profesi",
+        "roles": [
+          "Manajer Cabang",
+          "Teller Bank",
+          "Penjaga Brankas",
+          "Nasabah Prioritas",
+          "Kurir Uang Tunai",
+          "Auditor Keuangan",
+          "Analis Kredit",
+          "Petugas Keamanan Bersenjata"
+        ]
+      },
+      {
+        "id": "pangkalan-militer",
+        "name": "Pangkalan Militer",
+        "category": "Pertahanan",
+        "packId": "klasik",
+        "packLabel": "Klasik & Profesi",
+        "roles": [
+          "Komandan Regu",
+          "Dokter Lapangan",
+          "Operator Radar",
+          "Prajurit Baru",
+          "Mekanik Kendaraan Taktis",
+          "Koki Barak",
+          "Penjaga Gerbang Utama",
+          "Perwira Intelijen"
+        ]
+      },
+      {
+        "id": "studio-film",
+        "name": "Studio Film",
+        "category": "Hiburan",
+        "packId": "klasik",
+        "packLabel": "Klasik & Profesi",
+        "roles": [
+          "Sutradara",
+          "Aktor Utama",
+          "Penata Kamera",
+          "Penata Rias",
+          "Stuntman",
+          "Teknisi Suara",
+          "Penulis Naskah",
+          "Produser Eksekutif"
+        ]
+      },
+      {
+        "id": "kapal-pesiar",
+        "name": "Kapal Pesiar",
+        "category": "Wisata",
+        "packId": "klasik",
+        "packLabel": "Klasik & Profesi",
+        "roles": [
+          "Kapten Kapal",
+          "Bartender Dek",
+          "Penumpang VIP",
+          "Penyanyi Lounge",
+          "Kepala Koki",
+          "Teknisi Ruang Mesin",
+          "Petugas Kebersihan Kabin",
+          "Navigator"
+        ]
+      },
+      {
+        "id": "pesawat-terbang",
+        "name": "Pesawat Terbang",
+        "category": "Transportasi",
+        "packId": "klasik",
+        "packLabel": "Klasik & Profesi",
+        "roles": [
+          "Pilot",
+          "Kopilot",
+          "Pramugari Senior",
+          "Penumpang Bisnis",
+          "Penumpang Gugup",
+          "Mekanik Penerbangan",
+          "Marshal Keamanan Udara",
+          "Penumpang Kelas Ekonomi"
+        ]
+      },
+      {
+        "id": "sekolah-menengah",
+        "name": "Sekolah Menengah",
+        "category": "Pendidikan",
+        "packId": "klasik",
+        "packLabel": "Klasik & Profesi",
+        "roles": [
+          "Kepala Sekolah",
+          "Guru Matematika",
+          "Ketua OSIS",
+          "Penjaga Kantin",
+          "Siswa Teladan",
+          "Pustakawan",
+          "Guru Olahraga",
+          "Petugas Kebersihan Sekolah"
+        ]
+      },
+      {
+        "id": "lab-penelitian",
+        "name": "Lab Penelitian",
+        "category": "Sains",
+        "packId": "klasik",
+        "packLabel": "Klasik & Profesi",
+        "roles": [
+          "Kepala Peneliti",
+          "Ahli Bioteknologi",
+          "Asisten Lab",
+          "Teknisi Sterilisasi",
+          "Relawan Uji Coba",
+          "Analis Data",
+          "Petugas Keselamatan K3",
+          "Mahasiswa Magang"
+        ]
+      },
+      {
+        "id": "kedutaan-besar",
+        "name": "Kedutaan Besar",
+        "category": "Diplomatik",
+        "packId": "klasik",
+        "packLabel": "Klasik & Profesi",
+        "roles": [
+          "Duta Besar",
+          "Petugas Visa",
+          "Penerjemah Bahasa",
+          "Pengawal Diplomatik",
+          "Pemohon Paspor",
+          "Atase Budaya",
+          "Sekretaris Kedutaan",
+          "Kurir Diplomatik"
+        ]
+      },
+      {
+        "id": "hotel-bintang-lima",
+        "name": "Hotel Bintang Lima",
+        "category": "Perhotelan",
+        "packId": "klasik",
+        "packLabel": "Klasik & Profesi",
+        "roles": [
+          "Resepsionis Lobi",
+          "Bellboy",
+          "Tamu Bulan Madu",
+          "Housekeeper",
+          "Koki Sarapan",
+          "Concierge",
+          "Manajer Hotel",
+          "Penjaga Kolam Renang"
+        ]
+      },
+      {
+        "id": "stasiun-luar-angkasa",
+        "name": "Stasiun Luar Angkasa",
+        "category": "Fiksi Ilmiah",
+        "packId": "ekstra",
+        "packLabel": "Seru & Fantasi",
+        "roles": [
+          "Komandan Misi",
+          "Astronot Geologi",
+          "Teknisi Oksigen",
+          "Dokter Gravitasi Nol",
+          "Komunikator Bumi",
+          "Turis Antariksa",
+          "Robotik Spesialis",
+          "Botanis Hidroponik"
+        ]
+      },
+      {
+        "id": "sirkus-keliling",
+        "name": "Sirkus Keliling",
+        "category": "Hiburan",
+        "packId": "ekstra",
+        "packLabel": "Seru & Fantasi",
+        "roles": [
+          "Pembawa Acara Sirkus",
+          "Akrobat Trapeze",
+          "Badut Utama",
+          "Pesulap Panggung",
+          "Penonton Baris Depan",
+          "Penjual Popcorn",
+          "Penjaga Tenda",
+          "Penjinak Singa"
+        ]
+      },
+      {
+        "id": "kapal-selam",
+        "name": "Kapal Selam",
+        "category": "Maritim",
+        "packId": "ekstra",
+        "packLabel": "Seru & Fantasi",
+        "roles": [
+          "Kapten Kapal Selam",
+          "Operator Sonar",
+          "Ahli Torpedo",
+          "Teknisi Reaktor",
+          "Koki Ruang Sempit",
+          "Navigator Laut Dalam",
+          "Petugas Medis",
+          "Kelasi Jaga"
+        ]
+      },
+      {
+        "id": "bunker-bawah-tanah",
+        "name": "Bunker Bawah Tanah",
+        "category": "Misteri",
+        "packId": "ekstra",
+        "packLabel": "Seru & Fantasi",
+        "roles": [
+          "Pemimpin Bunker",
+          "Penjaga Gudang Logistik",
+          "Teknisi Generator",
+          "Ahli Hidrologi",
+          "Penghuni Baru",
+          "Petugas Radio",
+          "Petani Hidroponik",
+          "Penjaga Pintu Baja"
+        ]
+      },
+      {
+        "id": "festival-musik",
+        "name": "Festival Musik",
+        "category": "Hiburan",
+        "packId": "ekstra",
+        "packLabel": "Seru & Fantasi",
+        "roles": [
+          "Vokalis Band Utama",
+          "Sound Engineer",
+          "Penonton Festival",
+          "Petugas Panggung",
+          "Fotografer Konser",
+          "Penjual Merchandise",
+          "Petugas Medis Lapangan",
+          "Panitia Tiket Gelang"
+        ]
+      },
+      {
+        "id": "kapal-bajak-laut",
+        "name": "Kapal Bajak Laut",
+        "category": "Petualangan",
+        "packId": "ekstra",
+        "packLabel": "Seru & Fantasi",
+        "roles": [
+          "Kapten Bajak Laut",
+          "Pengintai Tiang Utama",
+          "Penjaga Peti Harta",
+          "Koki Kapal",
+          "Tawanan Kapal",
+          "Penembak Meriam",
+          "Tukang Kayu Layar",
+          "Navigator Peta Kuno"
+        ]
+      }
+    ]
+  },
+  "kata_kata": {
+    "packs": [
+      "kuliner",
+      "keseharian",
+      "hiburan"
+    ],
+    "items": [
+      {
+        "id": "kk-mie-bakso",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan",
+        "category": "Kuliner",
+        "citizenWord": "Mie Ayam",
+        "spyWord": "Bakso"
+      },
+      {
+        "id": "kk-nasgor-uduk",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan",
+        "category": "Kuliner",
+        "citizenWord": "Nasi Goreng",
+        "spyWord": "Nasi Uduk"
+      },
+      {
+        "id": "kk-esteh-kopisusu",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan",
+        "category": "Minuman",
+        "citizenWord": "Es Teh Manis",
+        "spyWord": "Es Kopi Susu"
+      },
+      {
+        "id": "kk-sate-ayam-kambing",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan",
+        "category": "Kuliner",
+        "citizenWord": "Sate Ayam",
+        "spyWord": "Sate Kambing"
+      },
+      {
+        "id": "kk-martabak-pancake",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan",
+        "category": "Jajanan",
+        "citizenWord": "Martabak Manis",
+        "spyWord": "Pancake"
+      },
+      {
+        "id": "kk-rendang-semur",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan",
+        "category": "Kuliner",
+        "citizenWord": "Rendang",
+        "spyWord": "Semur Daging"
+      },
+      {
+        "id": "kk-soto-rawon",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan",
+        "category": "Kuliner",
+        "citizenWord": "Soto Ayam",
+        "spyWord": "Rawon"
+      },
+      {
+        "id": "kk-bubur-lontong",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan",
+        "category": "Sarapan",
+        "citizenWord": "Bubur Ayam",
+        "spyWord": "Lontong Sayur"
+      },
+      {
+        "id": "kk-pisang-singkong",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan",
+        "category": "Gorengan",
+        "citizenWord": "Pisang Goreng",
+        "spyWord": "Singkong Keju"
+      },
+      {
+        "id": "kk-seblak-basoaci",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan",
+        "category": "Pedas",
+        "citizenWord": "Seblak",
+        "spyWord": "Baso Aci"
+      },
+      {
+        "id": "kk-geprek-penyet",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan",
+        "category": "Kuliner",
+        "citizenWord": "Ayam Geprek",
+        "spyWord": "Ayam Penyet"
+      },
+      {
+        "id": "kk-cendol-escampur",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan",
+        "category": "Minuman",
+        "citizenWord": "Es Cendol",
+        "spyWord": "Es Campur"
+      },
+      {
+        "id": "kk-ojol-taksi",
+        "packId": "keseharian",
+        "packLabel": "Keseharian & Tongkrongan",
+        "category": "Transportasi",
+        "citizenWord": "Ojek Online",
+        "spyWord": "Taksi Online"
+      },
+      {
+        "id": "kk-kos-kontrakan",
+        "packId": "keseharian",
+        "packLabel": "Keseharian & Tongkrongan",
+        "category": "Hunian",
+        "citizenWord": "Indekos",
+        "spyWord": "Kontrakan"
+      },
+      {
+        "id": "kk-mall-pasarmalam",
+        "packId": "keseharian",
+        "packLabel": "Keseharian & Tongkrongan",
+        "category": "Tempat",
+        "citizenWord": "Mall",
+        "spyWord": "Pasar Malam"
+      },
+      {
+        "id": "kk-kafe-warkop",
+        "packId": "keseharian",
+        "packLabel": "Keseharian & Tongkrongan",
+        "category": "Tongkrongan",
+        "citizenWord": "Kafe",
+        "spyWord": "Warkop"
+      },
+      {
+        "id": "kk-krl-transjakarta",
+        "packId": "keseharian",
+        "packLabel": "Keseharian & Tongkrongan",
+        "category": "Transportasi",
+        "citizenWord": "Kereta Commuter",
+        "spyWord": "Bus TransJakarta"
+      },
+      {
+        "id": "kk-payung-jashujan",
+        "packId": "keseharian",
+        "packLabel": "Keseharian & Tongkrongan",
+        "category": "Benda",
+        "citizenWord": "Payung",
+        "spyWord": "Jas Hujan"
+      },
+      {
+        "id": "kk-kipas-ac",
+        "packId": "keseharian",
+        "packLabel": "Keseharian & Tongkrongan",
+        "category": "Elektronik",
+        "citizenWord": "Kipas Angin",
+        "spyWord": "AC"
+      },
+      {
+        "id": "kk-kasur-sofa",
+        "packId": "keseharian",
+        "packLabel": "Keseharian & Tongkrongan",
+        "category": "Rumah",
+        "citizenWord": "Kasur",
+        "spyWord": "Sofa"
+      },
+      {
+        "id": "kk-sandal-sepatu",
+        "packId": "keseharian",
+        "packLabel": "Keseharian & Tongkrongan",
+        "category": "Alas Kaki",
+        "citizenWord": "Sandal Jepit",
+        "spyWord": "Sepatu Kets"
+      },
+      {
+        "id": "kk-powerbank-charger",
+        "packId": "keseharian",
+        "packLabel": "Keseharian & Tongkrongan",
+        "category": "Gawai",
+        "citizenWord": "Powerbank",
+        "spyWord": "Charger"
+      },
+      {
+        "id": "kk-kacamata-softlens",
+        "packId": "keseharian",
+        "packLabel": "Keseharian & Tongkrongan",
+        "category": "Aksesori",
+        "citizenWord": "Kacamata",
+        "spyWord": "Lensa Kontak"
+      },
+      {
+        "id": "kk-dompet-tas",
+        "packId": "keseharian",
+        "packLabel": "Keseharian & Tongkrongan",
+        "category": "Aksesori",
+        "citizenWord": "Dompet",
+        "spyWord": "Tas Selempang"
+      },
+      {
+        "id": "kk-bioskop-konser",
+        "packId": "hiburan",
+        "packLabel": "Hiburan, Alam & Budaya",
+        "category": "Hiburan",
+        "citizenWord": "Bioskop",
+        "spyWord": "Konser Musik"
+      },
+      {
+        "id": "kk-pantai-gunung",
+        "packId": "hiburan",
+        "packLabel": "Hiburan, Alam & Budaya",
+        "category": "Wisata",
+        "citizenWord": "Pantai",
+        "spyWord": "Gunung"
+      },
+      {
+        "id": "kk-kucing-anjing",
+        "packId": "hiburan",
+        "packLabel": "Hiburan, Alam & Budaya",
+        "category": "Hewan",
+        "citizenWord": "Kucing",
+        "spyWord": "Anjing"
+      },
+      {
+        "id": "kk-sepakbola-futsal",
+        "packId": "hiburan",
+        "packLabel": "Hiburan, Alam & Budaya",
+        "category": "Olahraga",
+        "citizenWord": "Sepak Bola",
+        "spyWord": "Futsal"
+      },
+      {
+        "id": "kk-karaoke-standup",
+        "packId": "hiburan",
+        "packLabel": "Hiburan, Alam & Budaya",
+        "category": "Hiburan",
+        "citizenWord": "Karaoke",
+        "spyWord": "Stand-Up Comedy"
+      },
+      {
+        "id": "kk-tiktok-instagram",
+        "packId": "hiburan",
+        "packLabel": "Hiburan, Alam & Budaya",
+        "category": "Media Sosial",
+        "citizenWord": "TikTok",
+        "spyWord": "Instagram"
+      },
+      {
+        "id": "kk-komik-novel",
+        "packId": "hiburan",
+        "packLabel": "Hiburan, Alam & Budaya",
+        "category": "Bacaan",
+        "citizenWord": "Komik",
+        "spyWord": "Novel"
+      },
+      {
+        "id": "kk-bali-jogja",
+        "packId": "hiburan",
+        "packLabel": "Hiburan, Alam & Budaya",
+        "category": "Wisata",
+        "citizenWord": "Bali",
+        "spyWord": "Yogyakarta"
+      },
+      {
+        "id": "kk-gitar-ukulele",
+        "packId": "hiburan",
+        "packLabel": "Hiburan, Alam & Budaya",
+        "category": "Musik",
+        "citizenWord": "Gitar",
+        "spyWord": "Ukulele"
+      },
+      {
+        "id": "kk-catur-monopoli",
+        "packId": "hiburan",
+        "packLabel": "Hiburan, Alam & Budaya",
+        "category": "Permainan",
+        "citizenWord": "Catur",
+        "spyWord": "Monopoli"
+      },
+      {
+        "id": "kk-mobil-motor",
+        "packId": "hiburan",
+        "packLabel": "Hiburan, Alam & Budaya",
+        "category": "Kendaraan",
+        "citizenWord": "Mobil",
+        "spyWord": "Motor"
+      },
+      {
+        "id": "kk-hujan-angin",
+        "packId": "hiburan",
+        "packLabel": "Hiburan, Alam & Budaya",
+        "category": "Cuaca",
+        "citizenWord": "Hujan Deras",
+        "spyWord": "Angin Kencang"
+      }
+    ]
+  },
+  "satu_frekuensi": {
+    "packs": [
+      "tongkrongan",
+      "kuliner",
+      "budaya"
+    ],
+    "items": [
+      {
+        "id": "tongkrongan_1",
+        "leftLabel": "Garing Banget",
+        "rightLabel": "Ngakak Brutal",
+        "category": "Humor",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_2",
+        "leftLabel": "Bucin Akut",
+        "rightLabel": "Cuek Bebek",
+        "category": "Asmara",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_3",
+        "leftLabel": "Red Flag",
+        "rightLabel": "Green Flag",
+        "category": "Relasi",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_4",
+        "leftLabel": "Introvert Kamar",
+        "rightLabel": "Ekstrovert Tongkrongan",
+        "category": "Sosial",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_5",
+        "leftLabel": "Mending Tidur",
+        "rightLabel": "Wajib Gaspol",
+        "category": "Aktivitas",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_6",
+        "leftLabel": "Wacana Doang",
+        "rightLabel": "Pasti Berangkat",
+        "category": "Tongkrongan",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_7",
+        "leftLabel": "Anak Rumahan",
+        "rightLabel": "Anak Jalanan Malam",
+        "category": "Gaya Hidup",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_8",
+        "leftLabel": "Hemat Pangkal Kaya",
+        "rightLabel": "Sultan Bebas Gesek",
+        "category": "Keuangan",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_9",
+        "leftLabel": "Gampang Baper",
+        "rightLabel": "Hati Baja",
+        "category": "Karakter",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_10",
+        "leftLabel": "Overthinking Jam 2 Pagi",
+        "rightLabel": "Santuy Tanpa Beban",
+        "category": "Pikiran",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_11",
+        "leftLabel": "Cringe Parah",
+        "rightLabel": "Keren Abis",
+        "category": "Vibe",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_12",
+        "leftLabel": "Fast Response 1 Detik",
+        "rightLabel": "Ghosting 3 Hari",
+        "category": "Chatting",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_13",
+        "leftLabel": "Teman Biasa",
+        "rightLabel": "Sahabat Sehidup Semati",
+        "category": "Pertemanan",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_14",
+        "leftLabel": "Bikin Ngantuk",
+        "rightLabel": "Bikin Melek Semalaman",
+        "category": "Energi",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_15",
+        "leftLabel": "Receh Banget",
+        "rightLabel": "Filosofis Mendalam",
+        "category": "Obrolan",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_16",
+        "leftLabel": "Gampang Ditebak",
+        "rightLabel": "Plot Twist Gila",
+        "category": "Cerita",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_17",
+        "leftLabel": "Sopan Santun",
+        "rightLabel": "Blak-Blakan Pedas",
+        "category": "Komunikasi",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_18",
+        "leftLabel": "Nunda Deadline",
+        "rightLabel": "Selesai H-7",
+        "category": "Kerja",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_19",
+        "leftLabel": "Malas Gerak (Mager)",
+        "rightLabel": "Produktif Maksimal",
+        "category": "Rutinitas",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_20",
+        "leftLabel": "Bikin Malu Sendiri",
+        "rightLabel": "Bikin Bangga Banget",
+        "category": "Momen",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_21",
+        "leftLabel": "Aman Terkendali",
+        "rightLabel": "Penuh Risiko",
+        "category": "Keputusan",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_22",
+        "leftLabel": "Kelihatan Pintar",
+        "rightLabel": "Benar-Benar Pintar",
+        "category": "Kesan",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_23",
+        "leftLabel": "Biasa Aja",
+        "rightLabel": "Ikonik Legendaris",
+        "category": "Status",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_24",
+        "leftLabel": "Murah Meriah",
+        "rightLabel": "Mahal Tak Masuk Akal",
+        "category": "Harga",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_25",
+        "leftLabel": "Sangat Membosankan",
+        "rightLabel": "Seru Tak Terlupakan",
+        "category": "Pengalaman",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_26",
+        "leftLabel": "Cuma Gaya",
+        "rightLabel": "Sangat Fungsional",
+        "category": "Barang",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_27",
+        "leftLabel": "Bisa Dilakukan Sambil Merem",
+        "rightLabel": "Butuh Latihan Bertahun-Tahun",
+        "category": "Keahlian",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "tongkrongan_28",
+        "leftLabel": "Dimaafkan Dalam 5 Menit",
+        "rightLabel": "Diingat Seumur Hidup",
+        "category": "Kesalahan",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Gaul"
+      },
+      {
+        "id": "kuliner_1",
+        "leftLabel": "Warteg 15 Ribuan",
+        "rightLabel": "Fine Dining Sultan",
+        "category": "Tempat Makan",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_2",
+        "leftLabel": "Tidak Pedas Sama Sekali",
+        "rightLabel": "Pedas Bikin Nangis",
+        "category": "Rasa",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_3",
+        "leftLabel": "Jajanan SD",
+        "rightLabel": "Hidangan Hotel Bintang 5",
+        "category": "Menu",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_4",
+        "leftLabel": "Makanan Tanggal Tua",
+        "rightLabel": "Makanan Hari Gajian",
+        "category": "Budget",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_5",
+        "leftLabel": "Makanan Diet Sehat",
+        "rightLabel": "Calorie Bomb Nikmat",
+        "category": "Gizi",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_6",
+        "leftLabel": "Enak Dimakan Dingin",
+        "rightLabel": "Wajib Panas Mengepul",
+        "category": "Suhu",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_7",
+        "leftLabel": "Camilan Ringan",
+        "rightLabel": "Bikin Kenyang Seharian",
+        "category": "Porsi",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_8",
+        "leftLabel": "Gampang Dimasak Anak Kos",
+        "rightLabel": "Harus Chef Profesional",
+        "category": "Masak",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_9",
+        "leftLabel": "Rasa Manis Banget",
+        "rightLabel": "Rasa Gurih Asin",
+        "category": "Rasa",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_10",
+        "leftLabel": "Harus Pakai Nasi",
+        "rightLabel": "Aneh Kalau Pakai Nasi",
+        "category": "Kebiasaan",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_11",
+        "leftLabel": "Makanan Pagi Banget",
+        "rightLabel": "Makanan Tengah Malam",
+        "category": "Waktu",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_12",
+        "leftLabel": "Bau Menyengat",
+        "rightLabel": "Aroma Wangi Menggoda",
+        "category": "Aroma",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_13",
+        "leftLabel": "Tekstur Renyah Garing",
+        "rightLabel": "Tekstur Lembut Lumer",
+        "category": "Tekstur",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_14",
+        "leftLabel": "Cuma Tren Sesaat",
+        "rightLabel": "Abadi Sepanjang Masa",
+        "category": "Kuliner",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_15",
+        "leftLabel": "Paling Enak Diaduk",
+        "rightLabel": "Haram Diaduk",
+        "category": "Debat",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_16",
+        "leftLabel": "Bikin Haus Banget",
+        "rightLabel": "Sangat Menyegarkan",
+        "category": "Minuman",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_17",
+        "leftLabel": "Makanan Sendirian",
+        "rightLabel": "Makanan Rame-Rame",
+        "category": "Suasana",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_18",
+        "leftLabel": "Pahit Pekat",
+        "rightLabel": "Creamy Manis",
+        "category": "Kopi & Minuman",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_19",
+        "leftLabel": "Porsi Mini",
+        "rightLabel": "Porsi Kuli Jumbo",
+        "category": "Porsi",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_20",
+        "leftLabel": "Gampang Dicari Di Mana Saja",
+        "rightLabel": "Langka Harus Pesan Jauh",
+        "category": "Akses",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_21",
+        "leftLabel": "Bikin Ribet Makannya",
+        "rightLabel": "Tinggal Hap Tanpa Ribet",
+        "category": "Praktis",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_22",
+        "leftLabel": "Masakan Rumahan Ibu",
+        "rightLabel": "Masakan Restoran Cepat Saji",
+        "category": "Gaya",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_23",
+        "leftLabel": "Bumbu Minimalis",
+        "rightLabel": "Rempah Medok Pekat",
+        "category": "Bumbu",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_24",
+        "leftLabel": "Cocok Saat Hujan Deras",
+        "rightLabel": "Cocok Saat Terik Siang",
+        "category": "Cuaca",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_25",
+        "leftLabel": "Makanan Anak Kecil",
+        "rightLabel": "Selera Orang Dewasa",
+        "category": "Usia",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "kuliner_26",
+        "leftLabel": "Cepat Basi",
+        "rightLabel": "Awet Berbulan-Bulan",
+        "category": "Ketahanan",
+        "packId": "kuliner",
+        "packLabel": "Kuliner & Jajanan"
+      },
+      {
+        "id": "budaya_1",
+        "leftLabel": "Jadul Era 90-an",
+        "rightLabel": "Futuristik Tahun 2099",
+        "category": "Era",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_2",
+        "leftLabel": "Wajar di +62",
+        "rightLabel": "Cuma Ada di Film",
+        "category": "Realita",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_3",
+        "leftLabel": "Lagu Galau Hujan",
+        "rightLabel": "Lagu Joget Hajatan",
+        "category": "Musik",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_4",
+        "leftLabel": "Film Bikin Nangis",
+        "rightLabel": "Film Komedi Ngakak",
+        "category": "Film",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_5",
+        "leftLabel": "Karakter Antagonis",
+        "rightLabel": "Pahlawan Sejati",
+        "category": "Fiksi",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_6",
+        "leftLabel": "Lokal Nusantara",
+        "rightLabel": "Internasional Global",
+        "category": "Budaya",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_7",
+        "leftLabel": "Sangat Realistis",
+        "rightLabel": "Fantasi Murni",
+        "category": "Genre",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_8",
+        "leftLabel": "Liburan Hemat Backpacker",
+        "rightLabel": "Liburan Mewah Resort",
+        "category": "Wisata",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_9",
+        "leftLabel": "Olahraga Santai",
+        "rightLabel": "Olahraga Ekstrem",
+        "category": "Olahraga",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_10",
+        "leftLabel": "Kota Super Sibuk",
+        "rightLabel": "Desa Tenang Damai",
+        "category": "Tempat",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_11",
+        "leftLabel": "Teknologi Kuno",
+        "rightLabel": "Teknologi Canggih",
+        "category": "Sains",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_12",
+        "leftLabel": "Hewan Imut Menggemaskan",
+        "rightLabel": "Hewan Seram Buas",
+        "category": "Alam",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_13",
+        "leftLabel": "Benda Sangat Kecil",
+        "rightLabel": "Benda Raksasa",
+        "category": "Ukuran",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_14",
+        "leftLabel": "Sangat Pelan",
+        "rightLabel": "Secepat Kilat",
+        "category": "Kecepatan",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_15",
+        "leftLabel": "Pekerjaan Santai",
+        "rightLabel": "Pekerjaan Penuh Tekanan",
+        "category": "Profesi",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_16",
+        "leftLabel": "Hobi Murah",
+        "rightLabel": "Hobi Bikin Kantong Jebol",
+        "category": "Hobi",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_17",
+        "leftLabel": "Underrated Banget",
+        "rightLabel": "Overrated Banget",
+        "category": "Opini",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_18",
+        "leftLabel": "Game Santai Kasual",
+        "rightLabel": "Game Kompetitif Bikin Emosi",
+        "category": "Gaming",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_19",
+        "leftLabel": "Tradisi Sakral",
+        "rightLabel": "Tren Viral TikTok",
+        "category": "Sosial",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_20",
+        "leftLabel": "Pakaian Santai Rumah",
+        "rightLabel": "Pakaian Kondangan Resmi",
+        "category": "Fashion",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_21",
+        "leftLabel": "Super Rahasia",
+        "rightLabel": "Rahasia Umum Semua Tahu",
+        "category": "Informasi",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_22",
+        "leftLabel": "Nyaris Mustahil Terjadi",
+        "rightLabel": "Terjadi Setiap Hari",
+        "category": "Peluang",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_23",
+        "leftLabel": "Menyeramkan Di Malam Hari",
+        "rightLabel": "Menenangkan Di Malam Hari",
+        "category": "Suasana",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_24",
+        "leftLabel": "Kendaraan Harian",
+        "rightLabel": "Kendaraan Mimpi",
+        "category": "Transportasi",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_25",
+        "leftLabel": "Cocok Untuk Libur Panjang",
+        "rightLabel": "Cocok Untuk Istirahat 10 Menit",
+        "category": "Waktu",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      },
+      {
+        "id": "budaya_26",
+        "leftLabel": "Karya Seni Klasik",
+        "rightLabel": "Meme Internet",
+        "category": "Seni",
+        "packId": "budaya",
+        "packLabel": "Budaya & Pop +62"
+      }
+    ]
+  },
+  "fakta_hari_ini": {
+    "packs": [
+      "hukum_sejarah",
+      "nusantara",
+      "sains_alam"
+    ],
+    "items": [
+      {
+        "id": "hukum_sejarah_1",
+        "prefix": "Di sebuah negara di Timur Tengah pernah tercatat tidak ada laporan hukum korupsi formal pada era tertentu karena ",
+        "twist": "belum adanya pasal undang-undang khusus yang mendefinisikan istilah korupsi itu sendiri",
+        "suffix": ".",
+        "category": "Hukum Unik",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_2",
+        "prefix": "Di Swiss, memelihara hanya satu ekor marmut (guinea pig) dianggap melanggar hukum kesejahteraan hewan karena ",
+        "twist": "marmut adalah hewan sosial yang bisa stres dan kesepian jika hidup sendirian",
+        "suffix": ".",
+        "category": "Hukum Hewan",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_3",
+        "prefix": "Di kota Venice, Italia, memberi makan merpati di Alun-Alun St. Mark bisa dikenai denda ratusan euro karena ",
+        "twist": "kotoran merpati bersifat asam dan merusak patung serta bangunan bersejarah",
+        "suffix": ".",
+        "category": "Aturan Kota",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_4",
+        "prefix": "Pada tahun 1932, militer Australia benar-benar pernah kalah dalam \"perang\" melawan ",
+        "twist": "kawanan burung emu yang jumlahnya puluhan ribu dan terlalu cepat untuk dihadang",
+        "suffix": ".",
+        "category": "Sejarah",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_5",
+        "prefix": "Di negara bagian Alaska, membangunkan beruang yang sedang tidur demi mengambil foto dilarang hukum, padahal ",
+        "twist": "berburu beruang secara legal di musim tertentu justru diperbolehkan",
+        "suffix": ".",
+        "category": "Hukum Unik",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_6",
+        "prefix": "Di Singapura, menjual permen karet dilarang sejak 1992 karena sebelumnya ",
+        "twist": "permen karet yang ditempel di sensor pintu kereta MRT sering menghentikan operasional kereta",
+        "suffix": ".",
+        "category": "Aturan Kota",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_7",
+        "prefix": "Pada abad ke-18 di Inggris, pajak jendela pernah diberlakukan sehingga banyak warga ",
+        "twist": "menutup jendela rumah mereka dengan batu bata agar tidak perlu membayar pajak tinggi",
+        "suffix": ".",
+        "category": "Sejarah",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_8",
+        "prefix": "Di Jepang, seorang pria bisa menyewa jasa aktor profesional khusus untuk ",
+        "twist": "berpura-pura menjadi anggota keluarga atau tamu pernikahan yang ramai",
+        "suffix": ".",
+        "category": "Budaya Modern",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_9",
+        "prefix": "Di kota Longyearbyen, Norwegia, penduduk secara praktis \"dilarang meninggal\" dan dimakamkan di sana karena ",
+        "twist": "tanah es abadi (permafrost) membuat jasad tidak bisa terurai dan berisiko menyimpan virus purba",
+        "suffix": ".",
+        "category": "Geografi",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_10",
+        "prefix": "Di Jerman, kehabisan bensin di jalan tol Autobahn bisa dikenai tilang karena ",
+        "twist": "berhenti di bahu jalan akibat kelalaian sendiri dianggap membahayakan kendaraan berkecepatan tinggi",
+        "suffix": ".",
+        "category": "Lalu Lintas",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_11",
+        "prefix": "Kaisar Romawi Caligula konon pernah berencana mengangkat seekor makhluk tak terduga menjadi konsul negara, yaitu ",
+        "twist": "kuda kesayangannya sendiri yang bernama Incitatus",
+        "suffix": ".",
+        "category": "Sejarah Kuno",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_12",
+        "prefix": "Di Yunani, pengunjung situs bersejarah Acropolis dilarang memakai sepatu hak tinggi karena ",
+        "twist": "ujung hak yang tajam dapat mengikis dan merusak lantai marmer kuno",
+        "suffix": ".",
+        "category": "Aturan Wisata",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_13",
+        "prefix": "Pada zaman Mesir Kuno, para pelayan Firaun pernah diolesi madu di tubuhnya agar ",
+        "twist": "lalat-lalat tertarik menghinggapi pelayan dan menjauh dari sang Firaun",
+        "suffix": ".",
+        "category": "Sejarah Kuno",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_14",
+        "prefix": "Di Prancis, terdapat aturan kuno yang melarang pemilik menamai babi peliharaan mereka dengan nama ",
+        "twist": "Napoleon, karena dianggap menghina tokoh sejarah negara",
+        "suffix": ".",
+        "category": "Hukum Unik",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_15",
+        "prefix": "Saat Menara Eiffel pertama kali dibangun tahun 1889, banyak seniman Paris memprotes dan meminta menara itu ",
+        "twist": "dibongkar setelah 20 tahun karena dianggap merusak pemandangan kota",
+        "suffix": ".",
+        "category": "Sejarah",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_16",
+        "prefix": "Universitas Oxford tercatat secara historis lebih tua ratusan tahun dibandingkan ",
+        "twist": "berdirinya Kekaisaran Aztek di Amerika Tengah",
+        "suffix": ".",
+        "category": "Linimasa",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_17",
+        "prefix": "Pada tahun 1912, sebuah kompetisi resmi di Olimpiade Musim Panas pernah memberikan medali emas untuk bidang ",
+        "twist": "seni lukis, sastra, musik, dan arsitektur",
+        "suffix": ".",
+        "category": "Olahraga",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_18",
+        "prefix": "Di negara kecil Liechtenstein pada tahun 1866, pasukan tentara mereka pulang dari perang dengan jumlah ",
+        "twist": "bertambah satu orang karena mereka berteman dengan seorang prajurit lawan di perjalanan",
+        "suffix": ".",
+        "category": "Sejarah",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_19",
+        "prefix": "Di kota Milan, Italia, pernah ada aturan abad ke-19 yang mewajibkan warga selalu tersenyum di tempat umum, kecuali saat ",
+        "twist": "menghadiri pemakaman atau menjenguk orang sakit di rumah sakit",
+        "suffix": ".",
+        "category": "Hukum Unik",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_20",
+        "prefix": "Di Thailand, menginjak uang kertas yang jatuh di jalan bisa berujung masalah hukum karena ",
+        "twist": "uang kertas tersebut bergambar potret Raja yang sangat dihormati",
+        "suffix": ".",
+        "category": "Budaya & Hukum",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_21",
+        "prefix": "Di Inggris, seluruh angsa liar tidak bertuan di Sungai Thames secara tradisi masih dianggap sebagai ",
+        "twist": "milik resmi Kerajaan Inggris sejak abad ke-12",
+        "suffix": ".",
+        "category": "Tradisi",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_22",
+        "prefix": "Kata \"sandwich\" lahir pada abad ke-18 karena bangsawan bernama Earl of Sandwich ingin ",
+        "twist": "makan daging dengan satu tangan tanpa mengotori kartu saat terus bermain kartu",
+        "suffix": ".",
+        "category": "Asal Kata",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_23",
+        "prefix": "Pada era 1830-an di Amerika Serikat, saus tomat (ketchup) sempat dipasarkan dan dijual dalam bentuk pil sebagai ",
+        "twist": "obat pencernaan dan penawar sakit perut",
+        "suffix": ".",
+        "category": "Sejarah Kuliner",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_24",
+        "prefix": "Di kota Eraclea, Italia, membangun istana pasir berukuran besar di pantai bisa kena denda karena ",
+        "twist": "dianggap menghalangi jalur pejalan kaki dan petugas penyelamat pantai",
+        "suffix": ".",
+        "category": "Aturan Kota",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "hukum_sejarah_25",
+        "prefix": "Perang tersingkat dalam sejarah dunia antara Inggris dan Zanzibar pada 1896 hanya berlangsung sekitar ",
+        "twist": "38 sampai 45 menit sebelum akhirnya gencatan senjata diumumkan",
+        "suffix": ".",
+        "category": "Sejarah",
+        "packId": "hukum_sejarah",
+        "packLabel": "Hukum & Sejarah Aneh"
+      },
+      {
+        "id": "nusantara_1",
+        "prefix": "Di beberapa daerah di Jawa pada masa kolonial, orang menggunakan istilah \"uang ketip\" karena koin tersebut ",
+        "twist": "bernilai sepuluh sen yang berasal dari kata Belanda \"dubbeltje\" atau kepingan tipis",
+        "suffix": ".",
+        "category": "Sejarah Lokal",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_2",
+        "prefix": "Indonesia menjadi satu-satunya tempat di dunia tempat ditemukannya komodo di alam liar, dan uniknya komodo betina bisa ",
+        "twist": "berkembang biak tanpa pejantan melalui proses partenogenesis",
+        "suffix": ".",
+        "category": "Fauna Nusantara",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_3",
+        "prefix": "Di Desa Trunyan, Bali, jenazah warga yang meninggal secara wajar tidak dikubur maupun dibakar, melainkan ",
+        "twist": "diletakkan di bawah pohon Taru Menyan yang aromanya secara alami menghilangkan bau",
+        "suffix": ".",
+        "category": "Tradisi",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_4",
+        "prefix": "Danau Kelimutu di Flores terkenal memiliki tiga kawah yang warnanya bisa berubah-ubah secara berkala karena ",
+        "twist": "reaksi kimia mineral vulkanik dan aktivitas gas di dasar kawah",
+        "suffix": ".",
+        "category": "Alam Indonesia",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_5",
+        "prefix": "Candi Borobudur yang megah itu dibangun pada abad ke-8 tanpa menggunakan semen sama sekali, melainkan ",
+        "twist": "sistem saling kunci antarbatu andesit seperti kepingan puzzle raksasa",
+        "suffix": ".",
+        "category": "Arsitektur",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_6",
+        "prefix": "Di Kalimantan Selatan, Pasar Terapung Lok Baintan telah bertahan ratusan tahun dan masih mempertahankan sistem ",
+        "twist": "barter langsung antarperahu untuk hasil kebun dan ikan segar",
+        "suffix": ".",
+        "category": "Budaya",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_7",
+        "prefix": "Bahasa Indonesia tidak hanya digunakan di Nusantara, tetapi juga dipelajari secara luas sebagai bahasa asing populer di ",
+        "twist": "sekolah-sekolah Australia dan bahkan diakui sebagai bahasa resmi di Sidang Umum UNESCO",
+        "suffix": ".",
+        "category": "Bahasa",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_8",
+        "prefix": "Bunga Rafflesia arnoldii di Bengkulu menjadi bunga tunggal terbesar di dunia, namun tanaman ini unik karena ",
+        "twist": "tidak memiliki batang, daun, maupun akar sejati karena hidup sebagai parasit pada liana",
+        "suffix": ".",
+        "category": "Flora Nusantara",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_9",
+        "prefix": "Di Tana Toraja, Sulawesi Selatan, terdapat tradisi Ma'nene yang dilakukan berkala oleh keluarga untuk ",
+        "twist": "membersihkan jasad leluhur dan mengganti pakaiannya sebagai bentuk penghormatan",
+        "suffix": ".",
+        "category": "Tradisi",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_10",
+        "prefix": "Pulau Samosir di Sumatera Utara memiliki keunikan geografis langka karena merupakan ",
+        "twist": "pulau vulkanik di tengah danau yang di atasnya juga terdapat danau kecil lagi",
+        "suffix": ".",
+        "category": "Geografi",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_11",
+        "prefix": "Di beberapa kota di Indonesia, pedagang bakso keliling menggunakan bunyi ketukan mangkuk atau kentongan tertentu karena ",
+        "twist": "setiap bunyi menjadi kode khas yang langsung membedakan jenis dagangan dari dalam rumah",
+        "suffix": ".",
+        "category": "Keseharian +62",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_12",
+        "prefix": "Kopi Luwak dari Indonesia menjadi salah satu kopi termahal di dunia karena biji kopinya ",
+        "twist": "mengalami fermentasi alami di dalam saluran pencernaan musang luwak sebelum diolah",
+        "suffix": ".",
+        "category": "Kuliner",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_13",
+        "prefix": "Kawah Ijen di Jawa Timur terkenal dengan fenomena \"Api Biru\" (Blue Fire) yang hanya terlihat malam hari akibat ",
+        "twist": "pembakaran gas belerang bersuhu tinggi yang keluar dari celah batuan vulkanik",
+        "suffix": ".",
+        "category": "Alam Indonesia",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_14",
+        "prefix": "Di Kampung Naga, Tasikmalaya, seluruh rumah adat dibangun seragam menghadap utara atau selatan tanpa listrik PLN untuk ",
+        "twist": "menjaga keselarasan adat leluhur dan mencegah kesenjangan sosial antarwarga",
+        "suffix": ".",
+        "category": "Adat",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_15",
+        "prefix": "Nama \"Rendang\" dalam bahasa Minangkabau sebenarnya merujuk bukan hanya pada makanannya, melainkan ",
+        "twist": "teknik memasak perlahan (marandang) hingga santan mengering menjadi dedak bumbu gelap",
+        "suffix": ".",
+        "category": "Kuliner",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_16",
+        "prefix": "Di Kota Pontianak, dua kali setahun terjadi fenomena \"Hari Tanpa Bayangan\" tepat di Tugu Khatulistiwa karena ",
+        "twist": "posisi matahari berada persis tegak lurus di atas garis lintang nol derajat",
+        "suffix": ".",
+        "category": "Geografi",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_17",
+        "prefix": "Suku Bajo di perairan Sulawesi dijuluki manusia laut karena secara fisiologis banyak dari mereka memiliki ",
+        "twist": "ukuran limpa yang lebih besar sehingga mampu menahan napas lebih lama saat menyelam",
+        "suffix": ".",
+        "category": "Sains & Budaya",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_18",
+        "prefix": "Di Pulau Madura, terdapat desa yang warganya tidur beralaskan pasir halus bersih di dalam rumah karena ",
+        "twist": "pasir dipercaya terasa sejuk di siang hari dan hangat saat malam tiba",
+        "suffix": ".",
+        "category": "Tradisi Unik",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_19",
+        "prefix": "Saat hari raya Nyepi di Bali, bahkan Bandara Internasional Ngurah Rai menutup operasional selama 24 jam penuh kecuali untuk ",
+        "twist": "pendaratan darurat medis atau keselamatan penerbangan",
+        "suffix": ".",
+        "category": "Budaya",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_20",
+        "prefix": "Indonesia memiliki lebih dari 700 bahasa daerah aktif, menjadikannya negara dengan keberagaman bahasa terbesar kedua di dunia setelah ",
+        "twist": "Papua Nugini yang memiliki lebih dari 800 bahasa",
+        "suffix": ".",
+        "category": "Bahasa",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_21",
+        "prefix": "Di daerah Lampung, kain tradisional Tapis dulunya ditenun dengan benang emas asli dan dipakai sebagai penanda ",
+        "twist": "status sosial serta kesiapan seseorang dalam upacara adat penting",
+        "suffix": ".",
+        "category": "Warisan",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_22",
+        "prefix": "Masjid Menara Kudus di Jawa Tengah memiliki menara berbentuk menyerupai candi Hindu karena ",
+        "twist": "Sunan Kudus memadukan arsitektur lokal agar dakwah diterima secara damai oleh masyarakat",
+        "suffix": ".",
+        "category": "Sejarah",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_23",
+        "prefix": "Di Yogyakarta, garis imajiner lurus menghubungkan Gunung Merapi, Keraton, dan Pantai Parangtritis yang melambangkan ",
+        "twist": "keselarasan hubungan antara manusia, alam, dan Sang Pencipta",
+        "suffix": ".",
+        "category": "Filosofi",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_24",
+        "prefix": "Buah durian dilarang dibawa masuk ke banyak hotel dan transportasi umum di Asia Tenggara karena ",
+        "twist": "senyawa sulfur alaminya menghasilkan aroma tajam yang sangat lama hilang di ruang ber-AC",
+        "suffix": ".",
+        "category": "Kuliner",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "nusantara_25",
+        "prefix": "Istilah \"Nongkrong\" dalam bahasa gaul Indonesia diyakini berasal dari kebiasaan duduk berjongkok di pinggir jalan sambil ",
+        "twist": "mengobrol santai berjam-jam tanpa agenda resmi",
+        "suffix": ".",
+        "category": "Keseharian +62",
+        "packId": "nusantara",
+        "packLabel": "Serba-Serbi Nusantara"
+      },
+      {
+        "id": "sains_alam_1",
+        "prefix": "Gurita adalah salah satu makhluk laut paling aneh karena memiliki tiga jantung, darah berwarna biru, dan ",
+        "twist": "sembilan otak—satu otak pusat dan satu mini-otak di setiap delapan lengannya",
+        "suffix": ".",
+        "category": "Biologi Laut",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_2",
+        "prefix": "Madu murni yang disimpan rapat hampir tidak pernah basi—bahkan madu berusia 3.000 tahun di makam Mesir masih layak makan karena ",
+        "twist": "kadar airnya sangat rendah dan keasamannya membuat bakteri sulit berkembang biak",
+        "suffix": ".",
+        "category": "Sains Pangan",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_3",
+        "prefix": "Wombat, hewan berkantung asal Australia, adalah satu-satunya mamalia di dunia yang menghasilkan kotoran berbentuk ",
+        "twist": "kubus kotak rapi agar tidak menggelinding saat dipakai menandai wilayah di atas batu",
+        "suffix": ".",
+        "category": "Fauna",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_4",
+        "prefix": "Satu hari di Planet Venus ternyata lebih lama daripada satu tahunnya sendiri karena ",
+        "twist": "rotasi Venus pada porosnya jauh lebih lambat daripada waktu revolusinya mengelilingi Matahari",
+        "suffix": ".",
+        "category": "Astronomi",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_5",
+        "prefix": "Secara botani, buah pisang dan semangka sebenarnya masuk kategori buah beri (berry), sedangkan stroberi bukan beri karena ",
+        "twist": "biji stroberi berada di permukaan luar, bukan tertanam di dalam daging buahnya",
+        "suffix": ".",
+        "category": "Botani",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_6",
+        "prefix": "Hiu sudah berenang di lautan Bumi jauh lebih lama sebelum munculnya ",
+        "twist": "pepohonan pertama di daratan maupun terbentuknya cincin Planet Saturnus",
+        "suffix": ".",
+        "category": "Evolusi",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_7",
+        "prefix": "Berang-berang laut (sea otter) punya kebiasaan menggemaskan saat tidur mengapung di air, yaitu ",
+        "twist": "saling berpegangan tangan agar tidak terbawa arus dan terpisah dari kelompoknya",
+        "suffix": ".",
+        "category": "Fauna",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_8",
+        "prefix": "Tubuh manusia di pagi hari rata-rata sekitar 1 sentimeter lebih tinggi dibandingkan malam hari karena ",
+        "twist": "tulang rawan di tulang belakang tertekan gravitasi sepanjang hari lalu mengembang lagi saat tidur",
+        "suffix": ".",
+        "category": "Tubuh Manusia",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_9",
+        "prefix": "Flamingo sebenarnya terlahir dengan bulu berwarna abu-abu pucat, lalu berubah menjadi merah muda karena ",
+        "twist": "pigmen karotenoid dari udang kecil dan alga yang mereka makan setiap hari",
+        "suffix": ".",
+        "category": "Fauna",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_10",
+        "prefix": "Suara \"krek\" saat seseorang membunyikan buku-buku jari bukan berasal dari tulang yang bergesekan, melainkan ",
+        "twist": "letupan gelembung gas kecil di dalam cairan pelumas sendi",
+        "suffix": ".",
+        "category": "Tubuh Manusia",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_11",
+        "prefix": "Lumba-lumba tidur dengan cara unik agar tetap bisa naik mengambil napas, yaitu dengan ",
+        "twist": "mengistirahatkan hanya separuh otaknya sementara separuh lainnya tetap terjaga",
+        "suffix": ".",
+        "category": "Biologi Laut",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_12",
+        "prefix": "Di Planet Saturnus dan Jupiter, para ilmuwan menduga tekanan atmosfer ekstremnya bisa menyebabkan ",
+        "twist": "hujan kristal berlian yang jatuh dari awan karbon bertekanan tinggi",
+        "suffix": ".",
+        "category": "Astronomi",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_13",
+        "prefix": "Pohon bambu raksasa tertentu bisa tumbuh hingga hampir satu meter hanya dalam satu hari karena ",
+        "twist": "sel-sel ruasnya sudah terbentuk rapat dan tinggal memanjang secara serentak saat menyerap air",
+        "suffix": ".",
+        "category": "Botani",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_14",
+        "prefix": "Koala memiliki sidik jari yang bentuknya sangat mirip dengan sidik jari manusia hingga ",
+        "twist": "bahkan di bawah mikroskop sekalipun nyaris sulit dibedakan oleh ahli forensik",
+        "suffix": ".",
+        "category": "Fauna",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_15",
+        "prefix": "Air panas dalam kondisi tertentu bisa membeku lebih cepat daripada air dingin—fenomena fisika nyata yang disebut ",
+        "twist": "Efek Mpemba, dinamai dari seorang siswa sekolah di Tanzania yang memperhatikannya saat membuat es krim",
+        "suffix": ".",
+        "category": "Fisika",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_16",
+        "prefix": "Kupu-kupu mengecap rasa makanan bukan menggunakan mulut, melainkan memakai ",
+        "twist": "sensor reseptor rasa yang berada di telapak kakinya saat hinggap di daun atau bunga",
+        "suffix": ".",
+        "category": "Serangga",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_17",
+        "prefix": "Di luar angkasa, astronot tidak bisa menangis dengan air mata menetes ke pipi karena ",
+        "twist": "tanpa gravitasi, air mata hanya berkumpul membentuk bola cairan lengket di sekitar mata",
+        "suffix": ".",
+        "category": "Antariksa",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_18",
+        "prefix": "Ubur-ubur jenis Turritopsis dohrnii dijuluki \"ubur-ubur abadi\" karena saat stres atau tua, ia mampu ",
+        "twist": "mengembalikan sel tubuhnya kembali ke fase bayi (polip) dan memulai siklus hidup baru",
+        "suffix": ".",
+        "category": "Biologi Laut",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_19",
+        "prefix": "Sidik lidah setiap manusia ternyata sama uniknya dengan sidik jari karena ",
+        "twist": "pola tekstur, lipatan, dan bentuk permukaan lidah tidak ada yang identik antarindividu",
+        "suffix": ".",
+        "category": "Tubuh Manusia",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_20",
+        "prefix": "Seekor siput kebun bisa tidur panjang tanpa bangun selama bertahun-tahun saat cuaca ekstrem karena ",
+        "twist": "tubuhnya membentuk lapisan lendir penutup cangkang agar tidak kehilangan kelembapan",
+        "suffix": ".",
+        "category": "Fauna",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_21",
+        "prefix": "Kacang tanah sebenarnya secara botani bukan termasuk keluarga kacang pohon (nut), melainkan ",
+        "twist": "polong-polongan yang tumbuh dan matang di dalam tanah seperti kerabat buncis",
+        "suffix": ".",
+        "category": "Botani",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_22",
+        "prefix": "Awan kumulus putih yang terlihat ringan melayang di langit sebenarnya memiliki berat rata-rata setara dengan ",
+        "twist": "ratusan ton air yang tersebar dalam miliaran tetesan mikroskopis",
+        "suffix": ".",
+        "category": "Cuaca",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_23",
+        "prefix": "Anjing memiliki kemampuan mencium bau luar biasa hingga bisa merasakan perubahan waktu karena ",
+        "twist": "kadar aroma pemiliknya di dalam ruangan perlahan memudar seiring berjalannya jam",
+        "suffix": ".",
+        "category": "Fauna",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_24",
+        "prefix": "Di Bulan, jejak sepatu astronot Apollo yang dibuat lebih dari 50 tahun lalu masih utuh hingga sekarang karena ",
+        "twist": "Bulan tidak memiliki atmosfer, angin, maupun hujan untuk menghapus jejak tersebut",
+        "suffix": ".",
+        "category": "Antariksa",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      },
+      {
+        "id": "sains_alam_25",
+        "prefix": "Burung gagak mampu mengingat wajah manusia selama bertahun-tahun dan bahkan bisa ",
+        "twist": "mengajarkan anak-anaknya untuk mewaspadai orang yang pernah mengganggu mereka",
+        "suffix": ".",
+        "category": "Fauna",
+        "packId": "sains_alam",
+        "packLabel": "Sains & Alam Nyeleneh"
+      }
+    ]
+  },
+  "pelukis_gadungan": {
+    "packs": [
+      "kuliner",
+      "tongkrongan",
+      "hewan_alam",
+      "aktivitas",
+      "benda"
+    ],
+    "items": [
+      {
+        "id": "pg_kul_1",
+        "packId": "kuliner",
+        "packLabel": "Kuliner Nusantara",
+        "category": "Kuliner",
+        "word": "Sate Ayam"
+      },
+      {
+        "id": "pg_kul_2",
+        "packId": "kuliner",
+        "packLabel": "Kuliner Nusantara",
+        "category": "Kuliner",
+        "word": "Bakso Urat"
+      },
+      {
+        "id": "pg_kul_3",
+        "packId": "kuliner",
+        "packLabel": "Kuliner Nusantara",
+        "category": "Kuliner",
+        "word": "Martabak Manis"
+      },
+      {
+        "id": "pg_kul_4",
+        "packId": "kuliner",
+        "packLabel": "Kuliner Nusantara",
+        "category": "Kuliner",
+        "word": "Nasi Tumpeng"
+      },
+      {
+        "id": "pg_kul_5",
+        "packId": "kuliner",
+        "packLabel": "Kuliner Nusantara",
+        "category": "Kuliner",
+        "word": "Mie Goreng Telor"
+      },
+      {
+        "id": "pg_kul_6",
+        "packId": "kuliner",
+        "packLabel": "Kuliner Nusantara",
+        "category": "Kuliner",
+        "word": "Es Kelapa Muda"
+      },
+      {
+        "id": "pg_kul_7",
+        "packId": "kuliner",
+        "packLabel": "Kuliner Nusantara",
+        "category": "Kuliner",
+        "word": "Pisang Goreng"
+      },
+      {
+        "id": "pg_kul_8",
+        "packId": "kuliner",
+        "packLabel": "Kuliner Nusantara",
+        "category": "Kuliner",
+        "word": "Kerak Telor"
+      },
+      {
+        "id": "pg_kul_9",
+        "packId": "kuliner",
+        "packLabel": "Kuliner Nusantara",
+        "category": "Kuliner",
+        "word": "Klepon"
+      },
+      {
+        "id": "pg_kul_10",
+        "packId": "kuliner",
+        "packLabel": "Kuliner Nusantara",
+        "category": "Kuliner",
+        "word": "Es Cendol"
+      },
+      {
+        "id": "pg_kul_11",
+        "packId": "kuliner",
+        "packLabel": "Kuliner Nusantara",
+        "category": "Kuliner",
+        "word": "Durian Montong"
+      },
+      {
+        "id": "pg_kul_12",
+        "packId": "kuliner",
+        "packLabel": "Kuliner Nusantara",
+        "category": "Kuliner",
+        "word": "Kerupuk Kaleng"
+      },
+      {
+        "id": "pg_kul_13",
+        "packId": "kuliner",
+        "packLabel": "Kuliner Nusantara",
+        "category": "Kuliner",
+        "word": "Kue Cubit"
+      },
+      {
+        "id": "pg_kul_14",
+        "packId": "kuliner",
+        "packLabel": "Kuliner Nusantara",
+        "category": "Kuliner",
+        "word": "Cilok Tusuk"
+      },
+      {
+        "id": "pg_ton_1",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Kota",
+        "category": "Jalanan & Kota",
+        "word": "Bajaj"
+      },
+      {
+        "id": "pg_ton_2",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Kota",
+        "category": "Jalanan & Kota",
+        "word": "Becak"
+      },
+      {
+        "id": "pg_ton_3",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Kota",
+        "category": "Jalanan & Kota",
+        "word": "Gerobak Bakso"
+      },
+      {
+        "id": "pg_ton_4",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Kota",
+        "category": "Jalanan & Kota",
+        "word": "Tenda Pecel Lele"
+      },
+      {
+        "id": "pg_ton_5",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Kota",
+        "category": "Jalanan & Kota",
+        "word": "Pos Ronda"
+      },
+      {
+        "id": "pg_ton_6",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Kota",
+        "category": "Jalanan & Kota",
+        "word": "Monas"
+      },
+      {
+        "id": "pg_ton_7",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Kota",
+        "category": "Jalanan & Kota",
+        "word": "Lampu Lalu Lintas"
+      },
+      {
+        "id": "pg_ton_8",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Kota",
+        "category": "Jalanan & Kota",
+        "word": "Jembatan Layang"
+      },
+      {
+        "id": "pg_ton_9",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Kota",
+        "category": "Jalanan & Kota",
+        "word": "Layang-Layang"
+      },
+      {
+        "id": "pg_ton_10",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Kota",
+        "category": "Jalanan & Kota",
+        "word": "Motor Ojol"
+      },
+      {
+        "id": "pg_ton_11",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Kota",
+        "category": "Jalanan & Kota",
+        "word": "Tiang Listrik"
+      },
+      {
+        "id": "pg_ton_12",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Kota",
+        "category": "Jalanan & Kota",
+        "word": "Angkot"
+      },
+      {
+        "id": "pg_ton_13",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Kota",
+        "category": "Jalanan & Kota",
+        "word": "Halte Bus"
+      },
+      {
+        "id": "pg_ton_14",
+        "packId": "tongkrongan",
+        "packLabel": "Tongkrongan & Kota",
+        "category": "Jalanan & Kota",
+        "word": "Warung Kopi"
+      },
+      {
+        "id": "pg_hwn_1",
+        "packId": "hewan_alam",
+        "packLabel": "Hewan & Alam",
+        "category": "Hewan & Alam",
+        "word": "Komodo"
+      },
+      {
+        "id": "pg_hwn_2",
+        "packId": "hewan_alam",
+        "packLabel": "Hewan & Alam",
+        "category": "Hewan & Alam",
+        "word": "Gurita"
+      },
+      {
+        "id": "pg_hwn_3",
+        "packId": "hewan_alam",
+        "packLabel": "Hewan & Alam",
+        "category": "Hewan & Alam",
+        "word": "Jerapah"
+      },
+      {
+        "id": "pg_hwn_4",
+        "packId": "hewan_alam",
+        "packLabel": "Hewan & Alam",
+        "category": "Hewan & Alam",
+        "word": "Gunung Meletus"
+      },
+      {
+        "id": "pg_hwn_5",
+        "packId": "hewan_alam",
+        "packLabel": "Hewan & Alam",
+        "category": "Hewan & Alam",
+        "word": "Kaktus"
+      },
+      {
+        "id": "pg_hwn_6",
+        "packId": "hewan_alam",
+        "packLabel": "Hewan & Alam",
+        "category": "Hewan & Alam",
+        "word": "Kupu-Kupu"
+      },
+      {
+        "id": "pg_hwn_7",
+        "packId": "hewan_alam",
+        "packLabel": "Hewan & Alam",
+        "category": "Hewan & Alam",
+        "word": "Ubur-Ubur"
+      },
+      {
+        "id": "pg_hwn_8",
+        "packId": "hewan_alam",
+        "packLabel": "Hewan & Alam",
+        "category": "Hewan & Alam",
+        "word": "Pohon Kelapa"
+      },
+      {
+        "id": "pg_hwn_9",
+        "packId": "hewan_alam",
+        "packLabel": "Hewan & Alam",
+        "category": "Hewan & Alam",
+        "word": "Gajah"
+      },
+      {
+        "id": "pg_hwn_10",
+        "packId": "hewan_alam",
+        "packLabel": "Hewan & Alam",
+        "category": "Hewan & Alam",
+        "word": "Burung Hantu"
+      },
+      {
+        "id": "pg_hwn_11",
+        "packId": "hewan_alam",
+        "packLabel": "Hewan & Alam",
+        "category": "Hewan & Alam",
+        "word": "Kura-Kura"
+      },
+      {
+        "id": "pg_hwn_12",
+        "packId": "hewan_alam",
+        "packLabel": "Hewan & Alam",
+        "category": "Hewan & Alam",
+        "word": "Hiu"
+      },
+      {
+        "id": "pg_hwn_13",
+        "packId": "hewan_alam",
+        "packLabel": "Hewan & Alam",
+        "category": "Hewan & Alam",
+        "word": "Ombak Pantai"
+      },
+      {
+        "id": "pg_hwn_14",
+        "packId": "hewan_alam",
+        "packLabel": "Hewan & Alam",
+        "category": "Hewan & Alam",
+        "word": "Siput"
+      },
+      {
+        "id": "pg_akt_1",
+        "packId": "aktivitas",
+        "packLabel": "Profesi & Aksi",
+        "category": "Profesi & Aksi",
+        "word": "Tukang Parkir"
+      },
+      {
+        "id": "pg_akt_2",
+        "packId": "aktivitas",
+        "packLabel": "Profesi & Aksi",
+        "category": "Profesi & Aksi",
+        "word": "Barista Kopi"
+      },
+      {
+        "id": "pg_akt_3",
+        "packId": "aktivitas",
+        "packLabel": "Profesi & Aksi",
+        "category": "Profesi & Aksi",
+        "word": "Pemadam Kebakaran"
+      },
+      {
+        "id": "pg_akt_4",
+        "packId": "aktivitas",
+        "packLabel": "Profesi & Aksi",
+        "category": "Profesi & Aksi",
+        "word": "Pesulap Topi"
+      },
+      {
+        "id": "pg_akt_5",
+        "packId": "aktivitas",
+        "packLabel": "Profesi & Aksi",
+        "category": "Profesi & Aksi",
+        "word": "Astronot"
+      },
+      {
+        "id": "pg_akt_6",
+        "packId": "aktivitas",
+        "packLabel": "Profesi & Aksi",
+        "category": "Profesi & Aksi",
+        "word": "Kiper Bola"
+      },
+      {
+        "id": "pg_akt_7",
+        "packId": "aktivitas",
+        "packLabel": "Profesi & Aksi",
+        "category": "Profesi & Aksi",
+        "word": "Tukang Cukur"
+      },
+      {
+        "id": "pg_akt_8",
+        "packId": "aktivitas",
+        "packLabel": "Profesi & Aksi",
+        "category": "Profesi & Aksi",
+        "word": "Mancing Ikan"
+      },
+      {
+        "id": "pg_akt_9",
+        "packId": "aktivitas",
+        "packLabel": "Profesi & Aksi",
+        "category": "Profesi & Aksi",
+        "word": "Koki Masak"
+      },
+      {
+        "id": "pg_akt_10",
+        "packId": "aktivitas",
+        "packLabel": "Profesi & Aksi",
+        "category": "Profesi & Aksi",
+        "word": "Penyelam Laut"
+      },
+      {
+        "id": "pg_akt_11",
+        "packId": "aktivitas",
+        "packLabel": "Profesi & Aksi",
+        "category": "Profesi & Aksi",
+        "word": "Main Gitar"
+      },
+      {
+        "id": "pg_akt_12",
+        "packId": "aktivitas",
+        "packLabel": "Profesi & Aksi",
+        "category": "Profesi & Aksi",
+        "word": "Ngepel Lantai"
+      },
+      {
+        "id": "pg_bnd_1",
+        "packId": "benda",
+        "packLabel": "Benda Sehari-Hari",
+        "category": "Benda Harian",
+        "word": "Kipas Angin"
+      },
+      {
+        "id": "pg_bnd_2",
+        "packId": "benda",
+        "packLabel": "Benda Sehari-Hari",
+        "category": "Benda Harian",
+        "word": "Rice Cooker"
+      },
+      {
+        "id": "pg_bnd_3",
+        "packId": "benda",
+        "packLabel": "Benda Sehari-Hari",
+        "category": "Benda Harian",
+        "word": "Sandal Jepit"
+      },
+      {
+        "id": "pg_bnd_4",
+        "packId": "benda",
+        "packLabel": "Benda Sehari-Hari",
+        "category": "Benda Harian",
+        "word": "Payung Lipat"
+      },
+      {
+        "id": "pg_bnd_5",
+        "packId": "benda",
+        "packLabel": "Benda Sehari-Hari",
+        "category": "Benda Harian",
+        "word": "Helm"
+      },
+      {
+        "id": "pg_bnd_6",
+        "packId": "benda",
+        "packLabel": "Benda Sehari-Hari",
+        "category": "Benda Harian",
+        "word": "Jam Weker"
+      },
+      {
+        "id": "pg_bnd_7",
+        "packId": "benda",
+        "packLabel": "Benda Sehari-Hari",
+        "category": "Benda Harian",
+        "word": "Raket Nyamuk"
+      },
+      {
+        "id": "pg_bnd_8",
+        "packId": "benda",
+        "packLabel": "Benda Sehari-Hari",
+        "category": "Benda Harian",
+        "word": "Dispenser Galon"
+      },
+      {
+        "id": "pg_bnd_9",
+        "packId": "benda",
+        "packLabel": "Benda Sehari-Hari",
+        "category": "Benda Harian",
+        "word": "Gitar Akustik"
+      },
+      {
+        "id": "pg_bnd_10",
+        "packId": "benda",
+        "packLabel": "Benda Sehari-Hari",
+        "category": "Benda Harian",
+        "word": "Sapu Lidi"
+      },
+      {
+        "id": "pg_bnd_11",
+        "packId": "benda",
+        "packLabel": "Benda Sehari-Hari",
+        "category": "Benda Harian",
+        "word": "Earphone Kabel"
+      },
+      {
+        "id": "pg_bnd_12",
+        "packId": "benda",
+        "packLabel": "Benda Sehari-Hari",
+        "category": "Benda Harian",
+        "word": "Kompor Gas"
+      }
+    ]
+  },
+  "malam_siluman": {
+    "roles": {
+      "siluman": {
+        "id": "siluman",
+        "name": "Siluman",
+        "team": "siluman",
+        "teamLabel": "Tim Siluman",
+        "mandatory": true,
+        "explanationTier": "simple",
+        "summary": "Memangsa 1 warga setiap malam dan berbaur saat diskusi siang hari.",
+        "nightActionTitle": "Pilih Mangsa Malam Ini",
+        "nightActionHint": "Pilih 1 pemain di luar kawanan Siluman. Jika ada 2+ Siluman, target suara terbanyak yang diserang."
+      },
+      "warga": {
+        "id": "warga",
+        "name": "Warga",
+        "team": "warga",
+        "teamLabel": "Tim Warga",
+        "mandatory": true,
+        "explanationTier": "simple",
+        "summary": "Tidak punya kekuatan malam; gunakan insting & diskusi siang untuk mengungkap Siluman.",
+        "nightActionTitle": "Ronda Malam (Tutup Mata)",
+        "nightActionHint": "Kirim aksi ronda malam agar semua pemain sama-sama mengetuk layar dan peran spesialmu aman."
+      },
+      "penerawang": {
+        "id": "penerawang",
+        "name": "Penerawang",
+        "team": "warga",
+        "teamLabel": "Tim Warga",
+        "mandatory": false,
+        "toggleKey": "seer",
+        "explanationTier": "simple",
+        "summary": "Setiap malam dapat meneropong 1 pemain untuk melihat auranya (Warga atau Siluman).",
+        "nightActionTitle": "Teropong Aura Pemain",
+        "nightActionHint": "Pilih 1 pemain hidup untuk diteropong malam ini. Hasil aura langsung muncul di catatan pribadimu saat Fajar."
+      },
+      "tabib": {
+        "id": "tabib",
+        "name": "Tabib",
+        "team": "warga",
+        "teamLabel": "Tim Warga",
+        "mandatory": false,
+        "toggleKey": "doctor",
+        "explanationTier": "simple",
+        "summary": "Setiap malam melindungi 1 pemain dari serangan Siluman (tidak bisa 2 malam beruntun ke orang sama).",
+        "nightActionTitle": "Lindungi Pemain Malam Ini",
+        "nightActionHint": "Pilih 1 pemain hidup (termasuk dirimu sendiri) untuk dijaga. Tidak bisa memilih orang yang sama dua malam berturut-turut."
+      },
+      "pemburu": {
+        "id": "pemburu",
+        "name": "Pemburu",
+        "team": "warga",
+        "teamLabel": "Tim Warga",
+        "mandatory": false,
+        "toggleKey": "hunter",
+        "explanationTier": "simple",
+        "summary": "Jika gugur (malam atau siang), langsung melepaskan 1 Tembakan Terakhir untuk membawa 1 tersangka.",
+        "nightActionTitle": "Ronda Malam (Siaga Senapan)",
+        "nightActionHint": "Kirim aksi ronda malam untuk menyamarkan peran. Senapanmu otomatis aktif jika kamu gugur!"
+      },
+      "pak_rt": {
+        "id": "pak_rt",
+        "name": "Pak RT",
+        "team": "warga",
+        "teamLabel": "Tim Warga",
+        "mandatory": false,
+        "toggleKey": "mayor",
+        "explanationTier": "simple",
+        "summary": "Suara voting eksekusimu di siang hari dihitung 2x lipat dibanding warga biasa.",
+        "nightActionTitle": "Ronda Malam (Pantau Desa)",
+        "nightActionHint": "Kirim aksi ronda malam agar peranmu tidak terbaca. Kekuatan 2x suaramu aktif saat voting siang."
+      },
+      "siluman_bayangan": {
+        "id": "siluman_bayangan",
+        "name": "Siluman Bayangan",
+        "team": "siluman",
+        "teamLabel": "Tim Siluman",
+        "mandatory": false,
+        "toggleKey": "stealthWolf",
+        "explanationTier": "detailed",
+        "summary": "Siluman penyamar ulung yang tetap terbaca \"Aura Warga\" saat diteropong Penerawang.",
+        "nightActionTitle": "Pilih Mangsa Bersama Kawanan",
+        "nightActionHint": "Kamu berburu bersama Siluman lain, namun Penerawang akan selalu melihatmu sebagai Aura Warga!",
+        "detailedGuide": {
+          "tagline": "Siluman Penyamar Kebal Teropong Penerawang",
+          "mechanics": [
+            "Menggantikan 1 kursi Siluman biasa jika jumlah Siluman dalam ruangan minimal 2 orang (otomatis 6+ pemain atau diatur Host ke 2–3 Siluman).",
+            "Setiap Malam, kamu tetap ikut memilih mangsa bersama kawanan Siluman dan mengenal identitas rekan Silumanmu.",
+            "KEBAL TEROPONG: Jika Penerawang meneropongmu di malam hari, hasil yang muncul di HP Penerawang tetap \"Aura Warga\"—sama persis seperti warga tidak bersalah!"
+          ],
+          "winCondition": "Menang bersama Tim Siluman ketika jumlah Siluman yang masih hidup sama atau lebih banyak daripada total pemain non-Siluman yang masih hidup.",
+          "tips": [
+            "Beranilah memancing Penerawang agar meneropongmu lebih awal! Begitu Penerawang mengumumkan kamu \"bersih\", gunakan kepercayaan itu untuk mengarahkan tuduhan ke Warga asli atau Pemburu.",
+            "Jangan ikut membela rekan Siluman yang sudah terpojok habis-habisan—korbankan rekanmu jika perlu agar alibimu tetap tak tersentuh sampai akhir."
+          ],
+          "counterplay": [
+            "Warga & Penerawang tidak boleh 100% pasrah pada hasil \"Aura Warga\" jika Siluman Bayangan aktif.",
+            "Perhatikan pola suara voting siang, siapa yang sering menyelamatkan tersangka, dan inkonsistensi argumen saat jumlah pemain tinggal sedikit."
+          ]
+        }
+      },
+      "tumbal": {
+        "id": "tumbal",
+        "name": "Tumbal",
+        "team": "netral",
+        "teamLabel": "Pihak Netral (Solo)",
+        "mandatory": false,
+        "toggleKey": "jester",
+        "explanationTier": "detailed",
+        "summary": "Pihak netral solo: langsung MENANG SENDIRIAN (+4 poin) jika dieksekusi oleh voting warga di siang hari!",
+        "nightActionTitle": "Ronda Malam (Menebar Curiga)",
+        "nightActionHint": "Kirim aksi ronda malam agar tetap aman dari mangsa Siluman—targetmu adalah dieksekusi saat voting siang!",
+        "detailedGuide": {
+          "tagline": "Si Gila Pancingan — Menang Solo Jika Digantung Desa",
+          "mechanics": [
+            "Berdiri di faksi Netral sendirian: bukan bagian dari Tim Warga maupun Tim Siluman.",
+            "KEMENANGAN SEKETIKA: Jika kamu mendapat suara terbanyak dan dieksekusi pada Voting Siang, ronde LANGSUNG BERAKHIR dan hanya kamu yang dinyatakan MENANG (+4 poin)!",
+            "BATAS MALAM: Jika kamu mati dimangsa Siluman di malam hari (atau terkena Tembakan Terakhir Pemburu), kamu hanya gugur seperti biasa dan TIDAK mendapat kemenangan."
+          ],
+          "winCondition": "Menang solo (+4 poin) secara instan tepat saat desa memutuskan mengeksekusi dirimu lewat Voting Siang.",
+          "tips": [
+            "Jangan bersikap terlalu konyol sejak detik pertama karena warga akan langsung sadar kamu Tumbal dan mengabaikanmu.",
+            "Cara paling ampuh: berpura-puralah seperti Siluman yang gugup, salah menyebut alibi tipis-tipis, atau klaim peran palsu yang sedikit bertabrakan agar desa yakin kamu penyusup."
+          ],
+          "counterplay": [
+            "Jika seseorang terlalu bersemangat ingin di-voting keluar atau sengaja memancing amarah desa tanpa alasan jelas, tahan diri—pilih \"Lewati Eksekusi\" atau uji dengan Penerawang.",
+            "Tim Siluman juga harus berhati-hati: membiarkan Tumbal dieksekusi siang hari otomatis menggagalkan kemenangan Siluman!"
+          ]
+        }
+      }
+    }
+  }
+}

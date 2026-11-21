@@ -1,8 +1,7 @@
 import type { NextConfig } from 'next';
 
-const isStaticExport = process.env.STATIC_EXPORT === 'true';
-
 const nextConfig: NextConfig = {
+  output: 'export',
   reactStrictMode: true,
   eslint: {
     ignoreDuringBuilds: true,
@@ -10,28 +9,17 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
-  images: isStaticExport
-    ? {
-        unoptimized: true,
-      }
-    : {
-        remotePatterns: [
-          {
-            protocol: 'https',
-            hostname: 'picsum.photos',
-            port: '',
-            pathname: '/**',
-          },
-        ],
+  images: {
+    unoptimized: true,
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'picsum.photos',
+        port: '',
+        pathname: '/**',
       },
-  ...(isStaticExport
-    ? {
-        output: 'export' as const,
-        trailingSlash: true,
-      }
-    : {
-        output: 'standalone' as const,
-      }),
+    ],
+  },
   transpilePackages: ['motion'],
   webpack: (config, { dev }) => {
     if (dev) {

@@ -92,6 +92,20 @@ import {
  * Reuses the exact same pure engines across all 5 games + v3.1.0 session platform,
  * enforcing actor/seat ownership and guaranteeing per-peer secret isolation.
  */
+export interface HydratedAuthorityState {
+  room: RoomDoc;
+  players: RoomPlayerDoc[];
+  secretsByRound?: Record<string, Record<string, PlayerSecretDoc>>;
+  serverState: ServerRoundStateDoc | null;
+  frequencyGuesses?: Record<string, Record<string, number>>;
+  pelukisVotes?: Record<string, Record<string, string>>;
+  malamSilumanNightActions?: Record<string, Record<string, string>>;
+  malamSilumanVotes?: Record<string, Record<string, string>>;
+  suitPicks?: Record<string, Record<string, SuitPick>>;
+  messages?: ChatMessage[];
+  presence?: Record<string, PresenceEntry>;
+}
+
 export class LanHostAuthority {
   private room: RoomDoc;
   private players: Map<string, RoomPlayerDoc> = new Map();
@@ -103,7 +117,53 @@ export class LanHostAuthority {
   private malamSilumanVotesByRound: Map<string, Map<string, string>> = new Map();
   private suitPicksByClash: Map<string, Map<string, SuitPick>> = new Map();
   private messages: ChatMessage[] = [];
+  private pendingSystemMessages: string[] = [];
   private presence: Record<string, PresenceEntry> = {};
+
+  static hydrate(state: HydratedAuthorityState): LanHostAuthority {
+    const firstPlayer = state.players[0];
+    const instance = new LanHostAuthority({
+      hostUid: state.room.hostUid,
+      hostName: firstPlayer?.displayName ?? 'Host',
+      avatarColor: firstPlayer?.avatarColor ?? '#DC2626',
+      gameType: state.room.gameType,
+      code: state.room.code,
+    });
+    instance.room = structuredClone(state.room);
+    instance.players = new Map(state.players.map((p) => [p.uid, structuredClone(p)]));
+    instance.secretsByRound = new Map(
+      Object.entries(state.secretsByRound ?? {}).map(([roundId, entries]) => [
+        roundId,
+        new Map(Object.entries(entries).map(([uid, sec]) => [uid, structuredClone(sec)])),
+      ]),
+    );
+    instance.serverState = state.serverState ? structuredClone(state.serverState) : null;
+    instance.frequencyGuessesByRound = new Map(
+      Object.entries(state.frequencyGuesses ?? {}).map(([k, v]) => [k, new Map(Object.entries(v))]),
+    );
+    instance.pelukisVotesByRound = new Map(
+      Object.entries(state.pelukisVotes ?? {}).map(([k, v]) => [k, new Map(Object.entries(v))]),
+    );
+    instance.malamSilumanNightActionsByRound = new Map(
+      Object.entries(state.malamSilumanNightActions ?? {}).map(([k, v]) => [
+        k,
+        new Map(Object.entries(v)),
+      ]),
+    );
+    instance.malamSilumanVotesByRound = new Map(
+      Object.entries(state.malamSilumanVotes ?? {}).map(([k, v]) => [
+        k,
+        new Map(Object.entries(v)),
+      ]),
+    );
+    instance.suitPicksByClash = new Map(
+      Object.entries(state.suitPicks ?? {}).map(([k, v]) => [k, new Map(Object.entries(v))]),
+    );
+    instance.messages = structuredClone(state.messages ?? []);
+    instance.pendingSystemMessages = [];
+    instance.presence = structuredClone(state.presence ?? {});
+    return instance;
+  }
 
   constructor(params: {
     hostUid: string;
@@ -197,13 +257,45 @@ export class LanHostAuthority {
     );
   }
 
+  exportState(): HydratedAuthorityState {
+    const mapToRecord = <T>(m: Map<string, Map<string, T>>): Record<string, Record<string, T>> => {
+      const out: Record<string, Record<string, T>> = {};
+      for (const [k, inner] of m.entries()) {
+        out[k] = Object.fromEntries(inner.entries());
+      }
+      return out;
+    };
+
+    return {
+      room: structuredClone(this.room),
+      players: structuredClone(this.getPlayersList()),
+      secretsByRound: mapToRecord(this.secretsByRound),
+      serverState: this.serverState ? structuredClone(this.serverState) : null,
+      frequencyGuesses: mapToRecord(this.frequencyGuessesByRound),
+      pelukisVotes: mapToRecord(this.pelukisVotesByRound),
+      malamSilumanNightActions: mapToRecord(this.malamSilumanNightActionsByRound),
+      malamSilumanVotes: mapToRecord(this.malamSilumanVotesByRound),
+      suitPicks: mapToRecord(this.suitPicksByClash),
+      messages: [...this.messages],
+      presence: structuredClone(this.presence),
+    };
+  }
+
+  consumeEmittedSystemMessages(): string[] {
+    const msgs = [...this.pendingSystemMessages];
+    this.pendingSystemMessages = [];
+    return msgs;
+  }
+
   private pushSystemMessage(text: string): void {
     const now = Date.now();
+    const clean = text.slice(0, 280);
+    this.pendingSystemMessages.push(clean);
     this.messages.push({
       id: `sys_${now}_${Math.random().toString(36).slice(2, 6)}`,
       senderUid: 'system',
       senderName: 'Yuk Main',
-      text: text.slice(0, 280),
+      text: clean,
       type: 'system',
       createdAt: now,
     });

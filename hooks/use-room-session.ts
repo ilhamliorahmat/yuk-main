@@ -1,32 +1,58 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
-import { getFirebaseServices } from '../lib/firebase/client';
-import { handleFirestoreError, OperationType } from '../lib/firebase/errors';
 import type {
   ChatMessage,
   PlayerSecretDoc,
   PresenceEntry,
   RoomDoc,
   RoomPlayerDoc,
-} from '../lib/games/types';
-import { isLanRoomId, type LanRoomSnapshot } from '../lib/lan/lan-protocol';
-import { lanRuntime } from '../lib/lan/lan-runtime';
+} from '@/lib/games/types';
+import { isLanRoomId, type LanRoomSnapshot } from '@/lib/lan/lan-protocol';
+import { lanRuntime } from '@/lib/lan/lan-runtime';
 import {
-  attachRoomPresence,
-  subscribeToRoomChat,
-  subscribeToRoomPresence,
-} from '../lib/platform/chat-presence';
-import { fetchAllRoundSecrets } from '../lib/platform/room-service';
+  ApiRequestError,
+  apiFetch,
+  buildPhpApiUrl,
+  subscribeRoomMutation,
+} from '@/lib/platform/api-client';
 
-function getTimestampMs(val: unknown): number {
-  if (val && typeof val === 'object' && 'toMillis' in val && typeof val.toMillis === 'function') {
-    return (val as { toMillis: () => number }).toMillis();
-  }
-  if (typeof val === 'number') return val;
-  return 0;
+interface OnlineRoomSnapshotPayload {
+  unchanged?: boolean;
+  version?: number;
+  room?: RoomDoc;
+  players?: RoomPlayerDoc[];
+  mySecretsBySeat?: Record<string, PlayerSecretDoc | null>;
+  revealedSecrets?: Record<string, PlayerSecretDoc>;
+  messages?: ChatMessage[];
+  presence?: Record<string, PresenceEntry>;
 }
+
+interface OnlineSessionState {
+  key: string;
+  loaded: boolean;
+  missing: boolean;
+  room: RoomDoc | null;
+  players: RoomPlayerDoc[];
+  mySecretsBySeat: Record<string, PlayerSecretDoc | null>;
+  revealedSecrets: Record<string, PlayerSecretDoc>;
+  messages: ChatMessage[];
+  presence: Record<string, PresenceEntry>;
+}
+
+const EMPTY_ONLINE_STATE: OnlineSessionState = {
+  key: '',
+  loaded: false,
+  missing: false,
+  room: null,
+  players: [],
+  mySecretsBySeat: {},
+  revealedSecrets: {},
+  messages: [],
+  presence: {},
+};
+
+const HEARTBEAT_INTERVAL_MS = 7000;
 
 export function useRoomSession(params: {
   roomId: string | null;
@@ -35,43 +61,13 @@ export function useRoomSession(params: {
   activeSeatUid?: string | null;
   isStageDisplay?: boolean;
 }) {
-  const { roomId, uid, displayName, activeSeatUid, isStageDisplay = false } = params;
+  const { roomId, uid, activeSeatUid, isStageDisplay = false } = params;
   const isLan = isLanRoomId(roomId);
   const effectiveSecretUid = activeSeatUid || uid;
-  const sessionKey = roomId && uid ? `${roomId}:${uid}` : '';
+  const sessionKey = roomId && uid ? `${roomId}:${uid}:${isStageDisplay ? '1' : '0'}` : '';
 
   const [lanTick, setLanTick] = useState(0);
-
-  const [roomState, setRoomState] = useState<{
-    key: string;
-    room: RoomDoc | null;
-    missing: boolean;
-  }>({ key: '', room: null, missing: false });
-
-  const [playersState, setPlayersState] = useState<{
-    key: string;
-    players: RoomPlayerDoc[];
-  }>({ key: '', players: [] });
-
-  const [secretState, setSecretState] = useState<{
-    key: string;
-    secret: PlayerSecretDoc | null;
-  }>({ key: '', secret: null });
-
-  const [revealedState, setRevealedState] = useState<{
-    key: string;
-    secrets: Record<string, PlayerSecretDoc>;
-  }>({ key: '', secrets: {} });
-
-  const [chatState, setChatState] = useState<{
-    key: string;
-    messages: ChatMessage[];
-  }>({ key: '', messages: [] });
-
-  const [presenceState, setPresenceState] = useState<{
-    key: string;
-    presence: Record<string, PresenceEntry>;
-  }>({ key: '', presence: {} });
+  const [onlineState, setOnlineState] = useState<OnlineSessionState>(EMPTY_ONLINE_STATE);
 
   // 0. Subscribe to Zero-Internet WebRTC LAN Runtime when roomId starts with `lan_`
   useEffect(() => {
@@ -93,200 +89,176 @@ export function useRoomSession(params: {
     return lanRuntime.isRoomMissing(roomId);
   }, [isLan, roomId, lanTick]);
 
-  // 1. Subscribe to Firestore Room & Players (Online Mode only)
+  // 1. Subscribe to PHP 8 + MySQL Adaptive Polling Session (Online Mode)
   useEffect(() => {
     if (isLan || !roomId || !uid) return;
-    const { auth, db } = getFirebaseServices();
-    if (!db) return;
 
-    const currentKey = `${roomId}:${uid}`;
-    const roomPath = `rooms/${roomId}`;
-    const unsubRoom = onSnapshot(
-      doc(db, 'rooms', roomId),
-      (snap) => {
-        if (!snap.exists()) {
-          setRoomState({ key: currentKey, room: null, missing: true });
-        } else {
-          setRoomState({ key: currentKey, room: snap.data() as RoomDoc, missing: false });
+    const currentKey = `${roomId}:${uid}:${isStageDisplay ? '1' : '0'}`;
+    let closed = false;
+    let pollTimer: number | null = null;
+    let inFlight = false;
+    let pendingImmediate = false;
+    let latestVersion = 0;
+    let lastHeartbeatAtMs = 0;
+    let currentStatus: string = 'lobby';
+    let consecutiveErrors = 0;
+
+    const nextPollDelayMs = (): number => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return 8000;
+      }
+      if (consecutiveErrors > 0) {
+        return Math.min(8000, 1500 * Math.pow(1.6, consecutiveErrors));
+      }
+      return currentStatus === 'lobby' || currentStatus === 'round_end' ? 2200 : 1400;
+    };
+
+    const scheduleNext = () => {
+      if (closed) return;
+      if (pollTimer !== null) window.clearTimeout(pollTimer);
+      pollTimer = window.setTimeout(() => {
+        void pollOnce(false);
+      }, nextPollDelayMs());
+    };
+
+    const pollOnce = async (forceFullSnapshot: boolean) => {
+      if (closed) return;
+      if (inFlight) {
+        if (forceFullSnapshot) {
+          pendingImmediate = true;
         }
-      },
-      (error) => {
-        setRoomState({ key: currentKey, room: null, missing: false });
-        handleFirestoreError(error, OperationType.GET, roomPath, auth);
-      },
-    );
+        return;
+      }
 
-    const playersPath = `rooms/${roomId}/players`;
-    const playersQuery = query(
-      collection(db, 'rooms', roomId, 'players'),
-      where('roomId', '==', roomId),
-    );
-    const unsubPlayers = onSnapshot(
-      playersQuery,
-      (snap) => {
-        const list: RoomPlayerDoc[] = snap.docs
-          .map((d) => d.data() as RoomPlayerDoc)
-          .sort((a, b) => getTimestampMs(a.joinedAt) - getTimestampMs(b.joinedAt));
-        setPlayersState({ key: currentKey, players: list });
-      },
-      (error) => {
-        handleFirestoreError(error, OperationType.LIST, playersPath, auth);
-      },
-    );
+      inFlight = true;
+      const now = Date.now();
+      const sendHeartbeat = forceFullSnapshot || now - lastHeartbeatAtMs >= HEARTBEAT_INTERVAL_MS;
+      if (sendHeartbeat) {
+        lastHeartbeatAtMs = now;
+      }
+
+      try {
+        const snap = await apiFetch<OnlineRoomSnapshotPayload>(
+          buildPhpApiUrl('rooms/snapshot', {
+            roomId,
+            stage: isStageDisplay ? 1 : 0,
+            heartbeat: sendHeartbeat ? 1 : 0,
+            sinceVersion: forceFullSnapshot ? 0 : latestVersion,
+          }),
+        );
+        if (closed) return;
+        consecutiveErrors = 0;
+
+        if (typeof snap.version === 'number' && snap.version > 0) {
+          latestVersion = snap.version;
+        }
+
+        if (snap.unchanged) {
+          if (snap.presence) {
+            const nextPresence = snap.presence;
+            setOnlineState((prev) =>
+              prev.key === currentKey ? { ...prev, presence: nextPresence } : prev,
+            );
+          }
+        } else if (snap.room) {
+          currentStatus = snap.room.status;
+          setOnlineState({
+            key: currentKey,
+            loaded: true,
+            missing: false,
+            room: snap.room,
+            players: snap.players ?? [],
+            mySecretsBySeat: snap.mySecretsBySeat ?? {},
+            revealedSecrets: snap.revealedSecrets ?? {},
+            messages: snap.messages ?? [],
+            presence: snap.presence ?? {},
+          });
+        }
+      } catch (err) {
+        if (closed) return;
+        if (
+          err instanceof ApiRequestError &&
+          (err.status === 404 || err.status === 403 || err.status === 401)
+        ) {
+          setOnlineState({
+            ...EMPTY_ONLINE_STATE,
+            key: currentKey,
+            loaded: true,
+            missing: true,
+          });
+          return;
+        }
+        consecutiveErrors = Math.min(5, consecutiveErrors + 1);
+      } finally {
+        inFlight = false;
+        if (!closed) {
+          if (pendingImmediate) {
+            pendingImmediate = false;
+            void pollOnce(true);
+          } else {
+            scheduleNext();
+          }
+        }
+      }
+    };
+
+    const unsubMutation = subscribeRoomMutation(roomId, () => {
+      if (pollTimer !== null) window.clearTimeout(pollTimer);
+      void pollOnce(true);
+    });
+
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        if (pollTimer !== null) window.clearTimeout(pollTimer);
+        void pollOnce(true);
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibility);
+    }
+
+    void pollOnce(true);
 
     return () => {
-      unsubRoom();
-      unsubPlayers();
+      closed = true;
+      unsubMutation();
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibility);
+      }
+      if (pollTimer !== null) window.clearTimeout(pollTimer);
     };
-  }, [isLan, roomId, uid]);
+  }, [isLan, roomId, uid, isStageDisplay]);
 
-  const room = isLan
-    ? (lanSnapshot?.room ?? null)
-    : roomState.key === sessionKey
-      ? roomState.room
-      : null;
-  const roomMissing = isLan
-    ? lanMissing
-    : roomState.key === sessionKey
-      ? roomState.missing
-      : false;
+  const activeOnline = onlineState.key === sessionKey ? onlineState : EMPTY_ONLINE_STATE;
+
+  const room = isLan ? (lanSnapshot?.room ?? null) : activeOnline.room;
+  const roomMissing = isLan ? lanMissing : activeOnline.missing;
   const loadingRoom = isLan
     ? Boolean(roomId) && !lanSnapshot && !lanMissing
-    : Boolean(sessionKey) && roomState.key !== sessionKey;
+    : Boolean(sessionKey) && !activeOnline.loaded;
+
   const players = useMemo(() => {
     if (isLan) return lanSnapshot?.players ?? [];
-    return playersState.key === sessionKey ? playersState.players : [];
-  }, [isLan, lanSnapshot, playersState, sessionKey]);
-
-  // 2. Subscribe to isolated per-player secret for active round (NEVER on Layar Panggung)
-  const activeRoundId = room?.currentRoundId ?? '';
-  const activeStatus = room?.status ?? 'lobby';
-  const secretKey =
-    !isLan &&
-    !isStageDisplay &&
-    roomId &&
-    effectiveSecretUid &&
-    activeRoundId &&
-    activeStatus !== 'lobby'
-      ? `${roomId}:${activeRoundId}:${effectiveSecretUid}`
-      : '';
-
-  useEffect(() => {
-    if (
-      isLan ||
-      isStageDisplay ||
-      !roomId ||
-      !effectiveSecretUid ||
-      !activeRoundId ||
-      activeStatus === 'lobby'
-    ) {
-      return;
-    }
-    const { auth, db } = getFirebaseServices();
-    if (!db) return;
-
-    const currentSecretKey = `${roomId}:${activeRoundId}:${effectiveSecretUid}`;
-    const secretPath = `rooms/${roomId}/rounds/${activeRoundId}/secrets/${effectiveSecretUid}`;
-    const unsubSecret = onSnapshot(
-      doc(db, 'rooms', roomId, 'rounds', activeRoundId, 'secrets', effectiveSecretUid),
-      (snap) => {
-        setSecretState({
-          key: currentSecretKey,
-          secret: snap.exists() ? (snap.data() as PlayerSecretDoc) : null,
-        });
-      },
-      (error) => {
-        handleFirestoreError(error, OperationType.GET, secretPath, auth);
-      },
-    );
-
-    return () => unsubSecret();
-  }, [isLan, isStageDisplay, roomId, effectiveSecretUid, activeRoundId, activeStatus]);
+    return activeOnline.players;
+  }, [isLan, lanSnapshot, activeOnline.players]);
 
   const mySecret = isLan
     ? !isStageDisplay && effectiveSecretUid
       ? (lanSnapshot?.secretsByOwnedSeat[effectiveSecretUid] ?? null)
       : null
-    : secretKey && secretState.key === secretKey
-      ? secretState.secret
+    : !isStageDisplay && effectiveSecretUid && room?.status !== 'lobby'
+      ? (activeOnline.mySecretsBySeat[effectiveSecretUid] ?? null)
       : null;
-
-  // 3. Subscribe to RTDB Chat & Presence (Online Mode only)
-  const presenceUid = isStageDisplay && uid ? `stage_${uid}` : uid;
-  const rtdbKey = !isLan && roomId && presenceUid && displayName ? `${roomId}:${presenceUid}` : '';
-
-  useEffect(() => {
-    if (isLan || !roomId || !presenceUid || !displayName) return;
-
-    const currentRtdbKey = `${roomId}:${presenceUid}`;
-    const unsubChat = subscribeToRoomChat(roomId, (msgs) => {
-      setChatState({ key: currentRtdbKey, messages: msgs });
-    });
-    const detachPresence = attachRoomPresence({
-      roomId,
-      uid: presenceUid,
-      displayName: isStageDisplay ? 'Layar Panggung' : displayName,
-      isStage: isStageDisplay,
-    });
-    const unsubPresence = subscribeToRoomPresence(roomId, (entries) => {
-      setPresenceState({ key: currentRtdbKey, presence: entries });
-    });
-
-    return () => {
-      unsubChat();
-      detachPresence();
-      unsubPresence();
-    };
-  }, [isLan, roomId, presenceUid, displayName, isStageDisplay]);
-
-  const messages = isLan
-    ? (lanSnapshot?.messages ?? [])
-    : rtdbKey && chatState.key === rtdbKey
-      ? chatState.messages
-      : [];
-  const presence = isLan
-    ? (lanSnapshot?.presence ?? {})
-    : rtdbKey && presenceState.key === rtdbKey
-      ? presenceState.presence
-      : {};
-
-  // 4. Post-round secret role reveal (Online Mode fetches Firestore; LAN reads snapshot directly)
-  const revealKey =
-    !isLan && room && room.status === 'round_end' && room.currentRoundId
-      ? `${room.id}:${room.currentRoundId}`
-      : '';
-
-  useEffect(() => {
-    if (isLan || !room || !uid || room.status !== 'round_end' || !room.currentRoundId) return;
-    if (players.length === 0) return;
-
-    const currentRevealKey = `${room.id}:${room.currentRoundId}`;
-    let cancelled = false;
-
-    void fetchAllRoundSecrets(
-      room.id,
-      room.currentRoundId,
-      players.map((p) => p.uid),
-    )
-      .then((secrets) => {
-        if (!cancelled) {
-          setRevealedState({ key: currentRevealKey, secrets });
-        }
-      })
-      .catch(() => {
-        // Ignore transient reveal fetch errors
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isLan, room, uid, players]);
 
   const revealedSecrets = isLan
     ? (lanSnapshot?.revealedSecrets ?? {})
-    : revealKey && revealedState.key === revealKey
-      ? revealedState.secrets
+    : room?.status === 'round_end'
+      ? activeOnline.revealedSecrets
       : {};
+
+  const messages = isLan ? (lanSnapshot?.messages ?? []) : activeOnline.messages;
+  const presence = isLan ? (lanSnapshot?.presence ?? {}) : activeOnline.presence;
 
   return {
     room,
