@@ -24,6 +24,7 @@ describe('Static Export + PHP 8 + PDO MySQL Architecture Parity', () => {
   it('ships complete PHP 8 backend, Apache .htaccess, and MySQL InnoDB schema', () => {
     const requiredFiles = [
       'database/mysql_schema.sql',
+      '.github/workflows/deploy-infinityfree.yml',
       'public/.htaccess',
       'public/api/.htaccess',
       'public/api/lib/.htaccess',
@@ -43,6 +44,7 @@ describe('Static Export + PHP 8 + PDO MySQL Architecture Parity', () => {
     for (const rel of requiredFiles) {
       expect(existsSync(resolve(ROOT, rel))).toBe(true);
     }
+    expect(existsSync(resolve(ROOT, '.github/workflows/ci.yml'))).toBe(false);
 
     const schema = readFileSync(resolve(ROOT, 'database/mysql_schema.sql'), 'utf8');
     const phpDb = readFileSync(resolve(ROOT, 'public/api/lib/db.php'), 'utf8');

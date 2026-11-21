@@ -1,0 +1,169 @@
+name: Deploy Yuk Main to InfinityFree
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - '**.md'
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-infinityfree-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-and-deploy:
+    name: Test, Build & FTPS Deploy (InfinityFree)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run unit & static-export parity tests
+        run: npm run test
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: TypeScript check & static export build
+        run: |
+          npx tsc --noEmit
+          npm run build
+          test -f out/index.html
+          test -f out/.htaccess
+          test -f out/api/.htaccess
+          test -f out/api/lib/.htaccess
+          test -f out/api/index.php
+
+      - name: Parse YUK_MAIN_DEPLOY_SECRETS & prepare PHP DB config
+        id: secrets
+        if: github.event_name != 'pull_request'
+        env:
+          RAW_DEPLOY_SECRETS: ${{ secrets.YUK_MAIN_DEPLOY_SECRETS }}
+        run: |
+          node - <<'EOF'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const raw = (process.env.RAW_DEPLOY_SECRETS || '').trim();
+          if (!raw) {
+            console.error('Missing GitHub Repository Secret: YUK_MAIN_DEPLOY_SECRETS');
+            process.exit(1);
+          }
+
+          let parsed;
+          try {
+            parsed = JSON.parse(raw);
+          } catch (err) {
+            console.error('YUK_MAIN_DEPLOY_SECRETS is not valid JSON:', err.message);
+            process.exit(1);
+          }
+
+          const ftp = parsed.ftp || {};
+          const server = String(ftp.server || '').trim();
+          const username = String(ftp.username || '').trim();
+          const password = String(ftp.password || '');
+          let serverDir = String(ftp.serverDir || '/htdocs/').trim() || '/htdocs/';
+          if (!serverDir.endsWith('/')) serverDir += '/';
+          const protocol = String(ftp.protocol || 'ftps').trim().toLowerCase();
+          const security = String(ftp.security || 'loose').trim().toLowerCase();
+
+          if (!server || !username || !password) {
+            console.error('YUK_MAIN_DEPLOY_SECRETS.ftp must include server, username, and password.');
+            process.exit(1);
+          }
+
+          for (const secretVal of [server, username, password]) {
+            if (secretVal) {
+              console.log(`::add-mask::${secretVal}`);
+            }
+          }
+
+          const outFile = process.env.GITHUB_OUTPUT;
+          const appendOutput = (k, v) => fs.appendFileSync(outFile, `${k}=${v}\n`, 'utf8');
+          appendOutput('ftp_server', server);
+          appendOutput('ftp_username', username);
+          appendOutput('ftp_password', password);
+          appendOutput('ftp_server_dir', serverDir);
+          appendOutput('ftp_protocol', protocol);
+          appendOutput('ftp_security', security);
+
+          const mysql = parsed.mysql || {};
+          const mysqlHost = String(mysql.host || '').trim();
+          const mysqlPort = String(mysql.port || '3306').trim() || '3306';
+          const mysqlDb = String(mysql.db || mysql.database || '').trim();
+          const mysqlUser = String(mysql.user || mysql.username || '').trim();
+          const mysqlPass = String(mysql.pass || mysql.password || '');
+
+          if (mysqlHost && mysqlDb && mysqlUser) {
+            for (const secretVal of [mysqlHost, mysqlDb, mysqlUser, mysqlPass]) {
+              if (secretVal) {
+                console.log(`::add-mask::${secretVal}`);
+              }
+            }
+
+            const escapePhpSingle = (s) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            const phpContent = [
+              '<?php',
+              '// Generated ephemerally during GitHub Actions deploy — never committed to Git.',
+              'return [',
+              `    'mysql_host' => '${escapePhpSingle(mysqlHost)}',`,
+              `    'mysql_port' => '${escapePhpSingle(mysqlPort)}',`,
+              `    'mysql_db'   => '${escapePhpSingle(mysqlDb)}',`,
+              `    'mysql_user' => '${escapePhpSingle(mysqlUser)}',`,
+              `    'mysql_pass' => '${escapePhpSingle(mysqlPass)}',`,
+              '];',
+              '',
+            ].join('\n');
+
+            fs.writeFileSync(path.resolve('out/api/config.local.php'), phpContent, 'utf8');
+            appendOutput('has_mysql_config', 'true');
+            console.log('Generated out/api/config.local.php from YUK_MAIN_DEPLOY_SECRETS.mysql.');
+          } else {
+            appendOutput('has_mysql_config', 'false');
+            console.log('No mysql block in YUK_MAIN_DEPLOY_SECRETS; preserving existing server api/config.local.php.');
+          }
+          EOF
+
+      - name: FTPS Deploy ./out/ to InfinityFree (with MySQL config)
+        if: github.event_name != 'pull_request' && steps.secrets.outputs.has_mysql_config == 'true'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ steps.secrets.outputs.ftp_server }}
+          username: ${{ steps.secrets.outputs.ftp_username }}
+          password: ${{ steps.secrets.outputs.ftp_password }}
+          protocol: ${{ steps.secrets.outputs.ftp_protocol }}
+          security: ${{ steps.secrets.outputs.ftp_security }}
+          local-dir: ./out/
+          server-dir: ${{ steps.secrets.outputs.ftp_server_dir }}
+          exclude: |
+            **/.git*
+            **/.git*/**
+
+      - name: FTPS Deploy ./out/ to InfinityFree (preserve manual server config.local.php)
+        if: github.event_name != 'pull_request' && steps.secrets.outputs.has_mysql_config != 'true'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ steps.secrets.outputs.ftp_server }}
+          username: ${{ steps.secrets.outputs.ftp_username }}
+          password: ${{ steps.secrets.outputs.ftp_password }}
+          protocol: ${{ steps.secrets.outputs.ftp_protocol }}
+          security: ${{ steps.secrets.outputs.ftp_security }}
+          local-dir: ./out/
+          server-dir: ${{ steps.secrets.outputs.ftp_server_dir }}
+          exclude: |
+            **/.git*
+            **/.git*/**
+            api/config.local.php
