@@ -13,11 +13,11 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: 'Yuk Main — Platform Game Tongkrongan Indonesia',
   description:
-    'Hidupkan tongkronganmu bareng Yuk Main: 4 permainan grup interaktif (Yang Bener Yang Mana, Kata-Kata Hari Ini, Satu Frekuensi, dan Fakta Hari Ini) yang 100% gratis, open-source, dan siap dimainkan Online maupun LAN Party tanpa internet.',
+    'Hidupkan tongkronganmu bareng Yuk Main: permainan grup interaktif berbahasa Indonesia yang 100% Source Available dan siap dimainkan Online maupun LAN Party tanpa internet.',
   openGraph: {
     title: 'Yuk Main — Platform Game Tongkrongan Indonesia',
     description:
-      '4 permainan grup interaktif berbahasa Indonesia untuk mengasah otak dan skill sosial di tongkrongan—100% gratis, open-source, Online & LAN Party tanpa internet.',
+      'Permainan grup interaktif berbahasa Indonesia untuk mengasah otak dan skill sosial di tongkrongan—100% Source Available, Online & LAN Party tanpa internet.',
     type: 'website',
   },
   twitter: {

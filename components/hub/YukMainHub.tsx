@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Image, { type StaticImageData } from 'next/image';
+import Link from 'next/link';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   ArrowRight,
@@ -13,6 +14,7 @@ import {
   Globe,
   Monitor,
   QrCode,
+  UserRound,
   Users,
   Wifi,
   X,
@@ -274,6 +276,12 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
             >
               Cara Bermain
             </button>
+            <Link
+              href="/about"
+              className="hover:text-white transition-colors whitespace-nowrap shrink-0"
+            >
+              Tentang
+            </Link>
           </nav>
 
           <div className="flex items-center gap-3 shrink-0">
@@ -307,7 +315,12 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
 
           <div className="relative space-y-4">
             <p className="text-xs sm:text-sm font-medium text-amber-300/90 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
-              <span>100% Gratis &amp; Open-Source</span>
+              <a
+                href="#source-available"
+                className="hover:text-amber-200 underline decoration-amber-400/50 decoration-dotted underline-offset-4 transition-colors"
+              >
+                100% Source Available*
+              </a>
               <span aria-hidden="true" className="text-slate-600">·</span>
               <span>{PARTY_GAMES.length} Permainan Grup</span>
               <span aria-hidden="true" className="text-slate-600">·</span>
@@ -325,7 +338,14 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
                   {PARTY_GAMES.length} permainan grup
                 </strong>{' '}
                 yang bakal mengasah otak dan skill sosial kalian, loh—tanpa ribet instal
-                aplikasi. Platform ini 100% gratis dan open-source, dikembangkan oleh{' '}
+                aplikasi. Platform ini{' '}
+                <a
+                  href="#source-available"
+                  className="text-slate-100 hover:text-amber-200 underline decoration-slate-500/70 decoration-dotted underline-offset-4 transition-colors"
+                >
+                  100% Source Available*
+                </a>
+                , dikembangkan oleh{' '}
                 <button
                   type="button"
                   onClick={() => setCreatorCardsOpen((prev) => !prev)}
@@ -338,7 +358,7 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
                 .
               </p>
 
-              {/* 2 Tiny Summoned Creator Cards (GitHub + Website) */}
+              {/* Summoned Creator Cards (About Me + GitHub + Website) */}
               <AnimatePresence>
                 {creatorCardsOpen && (
                   <motion.div
@@ -347,8 +367,26 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -4, scale: 0.98 }}
                     transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                    className="mt-4 inline-grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-md mx-auto text-left"
+                    className="mt-4 inline-grid grid-cols-1 sm:grid-cols-3 gap-2.5 w-full max-w-2xl mx-auto text-left"
                   >
+                    <Link
+                      href="/about"
+                      className="group min-h-[56px] px-3.5 py-2.5 rounded-xl bg-[#131A24] border border-slate-700/90 hover:border-amber-400/60 flex items-center justify-between gap-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-[#0B1018] border border-slate-800 flex items-center justify-center shrink-0 text-slate-200 group-hover:text-amber-300 transition-colors">
+                          <UserRound className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-white truncate">About Me</p>
+                          <p className="text-[11px] text-slate-400 truncate">
+                            Tentang kreator
+                          </p>
+                        </div>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-amber-300 shrink-0 transition-colors" />
+                    </Link>
+
                     <a
                       href={CREATOR_GITHUB_URL}
                       target="_blank"
@@ -650,9 +688,58 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
         </section>
       </main>
 
-      <footer className="border-t border-slate-800/80 py-6 px-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-center text-center text-xs text-slate-500">
-          <span>Yuk Main — Hub Permainan Pesta Indonesia (Online &amp; LAN Party)</span>
+      <footer
+        id="source-available"
+        className="border-t border-slate-800/80 py-8 px-4 sm:px-6 scroll-mt-20"
+      >
+        <div className="max-w-6xl mx-auto space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-slate-400">
+            <span className="text-slate-300 font-medium">
+              Yuk Main — Hub Permainan Pesta Indonesia (Online &amp; LAN Party)
+            </span>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+              <Link
+                href="/about"
+                className="text-amber-300 hover:text-amber-200 font-medium transition-colors whitespace-nowrap shrink-0"
+              >
+                Tentang Kreator (About Me)
+              </Link>
+              <a
+                href={CREATOR_GITHUB_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-white transition-colors whitespace-nowrap shrink-0"
+              >
+                GitHub
+              </a>
+              <a
+                href={CREATOR_WEBSITE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-white transition-colors whitespace-nowrap shrink-0"
+              >
+                liorahmat.xo.je
+              </a>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-slate-800/60 text-xs text-slate-400 leading-relaxed max-w-4xl">
+            <p>
+              <strong className="text-slate-200 font-semibold">*100% Source Available</strong>{' '}
+              <span className="text-slate-500">(PolyForm Noncommercial License 1.0.0)</span> — Kode
+              sumber Yuk Main tersedia terbuka untuk dipelajari, dimodifikasi, dan di-hosting
+              sendiri secara gratis untuk keperluan pribadi, edukasi, riset, maupun acara komunitas
+              non-komersial. Penggunaan komersial atau monetisasi oleh pihak lain memerlukan izin
+              tertulis dari{' '}
+              <Link
+                href="/about"
+                className="text-amber-300 hover:text-amber-200 underline decoration-amber-400/50 underline-offset-4 transition-colors"
+              >
+                Ilham Liorahmat
+              </Link>
+              .
+            </p>
+          </div>
         </div>
       </footer>
 

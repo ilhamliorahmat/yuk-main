@@ -42,6 +42,7 @@ jobs:
           npx tsc --noEmit
           npm run build
           test -f out/index.html
+          test -f out/about.html
           test -f out/.htaccess
           test -f out/api/.htaccess
           test -f out/api/lib/.htaccess

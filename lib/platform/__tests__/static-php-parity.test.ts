@@ -98,4 +98,21 @@ describe('Static Export + PHP 8 + PDO MySQL Architecture Parity', () => {
       expect(dispatcherSrc).toContain(`case '${action}':`);
     }
   });
+
+  it('uses 100% Source Available* branding with footer explanation and ships the /about page', () => {
+    expect(existsSync(resolve(ROOT, 'app/about/page.tsx'))).toBe(true);
+    expect(existsSync(resolve(ROOT, 'components/about/AboutCreatorView.tsx'))).toBe(true);
+
+    const hubSrc = readFileSync(resolve(ROOT, 'components/hub/YukMainHub.tsx'), 'utf8');
+    const layoutSrc = readFileSync(resolve(ROOT, 'app/layout.tsx'), 'utf8');
+
+    expect(hubSrc).toContain('100% Source Available*');
+    expect(hubSrc).toContain('id="source-available"');
+    expect(hubSrc).toContain('PolyForm Noncommercial License 1.0.0');
+    expect(hubSrc).toContain('href="/about"');
+    expect(hubSrc).not.toMatch(/open[- ]source/i);
+
+    expect(layoutSrc).toContain('100% Source Available');
+    expect(layoutSrc).not.toMatch(/open[- ]source/i);
+  });
 });
