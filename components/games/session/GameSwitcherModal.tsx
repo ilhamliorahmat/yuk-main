@@ -6,6 +6,7 @@ import {
   BookOpenCheck,
   Brush,
   Check,
+  Dices,
   Moon,
   Radio,
   Search,
@@ -78,6 +79,14 @@ const GAME_OPTIONS: Array<{
     playersHint: '4–12 pemain',
     icon: Moon,
     accent: 'text-rose-400',
+  },
+  {
+    id: 'ular_tangga',
+    title: 'Ular Tangga RP',
+    subtitle: 'Ular tangga RPG dengan 4 kelas hero, skenario art pack & tas item rahasia.',
+    playersHint: '2–12 pemain',
+    icon: Dices,
+    accent: 'text-amber-400',
   },
 ];
 

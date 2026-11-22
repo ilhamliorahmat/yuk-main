@@ -11,6 +11,7 @@ const YUKMAIN_ALLOWED_GAME_TYPES = [
     'fakta_hari_ini',
     'pelukis_gadungan',
     'malam_siluman',
+    'ular_tangga',
 ];
 
 function yukmain_row_to_player(array $row): array
@@ -186,12 +187,14 @@ function yukmain_build_default_room(string $roomId, string $code, string $gameTy
         'customDrawingPrompts'  => [],
         'pelukisStrokeRounds'   => 2,
         'malamSilumanSettings'  => yukmain_default_malam_siluman_settings(),
+        'ularTanggaSettings'    => yukmain_default_ular_tangga_settings(),
         'eliminatedUids'        => [],
         'eliminationLog'        => [],
         'frequencyState'        => null,
         'faktaState'            => null,
         'lukisanState'          => null,
         'malamSilumanState'     => null,
+        'ularTanggaState'       => null,
         'activeVote'            => null,
         'pendingSpyGuess'       => null,
         'lastRoundResult'       => null,
@@ -321,6 +324,7 @@ function yukmain_perform_empty_room_reset_locked(PDO $tx, array $roomRow, int $n
     $room['faktaState'] = null;
     $room['lukisanState'] = null;
     $room['malamSilumanState'] = null;
+    $room['ularTanggaState'] = null;
     $room['activeVote'] = null;
     $room['pendingSpyGuess'] = null;
     $room['lastRoundResult'] = null;
@@ -572,6 +576,14 @@ function yukmain_leave_room(PDO $pdo, array $user, string $roomId): array
                 $fs['phaseControllerUid'] = $nextCtrl['uid'];
                 $fs['phaseControllerName'] = $nextCtrl['displayName'];
                 $room['faktaState'] = $fs;
+            }
+        }
+
+        // Ular Tangga RP turn failover if current turn player left
+        if (($room['status'] ?? 'lobby') === 'playing' && !empty($room['ularTanggaState']) && function_exists('yukmain_ut_ensure_turn_valid')) {
+            $nextUt = yukmain_ut_ensure_turn_valid($room, $remaining);
+            if ($nextUt !== null) {
+                $room['ularTanggaState'] = $nextUt;
             }
         }
 

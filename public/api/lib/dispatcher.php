@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/rooms.php';
 require_once __DIR__ . '/engine_games_social.php';
 require_once __DIR__ . '/engine_malam_siluman.php';
+require_once __DIR__ . '/engine_ular_tangga.php';
 
 function yukmain_owns_seat(string $deviceUid, string $targetUid, array $playersByUid): bool
 {
@@ -311,6 +312,11 @@ function yukmain_dispatch_room_action(
                 $nextBrb = !empty($payload['isBrb']);
                 $tx->prepare('UPDATE room_players SET is_brb = ?, updated_at_ms = ? WHERE room_id = ? AND uid = ?')
                     ->execute([$nextBrb ? 1 : 0, $now, $roomId, $targetUid]);
+                $updatedPlayers = yukmain_load_room_players($tx, $roomId);
+                $nextUt = yukmain_ut_ensure_turn_valid($room, $updatedPlayers);
+                if ($nextUt !== null) {
+                    $room['ularTanggaState'] = $nextUt;
+                }
                 $room['updatedAt'] = $now;
                 $pushSys(
                     $nextBrb
@@ -357,6 +363,10 @@ function yukmain_dispatch_room_action(
                     $tx->prepare('UPDATE room_players SET is_host = 0 WHERE room_id = ?')->execute([$roomId]);
                     $tx->prepare('UPDATE room_players SET is_host = 1, is_ready = 1, updated_at_ms = ? WHERE room_id = ? AND uid = ?')
                         ->execute([$now, $roomId, $nextHost['uid']]);
+                }
+                $nextUt = yukmain_ut_ensure_turn_valid($room, $remaining);
+                if ($nextUt !== null) {
+                    $room['ularTanggaState'] = $nextUt;
                 }
                 $room['updatedAt'] = $now;
                 $pushSys("{$playersByUid[$senderUid]['displayName']} keluar dari ruang.");
@@ -1843,13 +1853,242 @@ function yukmain_dispatch_room_action(
                 break;
             }
 
+            // ===================== GAME #7: ULAR TANGGA RP =====================
+            case 'updateUlarTanggaSettings': {
+                yukmain_require_host($senderUid, $room);
+                $existing = yukmain_sanitize_ular_tangga_settings($room['ularTanggaSettings'] ?? null);
+                $incoming = is_array($payload['settings'] ?? null) ? $payload['settings'] : $payload;
+                $existingClasses = is_object($existing['classSelectionByUid'] ?? null)
+                    ? []
+                    : (is_array($existing['classSelectionByUid'] ?? null) ? $existing['classSelectionByUid'] : []);
+                $incomingClasses = is_array($incoming['classSelectionByUid'] ?? null)
+                    ? $incoming['classSelectionByUid']
+                    : [];
+                $merged = array_merge($existing, $incoming, [
+                    'classSelectionByUid' => array_merge($existingClasses, $incomingClasses),
+                ]);
+                $clean = yukmain_sanitize_ular_tangga_settings($merged);
+                $room['enabledPacks'] = [$clean['scenarioId']];
+                $room['ularTanggaSettings'] = $clean;
+                $room['updatedAt'] = $now;
+                break;
+            }
+
+            case 'selectUlarTanggaClass': {
+                if (($room['status'] ?? 'lobby') !== 'lobby') {
+                    throw new RuntimeException('Kelas hero hanya bisa dipilih di Lobi sebelum petualangan dimulai.');
+                }
+                $actor = yukmain_resolve_actor($senderUid, $payload, $playersByUid);
+                $rawClass = (string) ($payload['heroClass'] ?? 'acak');
+                $allowed = ['acak', 'ksatria', 'pencuri', 'penyihir', 'tabib'];
+                $nextClass = in_array($rawClass, $allowed, true) ? $rawClass : 'acak';
+                $existing = yukmain_sanitize_ular_tangga_settings($room['ularTanggaSettings'] ?? null);
+                $existingClasses = is_object($existing['classSelectionByUid'] ?? null)
+                    ? []
+                    : (is_array($existing['classSelectionByUid'] ?? null) ? $existing['classSelectionByUid'] : []);
+                $existingClasses[$actor['uid']] = $nextClass;
+                $existing['classSelectionByUid'] = $existingClasses;
+                $room['ularTanggaSettings'] = yukmain_sanitize_ular_tangga_settings($existing);
+                $room['updatedAt'] = $now;
+                break;
+            }
+
+            case 'startUlarTanggaRound': {
+                yukmain_require_host($senderUid, $room);
+                $settings = yukmain_sanitize_ular_tangga_settings($room['ularTanggaSettings'] ?? null);
+                $nextRound = ((int) ($room['roundNumber'] ?? 0)) + 1;
+                $roundId = 'r' . $nextRound . '_' . base_convert((string) $now, 10, 36);
+                $created = yukmain_ut_create_round($players, $settings, $roundId);
+
+                yukmain_save_round_secrets($tx, $roomId, $roundId, $created['secretsByUid'], $now);
+                $scenarioPack = yukmain_ut_scenario_pack((string) $settings['scenarioId']);
+                yukmain_save_server_state($tx, $roomId, $roundId, [
+                    'roundId'      => $roundId,
+                    'roundNumber'  => $nextRound,
+                    'locationName' => $scenarioPack['name'],
+                    'spyUids'      => [],
+                    'spyNames'     => [],
+                    'createdAtMs'  => $now,
+                ], $now);
+
+                $room['status'] = 'playing';
+                $room['roundNumber'] = $nextRound;
+                $room['currentRoundId'] = $roundId;
+                $room['enabledPacks'] = [$settings['scenarioId']];
+                $room['ularTanggaSettings'] = $settings;
+                $room['ularTanggaState'] = $created['state'];
+                $room['lastRoundResult'] = null;
+                $room['updatedAt'] = $now;
+
+                $pushSys($created['state']['eventLog'][0] ?? 'Petualangan Ular Tangga RP dimulai!');
+                $result = ['roundId' => $roundId, 'currentTurnUid' => $created['state']['currentTurnUid']];
+                break;
+            }
+
+            case 'useUlarTanggaSkill': {
+                $uts = $room['ularTanggaState'] ?? null;
+                if (($room['status'] ?? 'lobby') !== 'playing' || !is_array($uts)) {
+                    throw new RuntimeException('Petualangan belum aktif.');
+                }
+                $actor = yukmain_resolve_actor($senderUid, $payload, $playersByUid);
+                $targetUid = is_string($payload['targetUid'] ?? null) && $payload['targetUid'] !== ''
+                    ? $payload['targetUid']
+                    : null;
+                $res = yukmain_ut_apply_skill($uts, $actor['uid'], $targetUid);
+                $room['ularTanggaState'] = $res['state'];
+                $room['updatedAt'] = $now;
+                $pushSys($res['message']);
+                $result = ['message' => $res['message']];
+                break;
+            }
+
+            case 'useUlarTanggaItem': {
+                $uts = $room['ularTanggaState'] ?? null;
+                if (($room['status'] ?? 'lobby') !== 'playing' || !is_array($uts)) {
+                    throw new RuntimeException('Petualangan belum aktif.');
+                }
+                $actor = yukmain_resolve_actor($senderUid, $payload, $playersByUid);
+                $secret = yukmain_load_round_secret($tx, $roomId, $currentRoundId, $actor['uid']) ?? [];
+                $actorBag = is_array($secret['ularBag'] ?? null) ? $secret['ularBag'] : [];
+                $itemId = (string) ($payload['itemId'] ?? '');
+                $targetUid = is_string($payload['targetUid'] ?? null) && $payload['targetUid'] !== ''
+                    ? $payload['targetUid']
+                    : null;
+
+                $res = yukmain_ut_apply_bag_item($uts, $actor['uid'], $actorBag, $itemId, $targetUid);
+                $secret['ularBag'] = $res['nextBag'];
+                yukmain_save_round_secret_single($tx, $roomId, $currentRoundId, $actor['uid'], $secret, $now);
+
+                $room['ularTanggaState'] = $res['state'];
+                $room['updatedAt'] = $now;
+                $pushSys($res['message']);
+                $result = ['message' => $res['message']];
+                break;
+            }
+
+            case 'rollUlarTanggaDice': {
+                $uts = $room['ularTanggaState'] ?? null;
+                if (($room['status'] ?? 'lobby') !== 'playing' || !is_array($uts)) {
+                    throw new RuntimeException('Petualangan belum aktif.');
+                }
+                $actor = yukmain_resolve_actor($senderUid, $payload, $playersByUid);
+                $secret = yukmain_load_round_secret($tx, $roomId, $currentRoundId, $actor['uid']) ?? [];
+                $actorBag = is_array($secret['ularBag'] ?? null) ? $secret['ularBag'] : [];
+
+                $brbSet = [];
+                foreach ($players as $p) {
+                    if (!empty($p['isBrb'])) {
+                        $brbSet[$p['uid']] = true;
+                    }
+                }
+
+                $res = yukmain_ut_roll_dice_and_move($uts, $actor['uid'], $actorBag, $brbSet);
+                $secret['ularBag'] = $res['nextBag'];
+                yukmain_save_round_secret_single($tx, $roomId, $currentRoundId, $actor['uid'], $secret, $now);
+
+                if (!empty($res['finished'])) {
+                    $deltas = yukmain_ut_score_deltas($res['state']);
+                    yukmain_apply_score_deltas($tx, $roomId, $playersByUid, $deltas, $now);
+                    $scenarioName = yukmain_ut_scenario_pack((string) ($res['state']['scenarioId'] ?? 'menara_nusantara'))['name'];
+                    $winUid = (string) ($res['state']['winnerUid'] ?? $actor['uid']);
+                    $winName = (string) ($res['state']['winnerName'] ?? $actor['displayName']);
+                    $roundResult = [
+                        'roundNumber'     => (int) ($room['roundNumber'] ?? 1),
+                        'winnerTeam'      => 'petualang',
+                        'reason'          => $res['message'],
+                        'locationName'    => $scenarioName,
+                        'guessedLocation' => null,
+                        'spyUids'         => [$winUid],
+                        'spyNames'        => [$winName],
+                        'resolvedAtMs'    => $now,
+                        'scoresApplied'   => true,
+                    ];
+                    $room['status'] = 'round_end';
+                    $room['currentMatchRounds'] = ((int) ($room['currentMatchRounds'] ?? 0)) + 1;
+                    $room['ularTanggaState'] = $res['state'];
+                    $room['lastRoundResult'] = $roundResult;
+                    $room['updatedAt'] = $now;
+                    $pushSys($res['message']);
+                    $result = ['finished' => true, 'message' => $res['message']];
+                    break;
+                }
+
+                $room['ularTanggaState'] = $res['state'];
+                $room['updatedAt'] = $now;
+                $pushSys($res['message']);
+                $result = ['finished' => false, 'message' => $res['message']];
+                break;
+            }
+
+            case 'resolveUlarTanggaEncounter': {
+                $uts = $room['ularTanggaState'] ?? null;
+                if (($room['status'] ?? 'lobby') !== 'playing' || !is_array($uts)) {
+                    throw new RuntimeException('Petualangan belum aktif.');
+                }
+                $actor = yukmain_resolve_actor($senderUid, $payload, $playersByUid);
+                $secret = yukmain_load_round_secret($tx, $roomId, $currentRoundId, $actor['uid']) ?? [];
+                $actorBag = is_array($secret['ularBag'] ?? null) ? $secret['ularBag'] : [];
+
+                $brbSet = [];
+                foreach ($players as $p) {
+                    if (!empty($p['isBrb'])) {
+                        $brbSet[$p['uid']] = true;
+                    }
+                }
+
+                $decision = in_array($payload['decision'] ?? '', ['attack', 'buy', 'skip'], true)
+                    ? (string) $payload['decision']
+                    : 'skip';
+                $buyItemId = is_string($payload['buyItemId'] ?? null) && $payload['buyItemId'] !== ''
+                    ? (string) $payload['buyItemId']
+                    : null;
+
+                $res = yukmain_ut_resolve_encounter($uts, $actor['uid'], $actorBag, $decision, $buyItemId, $brbSet);
+                $secret['ularBag'] = $res['nextBag'];
+                yukmain_save_round_secret_single($tx, $roomId, $currentRoundId, $actor['uid'], $secret, $now);
+
+                if (!empty($res['finished'])) {
+                    $deltas = yukmain_ut_score_deltas($res['state']);
+                    yukmain_apply_score_deltas($tx, $roomId, $playersByUid, $deltas, $now);
+                    $scenarioName = yukmain_ut_scenario_pack((string) ($res['state']['scenarioId'] ?? 'menara_nusantara'))['name'];
+                    $winUid = (string) ($res['state']['winnerUid'] ?? $actor['uid']);
+                    $winName = (string) ($res['state']['winnerName'] ?? $actor['displayName']);
+                    $roundResult = [
+                        'roundNumber'     => (int) ($room['roundNumber'] ?? 1),
+                        'winnerTeam'      => 'petualang',
+                        'reason'          => $res['message'],
+                        'locationName'    => $scenarioName,
+                        'guessedLocation' => null,
+                        'spyUids'         => [$winUid],
+                        'spyNames'        => [$winName],
+                        'resolvedAtMs'    => $now,
+                        'scoresApplied'   => true,
+                    ];
+                    $room['status'] = 'round_end';
+                    $room['currentMatchRounds'] = ((int) ($room['currentMatchRounds'] ?? 0)) + 1;
+                    $room['ularTanggaState'] = $res['state'];
+                    $room['lastRoundResult'] = $roundResult;
+                    $room['updatedAt'] = $now;
+                    $pushSys($res['message']);
+                    $result = ['finished' => true, 'message' => $res['message']];
+                    break;
+                }
+
+                $room['ularTanggaState'] = $res['state'];
+                $room['updatedAt'] = $now;
+                $pushSys($res['message']);
+                $result = ['finished' => false, 'message' => $res['message']];
+                break;
+            }
+
             // ===================== RETURN TO LOBBY =====================
             case 'returnRoomToLobby':
             case 'returnKataKataToLobby':
             case 'returnSatuFrekuensiToLobby':
             case 'returnFaktaHariIniToLobby':
             case 'returnPelukisToLobby':
-            case 'returnMalamSilumanToLobby': {
+            case 'returnMalamSilumanToLobby':
+            case 'returnUlarTanggaToLobby': {
                 yukmain_require_host($senderUid, $room);
                 $room['status'] = 'lobby';
                 $room['activeVote'] = null;
@@ -1860,6 +2099,7 @@ function yukmain_dispatch_room_action(
                 $room['faktaState'] = null;
                 $room['lukisanState'] = null;
                 $room['malamSilumanState'] = null;
+                $room['ularTanggaState'] = null;
                 $room['updatedAt'] = $now;
                 break;
             }
@@ -1905,6 +2145,7 @@ function yukmain_dispatch_room_action(
                 $room['faktaState'] = null;
                 $room['lukisanState'] = null;
                 $room['malamSilumanState'] = null;
+                $room['ularTanggaState'] = null;
                 $room['activeVote'] = null;
                 $room['pendingSpyGuess'] = null;
                 $room['lastRoundResult'] = null;

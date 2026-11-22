@@ -7,6 +7,11 @@ import { MALAM_SILUMAN_ROLES } from '../../games/malam-siluman/roles-id';
 import { BUILTIN_DRAWING_PROMPTS_ID } from '../../games/pelukis-gadungan/prompts-id';
 import { BUILTIN_SPECTRUMS_ID } from '../../games/satu-frekuensi/spectrums-id';
 import { INDONESIAN_LOCATIONS } from '../../games/spyfall/locations-id';
+import {
+  ULAR_HERO_CLASS_ORDER,
+  ULAR_ITEM_IDS,
+  ULAR_SCENARIO_ORDER,
+} from '../../games/ular-tangga/packs';
 
 const ROOT = process.cwd();
 
@@ -36,6 +41,7 @@ describe('Static Export + PHP 8 + PDO MySQL Architecture Parity', () => {
       'public/api/lib/engine_common.php',
       'public/api/lib/engine_games_social.php',
       'public/api/lib/engine_malam_siluman.php',
+      'public/api/lib/engine_ular_tangga.php',
       'public/api/lib/rooms.php',
       'public/api/lib/dispatcher.php',
       'public/api/lib/game-packs.json',
@@ -72,6 +78,11 @@ describe('Static Export + PHP 8 + PDO MySQL Architecture Parity', () => {
       fakta_hari_ini: { items: Array<{ id: string }> };
       pelukis_gadungan: { items: Array<{ id: string }> };
       malam_siluman: { roles: Record<string, { id: string }> };
+      ular_tangga: {
+        heroClasses: Record<string, { id: string }>;
+        items: Record<string, { id: string }>;
+        scenarios: Record<string, { id: string }>;
+      };
     };
 
     expect(packs.spyfall.items).toHaveLength(INDONESIAN_LOCATIONS.length);
@@ -82,6 +93,9 @@ describe('Static Export + PHP 8 + PDO MySQL Architecture Parity', () => {
     expect(Object.keys(packs.malam_siluman.roles)).toHaveLength(
       Object.keys(MALAM_SILUMAN_ROLES).length,
     );
+    expect(Object.keys(packs.ular_tangga.heroClasses)).toHaveLength(ULAR_HERO_CLASS_ORDER.length);
+    expect(Object.keys(packs.ular_tangga.items)).toHaveLength(ULAR_ITEM_IDS.length);
+    expect(Object.keys(packs.ular_tangga.scenarios)).toHaveLength(ULAR_SCENARIO_ORDER.length);
   });
 
   it('handles every LanActionName case in PHP dispatcher.php', () => {

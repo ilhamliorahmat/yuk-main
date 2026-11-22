@@ -56,6 +56,21 @@ import {
   mergeLocationPool,
   sanitizeCustomLocation,
 } from '../games/spyfall/engine';
+import {
+  advanceUlarTurn,
+  applyUlarBagItem,
+  applyUlarSkill,
+  calculateUlarTanggaScoreDeltas,
+  createInitialUlarTanggaRound,
+  resolveUlarEncounter,
+  rollDiceAndMove,
+} from '../games/ular-tangga/engine';
+import {
+  getDefaultUlarTanggaSettings,
+  getUlarScenarioPack,
+  sanitizeUlarTanggaSettings,
+  ULAR_HERO_CLASSES,
+} from '../games/ular-tangga/packs';
 import type {
   ChatMessage,
   CustomDrawingPrompt,
@@ -76,6 +91,9 @@ import type {
   ServerRoundStateDoc,
   SpyMode,
   SuitPick,
+  UlarHeroClassId,
+  UlarItemId,
+  UlarTanggaSettings,
   WerewolfRoleId,
 } from '../games/types';
 import {
@@ -198,12 +216,14 @@ export class LanHostAuthority {
       customDrawingPrompts: [],
       pelukisStrokeRounds: 2,
       malamSilumanSettings: DEFAULT_MALAM_SILUMAN_SETTINGS,
+      ularTanggaSettings: getDefaultUlarTanggaSettings(),
       eliminatedUids: [],
       eliminationLog: [],
       frequencyState: null,
       faktaState: null,
       lukisanState: null,
       malamSilumanState: null,
+      ularTanggaState: null,
       activeVote: null,
       pendingSpyGuess: null,
       lastRoundResult: null,
@@ -570,6 +590,7 @@ export class LanHostAuthority {
         if (!target) throw new Error('Pemain tidak ditemukan.');
         const nextBrb = Boolean(payload.isBrb);
         this.players.set(targetUid, { ...target, isBrb: nextBrb, updatedAt: now });
+        this.ensureUlarTanggaTurnValid();
         this.pushSystemMessage(
           nextBrb
             ? `${target.displayName} lagi BRB sebentar (dilewati di ronde baru).`
@@ -604,6 +625,7 @@ export class LanHostAuthority {
         }
         delete this.presence[leavingUid];
         this.ensureFaktaControllerFailover();
+        this.ensureUlarTanggaTurnValid();
         if (leaving) {
           this.pushSystemMessage(`${leaving.displayName} keluar dari ruang LAN.`);
         }
@@ -2322,13 +2344,285 @@ export class LanHostAuthority {
         return { phase: 'night', nightNumber: nextNightNumber };
       }
 
+      // ===================== GAME #7: ULAR TANGGA RP =====================
+      case 'updateUlarTanggaSettings': {
+        this.requireHost(senderDeviceUid);
+        const existing = sanitizeUlarTanggaSettings(this.room.ularTanggaSettings);
+        const incoming = (payload.settings ?? payload) as Partial<UlarTanggaSettings>;
+        const nextSettings = sanitizeUlarTanggaSettings({
+          ...existing,
+          ...incoming,
+          classSelectionByUid: {
+            ...existing.classSelectionByUid,
+            ...(incoming.classSelectionByUid ?? {}),
+          },
+        });
+        this.room = {
+          ...this.room,
+          enabledPacks: [nextSettings.scenarioId],
+          ularTanggaSettings: nextSettings,
+          updatedAt: now,
+        };
+        return {};
+      }
+
+      case 'selectUlarTanggaClass': {
+        if (this.room.status !== 'lobby') {
+          throw new Error('Kelas hero hanya bisa dipilih di Lobi sebelum petualangan dimulai.');
+        }
+        const actor = this.resolveActor(senderDeviceUid, payload);
+        const rawClass = String(payload.heroClass ?? 'acak');
+        const nextClass: UlarHeroClassId | 'acak' =
+          rawClass === 'acak' || rawClass in ULAR_HERO_CLASSES
+            ? (rawClass as UlarHeroClassId | 'acak')
+            : 'acak';
+        const existing = sanitizeUlarTanggaSettings(this.room.ularTanggaSettings);
+        const nextSettings = sanitizeUlarTanggaSettings({
+          ...existing,
+          classSelectionByUid: {
+            ...existing.classSelectionByUid,
+            [actor.uid]: nextClass,
+          },
+        });
+        this.room = {
+          ...this.room,
+          ularTanggaSettings: nextSettings,
+          updatedAt: now,
+        };
+        return {};
+      }
+
+      case 'startUlarTanggaRound': {
+        this.requireHost(senderDeviceUid);
+        const settings = sanitizeUlarTanggaSettings(this.room.ularTanggaSettings);
+        const nextRound = (this.room.roundNumber ?? 0) + 1;
+        const roundId = `r${nextRound}_${Date.now().toString(36)}`;
+        const created = createInitialUlarTanggaRound({
+          players: this.getPlayersList(),
+          settings,
+          roundId,
+        });
+
+        this.secretsByRound.set(roundId, new Map(Object.entries(created.secretsByUid)));
+        this.serverState = {
+          roundId,
+          roundNumber: nextRound,
+          locationName: getUlarScenarioPack(settings.scenarioId).name,
+          spyUids: [],
+          spyNames: [],
+          createdAtMs: now,
+        };
+
+        this.room = {
+          ...this.room,
+          status: 'playing',
+          roundNumber: nextRound,
+          currentRoundId: roundId,
+          enabledPacks: [settings.scenarioId],
+          ularTanggaSettings: settings,
+          ularTanggaState: created.state,
+          lastRoundResult: null,
+          updatedAt: now,
+        };
+        this.pushSystemMessage(
+          created.state.eventLog[0] ?? 'Petualangan Ular Tangga RP dimulai!',
+        );
+        return { roundId, currentTurnUid: created.state.currentTurnUid };
+      }
+
+      case 'useUlarTanggaSkill': {
+        if (this.room.status !== 'playing' || !this.room.ularTanggaState) {
+          throw new Error('Petualangan belum aktif.');
+        }
+        const actor = this.resolveActor(senderDeviceUid, payload);
+        const targetUid =
+          typeof payload.targetUid === 'string' && payload.targetUid ? payload.targetUid : null;
+        const res = applyUlarSkill({
+          state: this.room.ularTanggaState,
+          actorUid: actor.uid,
+          targetUid,
+        });
+        this.room = {
+          ...this.room,
+          ularTanggaState: res.state,
+          updatedAt: now,
+        };
+        this.pushSystemMessage(res.message);
+        return { message: res.message };
+      }
+
+      case 'useUlarTanggaItem': {
+        if (this.room.status !== 'playing' || !this.room.ularTanggaState) {
+          throw new Error('Petualangan belum aktif.');
+        }
+        const actor = this.resolveActor(senderDeviceUid, payload);
+        const roundSecrets = this.secretsByRound.get(this.room.currentRoundId);
+        const secret = roundSecrets?.get(actor.uid);
+        const actorBag = secret?.ularBag ?? [];
+        const itemId = String(payload.itemId ?? '') as UlarItemId;
+        const targetUid =
+          typeof payload.targetUid === 'string' && payload.targetUid ? payload.targetUid : null;
+
+        const res = applyUlarBagItem({
+          state: this.room.ularTanggaState,
+          actorUid: actor.uid,
+          actorBag,
+          itemId,
+          targetUid,
+        });
+
+        if (roundSecrets && secret) {
+          roundSecrets.set(actor.uid, { ...secret, ularBag: res.nextBag });
+        }
+        this.room = {
+          ...this.room,
+          ularTanggaState: res.state,
+          updatedAt: now,
+        };
+        this.pushSystemMessage(res.message);
+        return { message: res.message };
+      }
+
+      case 'rollUlarTanggaDice': {
+        if (this.room.status !== 'playing' || !this.room.ularTanggaState) {
+          throw new Error('Petualangan belum aktif.');
+        }
+        const actor = this.resolveActor(senderDeviceUid, payload);
+        const roundSecrets = this.secretsByRound.get(this.room.currentRoundId);
+        const secret = roundSecrets?.get(actor.uid);
+        const actorBag = secret?.ularBag ?? [];
+        const activeBrbUids = new Set(
+          this.getPlayersList()
+            .filter((p) => Boolean(p.isBrb))
+            .map((p) => p.uid),
+        );
+
+        const res = rollDiceAndMove({
+          state: this.room.ularTanggaState,
+          actorUid: actor.uid,
+          actorBag,
+          activeBrbUids,
+        });
+
+        if (roundSecrets && secret) {
+          roundSecrets.set(actor.uid, { ...secret, ularBag: res.nextBag });
+        }
+
+        if (res.finished) {
+          const deltas = calculateUlarTanggaScoreDeltas(res.state);
+          this.applyScoreDeltas(deltas);
+          const scenarioName = getUlarScenarioPack(res.state.scenarioId).name;
+          const roundResult: RoundResult = {
+            roundNumber: this.room.roundNumber,
+            winnerTeam: 'petualang',
+            reason: res.message,
+            locationName: scenarioName,
+            guessedLocation: null,
+            spyUids: res.state.winnerUid ? [res.state.winnerUid] : [],
+            spyNames: res.state.winnerName ? [res.state.winnerName] : [],
+            resolvedAtMs: now,
+            scoresApplied: true,
+          };
+          this.room = {
+            ...this.room,
+            status: 'round_end',
+            currentMatchRounds: (this.room.currentMatchRounds ?? 0) + 1,
+            ularTanggaState: res.state,
+            lastRoundResult: roundResult,
+            updatedAt: now,
+          };
+          this.pushSystemMessage(res.message);
+          return { finished: true, message: res.message };
+        }
+
+        this.room = {
+          ...this.room,
+          ularTanggaState: res.state,
+          updatedAt: now,
+        };
+        this.pushSystemMessage(res.message);
+        return { finished: false, message: res.message };
+      }
+
+      case 'resolveUlarTanggaEncounter': {
+        if (this.room.status !== 'playing' || !this.room.ularTanggaState) {
+          throw new Error('Petualangan belum aktif.');
+        }
+        const actor = this.resolveActor(senderDeviceUid, payload);
+        const roundSecrets = this.secretsByRound.get(this.room.currentRoundId);
+        const secret = roundSecrets?.get(actor.uid);
+        const actorBag = secret?.ularBag ?? [];
+        const activeBrbUids = new Set(
+          this.getPlayersList()
+            .filter((p) => Boolean(p.isBrb))
+            .map((p) => p.uid),
+        );
+
+        const decisionRaw = String(payload.decision ?? 'skip');
+        const decision: 'attack' | 'buy' | 'skip' =
+          decisionRaw === 'attack' || decisionRaw === 'buy' ? decisionRaw : 'skip';
+        const buyItemId =
+          typeof payload.buyItemId === 'string' && payload.buyItemId
+            ? (payload.buyItemId as UlarItemId)
+            : null;
+
+        const res = resolveUlarEncounter({
+          state: this.room.ularTanggaState,
+          actorUid: actor.uid,
+          actorBag,
+          decision,
+          buyItemId,
+          activeBrbUids,
+        });
+
+        if (roundSecrets && secret) {
+          roundSecrets.set(actor.uid, { ...secret, ularBag: res.nextBag });
+        }
+
+        if (res.finished) {
+          const deltas = calculateUlarTanggaScoreDeltas(res.state);
+          this.applyScoreDeltas(deltas);
+          const scenarioName = getUlarScenarioPack(res.state.scenarioId).name;
+          const roundResult: RoundResult = {
+            roundNumber: this.room.roundNumber,
+            winnerTeam: 'petualang',
+            reason: res.message,
+            locationName: scenarioName,
+            guessedLocation: null,
+            spyUids: res.state.winnerUid ? [res.state.winnerUid] : [],
+            spyNames: res.state.winnerName ? [res.state.winnerName] : [],
+            resolvedAtMs: now,
+            scoresApplied: true,
+          };
+          this.room = {
+            ...this.room,
+            status: 'round_end',
+            currentMatchRounds: (this.room.currentMatchRounds ?? 0) + 1,
+            ularTanggaState: res.state,
+            lastRoundResult: roundResult,
+            updatedAt: now,
+          };
+          this.pushSystemMessage(res.message);
+          return { finished: true, message: res.message };
+        }
+
+        this.room = {
+          ...this.room,
+          ularTanggaState: res.state,
+          updatedAt: now,
+        };
+        this.pushSystemMessage(res.message);
+        return { finished: false, message: res.message };
+      }
+
       // ===================== RETURN TO LOBBY =====================
       case 'returnRoomToLobby':
       case 'returnKataKataToLobby':
       case 'returnSatuFrekuensiToLobby':
       case 'returnFaktaHariIniToLobby':
       case 'returnPelukisToLobby':
-      case 'returnMalamSilumanToLobby': {
+      case 'returnMalamSilumanToLobby':
+      case 'returnUlarTanggaToLobby': {
         this.requireHost(senderDeviceUid);
         this.room = {
           ...this.room,
@@ -2341,6 +2635,7 @@ export class LanHostAuthority {
           faktaState: null,
           lukisanState: null,
           malamSilumanState: null,
+          ularTanggaState: null,
           updatedAt: now,
         };
         return {};
@@ -2361,6 +2656,7 @@ export class LanHostAuthority {
             'fakta_hari_ini',
             'pelukis_gadungan',
             'malam_siluman',
+            'ular_tangga',
           ].includes(nextGameType)
         ) {
           throw new Error('Jenis permainan tidak valid.');
@@ -2401,6 +2697,7 @@ export class LanHostAuthority {
           faktaState: null,
           lukisanState: null,
           malamSilumanState: null,
+          ularTanggaState: null,
           activeVote: null,
           pendingSpyGuess: null,
           lastRoundResult: null,
@@ -2578,6 +2875,38 @@ export class LanHostAuthority {
         updatedAt: Date.now(),
       };
     }
+  }
+
+  private ensureUlarTanggaTurnValid(): void {
+    const uts = this.room.ularTanggaState;
+    if (!uts || this.room.status !== 'playing' || uts.phase === 'reveal') return;
+    const currentSeat = this.players.get(uts.currentTurnUid);
+    const activeBrbUids = new Set(
+      this.getPlayersList()
+        .filter((p) => Boolean(p.isBrb))
+        .map((p) => p.uid),
+    );
+    const currentInvalid = !currentSeat || Boolean(currentSeat.isBrb);
+    if (!currentInvalid) return;
+
+    const remainingActive = uts.turnOrder.filter((uid) => {
+      const p = this.players.get(uid);
+      return Boolean(p && !p.isBrb && uts.heroesByUid[uid]);
+    });
+    if (remainingActive.length === 0) return;
+
+    const nextState = advanceUlarTurn(uts, activeBrbUids);
+    this.room = {
+      ...this.room,
+      ularTanggaState: {
+        ...nextState,
+        eventLog: [
+          `Giliran diteruskan ke ${nextState.currentTurnName} karena pemain sebelumnya keluar/BRB.`,
+          ...nextState.eventLog,
+        ].slice(0, 12),
+      },
+      updatedAt: Date.now(),
+    };
   }
 
   private finalizePelukisVoteTally(

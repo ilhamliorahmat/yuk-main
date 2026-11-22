@@ -46,6 +46,7 @@ function yukmain_default_packs_for_game(string $gameType): array
         'fakta_hari_ini'   => ['hukum_sejarah', 'nusantara'],
         'pelukis_gadungan' => ['kuliner', 'tongkrongan', 'hewan_alam'],
         'malam_siluman'    => ['malam_siluman'],
+        'ular_tangga'      => ['menara_nusantara'],
         default            => ['nusantara', 'klasik'],
     };
 }
@@ -171,6 +172,51 @@ function yukmain_sanitize_malam_siluman_settings($raw): array
             'stealthWolf' => is_bool($r['stealthWolf'] ?? null) ? $r['stealthWolf'] : false,
             'jester'      => is_bool($r['jester'] ?? null) ? $r['jester'] : false,
         ],
+    ];
+}
+
+function yukmain_default_ular_tangga_settings(): array
+{
+    return [
+        'scenarioId'          => 'menara_nusantara',
+        'boardMode'           => 'standar',
+        'exactFinishBounce'   => true,
+        'classSelectionByUid' => new stdClass(),
+    ];
+}
+
+function yukmain_sanitize_ular_tangga_settings($raw): array
+{
+    $def = yukmain_default_ular_tangga_settings();
+    if (!is_array($raw)) {
+        return $def;
+    }
+
+    $allowedScenarios = ['menara_nusantara', 'distrik_neon', 'pasar_mistis'];
+    $scenarioId = in_array($raw['scenarioId'] ?? '', $allowedScenarios, true)
+        ? (string) $raw['scenarioId']
+        : $def['scenarioId'];
+
+    $boardMode = (($raw['boardMode'] ?? '') === 'brutal') ? 'brutal' : 'standar';
+    $exactFinishBounce = isset($raw['exactFinishBounce']) && is_bool($raw['exactFinishBounce'])
+        ? $raw['exactFinishBounce']
+        : $def['exactFinishBounce'];
+
+    $allowedClasses = ['acak', 'ksatria', 'pencuri', 'penyihir', 'tabib'];
+    $cleanClasses = [];
+    if (is_array($raw['classSelectionByUid'] ?? null)) {
+        foreach ($raw['classSelectionByUid'] as $uid => $val) {
+            if (is_string($uid) && $uid !== '' && is_string($val) && in_array($val, $allowedClasses, true)) {
+                $cleanClasses[$uid] = $val;
+            }
+        }
+    }
+
+    return [
+        'scenarioId'          => $scenarioId,
+        'boardMode'           => $boardMode,
+        'exactFinishBounce'   => $exactFinishBounce,
+        'classSelectionByUid' => empty($cleanClasses) ? new stdClass() : $cleanClasses,
     ];
 }
 

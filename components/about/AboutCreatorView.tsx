@@ -11,6 +11,7 @@ import kataCover from '@/src/assets/images/yukmain_kata_cover_1795098826342.jpg'
 import pelukisCover from '@/src/assets/images/yukmain_pelukis_cover_1795178136981.jpg';
 import silumanCover from '@/src/assets/images/yukmain_siluman_cover_1795180059853.jpg';
 import spyfallCover from '@/src/assets/images/yukmain_spyfall_cover_1795001423851.jpg';
+import ularCover from '@/src/assets/images/yukmain_ular_cover_1795263812261.jpg';
 import { PARTY_GAMES } from '@/lib/games/registry';
 
 const CREATOR_GITHUB_URL = 'https://github.com/ilhamliorahmat/';
@@ -24,6 +25,7 @@ const GAME_SHOWCASE = [
   { id: 'fakta_hari_ini', title: 'Fakta Hari Ini', cover: faktaCover },
   { id: 'pelukis_gadungan', title: 'Pelukis Gadungan', cover: pelukisCover },
   { id: 'malam_siluman', title: 'Malam Siluman', cover: silumanCover },
+  { id: 'ular_tangga', title: 'Ular Tangga RP', cover: ularCover },
 ];
 
 const DESIGN_PRINCIPLES = [
@@ -43,7 +45,7 @@ const DESIGN_PRINCIPLES = [
     number: '03.',
     title: 'Satu Kode Ruang untuk Semalaman',
     description:
-      'Host bisa berpindah antar 6 permainan di ruang yang sama tanpa mengusir pemain atau membuat kode baru, lalu menutup malam dengan Rekap Permainan dan Duel Suit Best-of-3.',
+      'Host bisa berpindah antar 7 permainan di ruang yang sama tanpa mengusir pemain atau membuat kode baru, lalu menutup malam dengan Rekap Permainan dan Duel Suit Best-of-3.',
   },
 ];
 

@@ -34,6 +34,8 @@ export function getDefaultPacksForGame(gameType: GameType): string[] {
       return ['kuliner', 'tongkrongan', 'hewan_alam'];
     case 'malam_siluman':
       return ['malam_siluman'];
+    case 'ular_tangga':
+      return ['menara_nusantara'];
     case 'spyfall':
     default:
       return ['nusantara', 'klasik'];

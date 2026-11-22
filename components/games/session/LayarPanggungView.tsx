@@ -5,6 +5,7 @@ import {
   BookOpenCheck,
   Brush,
   Coffee,
+  Dices,
   LogOut,
   Monitor,
   Moon,
@@ -20,6 +21,7 @@ import {
 import QRCode from 'qrcode';
 import { PelukisCanvas } from '@/components/games/pelukis-gadungan/PelukisCanvas';
 import { FrequencyDial } from '@/components/games/satu-frekuensi/FrequencyDial';
+import { UlarTanggaBoard } from '@/components/games/ular-tangga/UlarTanggaBoard';
 import { MALAM_SILUMAN_ROLES } from '@/lib/games/malam-siluman/roles-id';
 import type {
   GameType,
@@ -49,6 +51,7 @@ const GAME_META: Record<
   fakta_hari_ini: { title: 'Fakta Hari Ini', icon: BookOpenCheck, accent: 'text-indigo-400' },
   pelukis_gadungan: { title: 'Pelukis Gadungan', icon: Brush, accent: 'text-emerald-400' },
   malam_siluman: { title: 'Malam Siluman', icon: Moon, accent: 'text-rose-400' },
+  ular_tangga: { title: 'Ular Tangga RP', icon: Dices, accent: 'text-amber-400' },
 };
 
 function formatClock(sec: number): string {
@@ -133,6 +136,9 @@ export function LayarPanggungView({
       if (res.winnerTeam === 'warga') return 'Tim Warga Menang!';
       if (res.winnerTeam === 'tumbal') return 'Tumbal Menang Solo! (+4 Poin)';
       return 'Kawanan Siluman Menang!';
+    }
+    if (room.gameType === 'ular_tangga') {
+      return `${room.ularTanggaState?.winnerName ?? 'Juara'} Menaklukkan Petak 100!`;
     }
     return `Hasil Ronde #${res.roundNumber}`;
   }, [room]);
@@ -740,6 +746,47 @@ export function LayarPanggungView({
                           );
                         })}
                       </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* GAME #7: ULAR TANGGA RP STAGE (Public Board + Adventure Log, Zero Bag Leaks) */}
+              {room.gameType === 'ular_tangga' && room.ularTanggaState && (() => {
+                const uts = room.ularTanggaState;
+                return (
+                  <div className="space-y-4">
+                    <div className="rounded-2xl bg-[#131A24] border border-slate-800 p-5 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                          Giliran #{uts.turnNumber} · {uts.boardMode === 'brutal' ? 'Mode Brutal' : 'Mode Standar'}
+                        </p>
+                        <h2 className="text-xl sm:text-2xl font-black text-white mt-0.5">
+                          {room.status === 'round_end'
+                            ? `${uts.winnerName ?? 'Petualang'} Menang!`
+                            : `Giliran: ${uts.currentTurnName}`}
+                        </h2>
+                      </div>
+                      {uts.lastRoll && (
+                        <div className="px-4 py-2 rounded-xl bg-[#0B1018] border border-slate-800 text-xs sm:text-sm text-slate-200 max-w-md">
+                          {uts.lastRoll.summary}
+                        </div>
+                      )}
+                    </div>
+
+                    <UlarTanggaBoard state={uts} />
+
+                    <div className="rounded-2xl bg-[#131A24] border border-slate-800 p-4 space-y-2">
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                        Log Petualangan Terbaru
+                      </p>
+                      <ul className="space-y-1 text-xs sm:text-sm text-slate-300">
+                        {uts.eventLog.slice(0, 4).map((line, i) => (
+                          <li key={i} className={i === 0 ? 'text-white font-semibold' : 'text-slate-400'}>
+                            {line}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   </div>
                 );

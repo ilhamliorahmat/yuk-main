@@ -18,6 +18,7 @@ import { QrInviteModal } from './session/QrInviteModal';
 import { RekapPermainanOverlay } from './session/RekapPermainanOverlay';
 import { RoomControlStrip } from './session/RoomControlStrip';
 import { SpyfallRoomView } from './spyfall/SpyfallRoomView';
+import { UlarTanggaRoomView } from './ular-tangga/UlarTanggaRoomView';
 
 interface ActiveRoomContainerProps {
   roomId: string;
@@ -226,6 +227,24 @@ export function ActiveRoomContainer({
     if (room.gameType === 'malam_siluman') {
       return (
         <MalamSilumanRoomView
+          room={room}
+          players={players}
+          mySecret={mySecret}
+          messages={messages}
+          presence={presence}
+          myUid={effectiveSeatUid}
+          myName={effectiveSeatName}
+          deviceUid={myUid}
+          deviceName={myName}
+          onBeforeLeave={() => setIsLeaving(true)}
+          onExitToHub={onExitToHub}
+        />
+      );
+    }
+
+    if (room.gameType === 'ular_tangga') {
+      return (
+        <UlarTanggaRoomView
           room={room}
           players={players}
           mySecret={mySecret}

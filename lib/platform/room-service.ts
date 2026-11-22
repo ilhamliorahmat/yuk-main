@@ -1,6 +1,7 @@
 'use client';
 
 import { sanitizeMalamSilumanSettings } from '@/lib/games/malam-siluman/engine';
+import { sanitizeUlarTanggaSettings } from '@/lib/games/ular-tangga/packs';
 import type {
   CustomDrawingPrompt,
   CustomFactItem,
@@ -14,6 +15,9 @@ import type {
   RoomPlayerDoc,
   SpyMode,
   SuitPick,
+  UlarHeroClassId,
+  UlarItemId,
+  UlarTanggaSettings,
 } from '@/lib/games/types';
 import { isLanRoomId, type LanActionName } from '@/lib/lan/lan-protocol';
 import { lanRuntime } from '@/lib/lan/lan-runtime';
@@ -643,6 +647,87 @@ export async function returnMalamSilumanToLobby(params: {
   hostName: string;
 }): Promise<void> {
   await dispatchRoomAction(params.roomId, 'returnMalamSilumanToLobby', {});
+}
+
+// --- Settings & Actions: Game #7 (Ular Tangga RP / ular_tangga) ---
+
+export async function updateUlarTanggaSettings(params: {
+  roomId: string;
+  settings: Partial<UlarTanggaSettings>;
+}): Promise<void> {
+  const clean = sanitizeUlarTanggaSettings(params.settings);
+  await dispatchRoomAction(params.roomId, 'updateUlarTanggaSettings', {
+    settings: clean,
+  });
+}
+
+export async function selectUlarTanggaClass(params: {
+  roomId: string;
+  actorUid: string;
+  heroClass: UlarHeroClassId | 'acak';
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'selectUlarTanggaClass', {
+    heroClass: params.heroClass,
+    actAsUid: params.actorUid,
+  });
+}
+
+export async function startUlarTanggaRound(params: {
+  roomId: string;
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'startUlarTanggaRound', {});
+}
+
+export async function activateUlarTanggaSkill(params: {
+  roomId: string;
+  actorUid: string;
+  targetUid?: string | null;
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'useUlarTanggaSkill', {
+    targetUid: params.targetUid ?? '',
+    actAsUid: params.actorUid,
+  });
+}
+
+export async function activateUlarTanggaItem(params: {
+  roomId: string;
+  actorUid: string;
+  itemId: UlarItemId;
+  targetUid?: string | null;
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'useUlarTanggaItem', {
+    itemId: params.itemId,
+    targetUid: params.targetUid ?? '',
+    actAsUid: params.actorUid,
+  });
+}
+
+export async function rollUlarTanggaDice(params: {
+  roomId: string;
+  actorUid: string;
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'rollUlarTanggaDice', {
+    actAsUid: params.actorUid,
+  });
+}
+
+export async function resolveUlarTanggaEncounter(params: {
+  roomId: string;
+  actorUid: string;
+  decision: 'attack' | 'buy' | 'skip';
+  buyItemId?: UlarItemId | null;
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'resolveUlarTanggaEncounter', {
+    decision: params.decision,
+    buyItemId: params.buyItemId ?? '',
+    actAsUid: params.actorUid,
+  });
+}
+
+export async function returnUlarTanggaToLobby(params: {
+  roomId: string;
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'returnUlarTanggaToLobby', {});
 }
 
 // --- Session & Cross-Game Actions (v3.1.0) ---

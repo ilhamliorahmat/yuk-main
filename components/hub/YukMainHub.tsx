@@ -31,6 +31,8 @@ import silumanCover from '@/src/assets/images/yukmain_siluman_cover_179518005985
 import silumanEmblem from '@/src/assets/images/yukmain_siluman_emblem_1795180059939.jpg';
 import spyEmblem from '@/src/assets/images/yukmain_spy_emblem_1795001425384.jpg';
 import spyfallCover from '@/src/assets/images/yukmain_spyfall_cover_1795001423851.jpg';
+import ularCover from '@/src/assets/images/yukmain_ular_cover_1795263812261.jpg';
+import ularEmblem from '@/src/assets/images/yukmain_ular_emblem_1795263811980.jpg';
 import { LanPairingModal } from '@/components/lan/LanPairingModal';
 import { OfflineNoticeBanner } from '@/components/pwa/OfflineNoticeBanner';
 import { useAuth } from '@/hooks/use-auth';
@@ -95,6 +97,11 @@ const GAME_VISUALS: Record<GameType, GameVisualMeta> = {
     emblem: silumanEmblem,
     ctaClass: 'bg-rose-600 hover:bg-rose-500 text-white',
   },
+  ular_tangga: {
+    cover: ularCover,
+    emblem: ularEmblem,
+    ctaClass: 'bg-amber-400 hover:bg-amber-300 text-slate-950',
+  },
 };
 
 export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProps) {
@@ -116,6 +123,7 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [rulesGame, setRulesGame] = useState<PartyGameDefinition | null>(null);
+  const [rulesTab, setRulesTab] = useState<'rules' | 'behind'>('rules');
   const [creatorCardsOpen, setCreatorCardsOpen] = useState(false);
   const creatorAnchorRef = useRef<HTMLDivElement | null>(null);
 
@@ -757,7 +765,7 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
         />
       )}
 
-      {/* Rules Modal */}
+      {/* Rules & Behind-The-Game Modal */}
       {rulesGame && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4"
@@ -770,26 +778,75 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
               <div>
                 <p className="text-xs text-slate-400">Game #{rulesGame.number}</p>
                 <h2 id="rules-modal-title" className="text-lg font-bold text-white">
-                  Aturan Main {rulesGame.title}
+                  {rulesGame.title}
                 </h2>
               </div>
               <button
                 type="button"
-                onClick={() => setRulesGame(null)}
+                onClick={() => {
+                  setRulesGame(null);
+                  setRulesTab('rules');
+                }}
                 aria-label="Tutup panduan"
                 className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <ol className="space-y-3 text-sm text-slate-300 leading-relaxed list-decimal pl-5">
-              {rulesGame.rulesSummary.map((rule, idx) => (
-                <li key={idx}>{rule}</li>
-              ))}
-            </ol>
+
+            {rulesGame.behindTheGame && (
+              <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-[#0B1018] border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setRulesTab('rules')}
+                  className={`min-h-[38px] rounded-lg text-xs font-bold transition-colors ${
+                    rulesTab === 'rules'
+                      ? 'bg-slate-800 text-white'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Cara Bermain
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRulesTab('behind')}
+                  className={`min-h-[38px] rounded-lg text-xs font-bold transition-colors ${
+                    rulesTab === 'behind'
+                      ? 'bg-amber-400 text-slate-950'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Di Balik Game Ini
+                </button>
+              </div>
+            )}
+
+            {rulesTab === 'behind' && rulesGame.behindTheGame ? (
+              <div className="space-y-3 text-sm text-slate-300 leading-relaxed">
+                <h3 className="text-base font-bold text-amber-300">
+                  {rulesGame.behindTheGame.title}
+                </h3>
+                <p>{rulesGame.behindTheGame.lead}</p>
+                <ul className="space-y-2 list-disc pl-5 text-slate-300">
+                  {rulesGame.behindTheGame.points.map((pt, idx) => (
+                    <li key={idx}>{pt}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <ol className="space-y-3 text-sm text-slate-300 leading-relaxed list-decimal pl-5">
+                {rulesGame.rulesSummary.map((rule, idx) => (
+                  <li key={idx}>{rule}</li>
+                ))}
+              </ol>
+            )}
+
             <button
               type="button"
-              onClick={() => setRulesGame(null)}
+              onClick={() => {
+                setRulesGame(null);
+                setRulesTab('rules');
+              }}
               className="w-full min-h-[44px] rounded-xl bg-slate-100 hover:bg-white text-slate-900 font-semibold text-sm transition-colors"
             >
               Mengerti

@@ -4,7 +4,8 @@ export type GameType =
   | 'satu_frekuensi'
   | 'fakta_hari_ini'
   | 'pelukis_gadungan'
-  | 'malam_siluman';
+  | 'malam_siluman'
+  | 'ular_tangga';
 
 export type RoomStatus = 'lobby' | 'playing' | 'voting' | 'spy_guess' | 'round_end';
 
@@ -230,6 +231,84 @@ export interface MalamSilumanState {
   lastVoteTally?: Record<string, number>;
 }
 
+export type UlarScenarioId = 'menara_nusantara' | 'distrik_neon' | 'pasar_mistis';
+
+export type UlarHeroClassId = 'ksatria' | 'pencuri' | 'penyihir' | 'tabib';
+
+export type UlarItemId =
+  | 'ramuan_hp'
+  | 'sepatu_kilat'
+  | 'jimat_anti_ular'
+  | 'gulungan_tukar'
+  | 'bom_ular';
+
+export type UlarBoardMode = 'standar' | 'brutal';
+
+export interface UlarTanggaSettings {
+  scenarioId: UlarScenarioId;
+  boardMode: UlarBoardMode;
+  exactFinishBounce: boolean;
+  classSelectionByUid: Record<string, UlarHeroClassId | 'acak'>;
+}
+
+export interface UlarHeroState {
+  uid: string;
+  displayName: string;
+  avatarColor: string;
+  heroClass: UlarHeroClassId;
+  tile: number;
+  hp: number;
+  maxHp: number;
+  gold: number;
+  shielded: boolean;
+  bonusSteps: number;
+  skillCooldown: number;
+  bagCount: number;
+  koCount: number;
+  monstersDefeated: number;
+}
+
+export interface UlarEncounterState {
+  type: 'monster' | 'merchant';
+  tile: number;
+  monsterId?: string;
+  monsterName?: string;
+  monsterPower?: number;
+  monsterDamage?: number;
+  monsterRewardGold?: number;
+  monsterFlavor?: string;
+}
+
+export interface UlarTanggaRollInfo {
+  uid: string;
+  displayName: string;
+  dice: number;
+  bonus: number;
+  fromTile: number;
+  toTile: number;
+  summary: string;
+}
+
+export interface UlarTanggaState {
+  scenarioId: UlarScenarioId;
+  boardMode: UlarBoardMode;
+  exactFinishBounce: boolean;
+  phase: 'turn_action' | 'encounter' | 'reveal';
+  turnOrder: string[];
+  currentTurnIndex: number;
+  currentTurnUid: string;
+  currentTurnName: string;
+  turnNumber: number;
+  usedSkillThisTurn: boolean;
+  usedItemThisTurn: boolean;
+  lastRoll: UlarTanggaRollInfo | null;
+  activeEncounter: UlarEncounterState | null;
+  heroesByUid: Record<string, UlarHeroState>;
+  eventLog: string[];
+  winnerUid?: string | null;
+  winnerName?: string | null;
+}
+
 export interface EliminationEntry {
   uid: string;
   displayName: string;
@@ -264,7 +343,8 @@ export interface RoundResult {
     | 'pelukis'
     | 'gadungan'
     | 'siluman'
-    | 'tumbal';
+    | 'tumbal'
+    | 'petualang';
   reason: string;
   locationName: string;
   guessedLocation: string | null;
@@ -382,12 +462,14 @@ export interface RoomDoc {
   customDrawingPrompts?: CustomDrawingPrompt[];
   pelukisStrokeRounds?: 1 | 2;
   malamSilumanSettings?: MalamSilumanSettings | null;
+  ularTanggaSettings?: UlarTanggaSettings | null;
   eliminatedUids?: string[];
   eliminationLog?: EliminationEntry[];
   frequencyState?: FrequencyState | null;
   faktaState?: FaktaState | null;
   lukisanState?: LukisanState | null;
   malamSilumanState?: MalamSilumanState | null;
+  ularTanggaState?: UlarTanggaState | null;
   activeVote: VoteState | null;
   pendingSpyGuess: PendingSpyGuess | null;
   lastRoundResult: RoundResult | null;
@@ -451,6 +533,8 @@ export interface PlayerSecretDoc {
   fellowWolves?: Array<{ uid: string; displayName: string; role: WerewolfRoleId }>;
   peekHistory?: MalamSilumanPeekRecord[];
   lastProtectedUid?: string | null;
+  ularHeroClass?: UlarHeroClassId;
+  ularBag?: UlarItemId[];
   createdAt?: unknown;
 }
 
@@ -506,4 +590,9 @@ export interface PartyGameDefinition {
   durationLabel: string;
   available: boolean;
   rulesSummary: string[];
+  behindTheGame?: {
+    title: string;
+    lead: string;
+    points: string[];
+  };
 }

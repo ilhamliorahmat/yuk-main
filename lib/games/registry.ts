@@ -115,6 +115,34 @@ export const PARTY_GAMES: PartyGameDefinition[] = [
       'Warga menang jika semua Siluman gugur; Siluman menang jika jumlahnya menyamai atau melebihi non-Siluman; Tumbal (jika aktif) menang SOLO (+4 poin) bila berhasil memancing desa mengeksekusinya di siang hari!',
     ],
   },
+  {
+    id: 'ular_tangga',
+    number: 7,
+    title: 'Ular Tangga RP',
+    subtitle: 'Papan Petualangan RPG, Kelas Hero & Paket Skenario',
+    description:
+      'Ular Tangga klasik disulap jadi petualangan RPG meja! Pilih kelas Hero, kumpulkan Koin & item rahasia, hadapi monster, dan pilih Paket Skenario lengkap dengan tema seni & peta unik menuju Petak 100.',
+    minPlayers: 2,
+    maxPlayers: 12,
+    durationLabel: '10–15 Menit · Tanpa Timer',
+    available: true,
+    rulesSummary: [
+      'Minimal 2 pemain memilih Paket Skenario (tema visual, peta ular/tangga & monster unik) serta Kelas Hero masing-masing (Ksatria, Pencuri, Penyihir, atau Tabib).',
+      'Sebelum melempar dadu di giliranmu, kamu bisa mengaktifkan 1 Skill Kelas (jika cooldown habis) dan/atau 1 Item Rahasia dari tasmu untuk menyembuhkan diri atau mensabotase lawan.',
+      'Tangga menyembuhkan HP saat naik, Sarang Ular menggigit HP saat turun (kecuali dilindungi Jimat/Perisai Anti-Ular), Peti Harta memberi Koin + Item Rahasia, dan Kedai menjual perlengkapan RPG.',
+      'Mendarat di Petak Monster memicu duel 1-ketuk (Dadu + Bonus Kelas vs Kekuatan Monster). Menang mendapat Koin + langkah maju bonus; kalah mengurangi HP.',
+      'Jika HP habis (0), Hero tidak tereliminasi—ia hanya Pingsan (-8 petak, kehilangan setengah Koin, lalu bangkit dengan HP penuh di giliran berikutnya). Hero pertama yang menyentuh Petak 100 menang!',
+    ],
+    behindTheGame: {
+      title: 'Di Balik Ular Tangga RP',
+      lead: 'Ular Tangga tradisional sering terasa pasif karena 100% bergantung pada lemparan dadu. "RP" di sini berarti Roleplay Petualangan—mengubah balapan angka 1–100 menjadi kisah meja yang penuh negosiasi, gertakan, dan kejutan.',
+      points: [
+        'Identitas & Pilihan Taktis: Alih-alih sekadar bidak polos, setiap pemain membawa peran (Tank Ksatria, Pencuri licin, Penyihir sabotase, atau Tabib penyembuh) dan tas item rahasia.',
+        'Bundel Skenario & Tema Seni: Setiap paket mengganti suasana visual papan, jenis tangga/ular, tata letak petak, hingga monster khas—dari Menara Nusantara, Distrik Neon 2099, sampai Pasar Malam Mistis.',
+        'Tetap Ramah Tongkrongan: Tidak ada pemain yang dikeluarkan lebih awal (0 HP hanya Pingsan sementara) sehingga semua teman tetap tertawa bersama hingga garis finis.',
+      ],
+    },
+  },
 ];
 
 export function getPartyGame(gameType: GameType): PartyGameDefinition {

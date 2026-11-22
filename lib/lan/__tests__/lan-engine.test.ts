@@ -421,5 +421,90 @@ describe('LanHostAuthority — Zero-Leak Isolation & All 5 Games + Session Platf
     expect(auth.getRoom().malamSilumanState).toBeNull();
     expect(auth.getRoom().completedGames).toHaveLength(1);
   });
+
+  it('runs Ular Tangga RP with Scenario Packs, strict bag isolation, skill/dice turns, and BRB turn advance', () => {
+    const auth = setupFourPlayerRoom('ular_tangga');
+
+    auth.handleAction('host_1', 'updateUlarTanggaSettings', {
+      scenarioId: 'distrik_neon',
+      boardMode: 'brutal',
+      exactFinishBounce: true,
+    });
+    auth.handleAction('guest_2', 'selectUlarTanggaClass', {
+      heroClass: 'penyihir',
+      actAsUid: 'guest_2',
+    });
+    auth.handleAction('host_1', 'selectUlarTanggaClass', {
+      heroClass: 'tabib',
+      actAsUid: 'host_1',
+    });
+
+    auth.handleAction('host_1', 'startUlarTanggaRound', {});
+    const started = auth.getRoom();
+    expect(started.status).toBe('playing');
+    expect(started.ularTanggaState?.scenarioId).toBe('distrik_neon');
+    expect(started.ularTanggaState?.boardMode).toBe('brutal');
+
+    // Stage display receives zero secret bags
+    const stageSnap = auth.getSnapshotForPeer('tv_stage', true);
+    expect(stageSnap.secretsByOwnedSeat).toEqual({});
+
+    // Each peer ONLY sees their own starter bag item
+    for (const uid of ['host_1', 'guest_2', 'guest_3', 'guest_4']) {
+      const peerSnap = auth.getSnapshotForPeer(uid, false);
+      expect(Object.keys(peerSnap.secretsByOwnedSeat)).toEqual([uid]);
+      expect(peerSnap.secretsByOwnedSeat[uid]?.ularBag).toHaveLength(1);
+    }
+
+    const activeUid = started.ularTanggaState!.currentTurnUid;
+    const starterItem = auth.getSnapshotForPeer(activeUid, false).secretsByOwnedSeat[activeUid]!
+      .ularBag![0];
+
+    // Active player uses class skill & starter item, then rolls dice
+    auth.handleAction(activeUid, 'useUlarTanggaSkill', {
+      actAsUid: activeUid,
+      targetUid: null,
+    });
+    auth.handleAction(activeUid, 'useUlarTanggaItem', {
+      actAsUid: activeUid,
+      itemId: starterItem,
+      targetUid: null,
+    });
+    expect(auth.getSnapshotForPeer(activeUid, false).secretsByOwnedSeat[activeUid]?.ularBag).toEqual(
+      [],
+    );
+
+    const rollRes = auth.handleAction(activeUid, 'rollUlarTanggaDice', {
+      actAsUid: activeUid,
+    }) as { finished: boolean };
+    expect(rollRes.finished).toBe(false);
+
+    // If an encounter was triggered, resolve it to advance turn
+    if (auth.getRoom().ularTanggaState?.phase === 'encounter') {
+      const encType = auth.getRoom().ularTanggaState!.activeEncounter!.type;
+      auth.handleAction(activeUid, 'resolveUlarTanggaEncounter', {
+        actAsUid: activeUid,
+        decision: encType === 'monster' ? 'attack' : 'skip',
+      });
+    }
+
+    // Next player toggles BRB -> turn automatically skips forward!
+    const nextTurnUid = auth.getRoom().ularTanggaState!.currentTurnUid;
+    auth.handleAction(nextTurnUid, 'togglePlayerBrb', {
+      uid: nextTurnUid,
+      isBrb: true,
+    });
+    expect(auth.getRoom().ularTanggaState!.currentTurnUid).not.toBe(nextTurnUid);
+
+    // Return to lobby & switch game resets ularTanggaState
+    auth.handleAction('host_1', 'returnUlarTanggaToLobby', {});
+    expect(auth.getRoom().status).toBe('lobby');
+    expect(auth.getRoom().ularTanggaState).toBeNull();
+
+    auth.handleAction('host_1', 'switchRoomGameType', { nextGameType: 'spyfall' });
+    expect(auth.getRoom().gameType).toBe('spyfall');
+    expect(auth.getRoom().ularTanggaState).toBeNull();
+  });
 });
+
 
