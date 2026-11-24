@@ -47,6 +47,8 @@ import {
   activateUlarTanggaSkill,
 } from '@/lib/platform/room-service';
 import { RoomChatPanel } from '../spyfall/RoomChatPanel';
+import { UlarDice3D } from './UlarDice3D';
+import { UlarHeroPawn } from './UlarHeroPawn';
 import { UlarTanggaBoard } from './UlarTanggaBoard';
 import { UlarTanggaLobbySettings } from './UlarTanggaLobbySettings';
 import { UlarTanggaPlayersPanel } from './UlarTanggaPlayersPanel';
@@ -457,10 +459,10 @@ export function UlarTanggaRoomView({
                   </section>
                 )}
 
-                {/* Active Turn Status & Latest Log */}
+                {/* Active Turn Status, 3D Dice Stage & Latest Log */}
                 {room.status === 'playing' && (
-                  <div className="rounded-2xl bg-[#131A24] border border-slate-800 p-4 flex flex-wrap items-center justify-between gap-3">
-                    <div className="space-y-0.5">
+                  <div className="rounded-2xl bg-[#131A24] border border-slate-800 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1.5 min-w-0 flex-1">
                       <p className="text-xs font-semibold text-slate-400">
                         Giliran #{uts.turnNumber} · {uts.boardMode === 'brutal' ? 'Mode Brutal' : 'Mode Standar'}
                       </p>
@@ -477,17 +479,27 @@ export function UlarTanggaRoomView({
                           <span>Menunggu langkah {uts.currentTurnName}...</span>
                         )}
                       </p>
+                      {uts.lastRoll && (
+                        <p className="text-xs text-slate-300 leading-snug">
+                          {uts.lastRoll.summary}
+                        </p>
+                      )}
                     </div>
 
-                    {uts.lastRoll && (
-                      <div className="px-3 py-1.5 rounded-xl bg-[#0B1018] border border-slate-800 text-xs text-slate-300 max-w-md">
-                        <strong className="text-amber-300 font-mono-tabular mr-1.5">
-                          Dadu {uts.lastRoll.dice}
-                          {uts.lastRoll.bonus > 0 ? `+${uts.lastRoll.bonus}` : ''}:
-                        </strong>
-                        {uts.lastRoll.summary}
-                      </div>
-                    )}
+                    <div className="shrink-0">
+                      <UlarDice3D
+                        value={uts.lastRoll?.dice ?? null}
+                        bonus={uts.lastRoll?.bonus ?? 0}
+                        rollKey={
+                          uts.lastRoll
+                            ? `${uts.turnNumber}-${uts.lastRoll.uid}-${uts.lastRoll.dice}-${uts.lastRoll.fromTile}`
+                            : 'initial'
+                        }
+                        rollerName={uts.lastRoll?.displayName ?? null}
+                        artStyle={scenarioPack.artStyle}
+                        compact
+                      />
+                    </div>
                   </div>
                 )}
 
@@ -499,13 +511,26 @@ export function UlarTanggaRoomView({
                   <section className="rounded-2xl bg-[#131A24] border border-slate-800 p-5 space-y-5">
                     {/* Hero Stats Bar */}
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
-                      <div>
-                        <p className="text-xs text-slate-400">
-                          Hero {myHero.displayName}
-                        </p>
-                        <h3 className={`text-lg font-black ${myClassMeta?.accentClass ?? 'text-white'}`}>
-                          {myClassMeta?.name} · Petak {myHero.tile}
-                        </h3>
+                      <div className="flex items-center gap-3">
+                        <UlarHeroPawn
+                          heroClass={myHero.heroClass}
+                          displayName={myHero.displayName}
+                          avatarColor={myHero.avatarColor}
+                          artStyle={scenarioPack.artStyle}
+                          size="md"
+                          isTurn={isMyTurn}
+                          shielded={myHero.shielded}
+                          bonusSteps={myHero.bonusSteps}
+                          showInitialBadge={false}
+                        />
+                        <div>
+                          <p className="text-xs text-slate-400">
+                            Hero {myHero.displayName}
+                          </p>
+                          <h3 className={`text-lg font-black ${myClassMeta?.accentClass ?? 'text-white'}`}>
+                            {myClassMeta?.name} · Petak {myHero.tile}
+                          </h3>
+                        </div>
                       </div>
 
                       <div className="flex flex-wrap items-center gap-4 text-sm font-mono-tabular">

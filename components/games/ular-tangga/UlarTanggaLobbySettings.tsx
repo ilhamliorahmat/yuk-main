@@ -29,6 +29,7 @@ import {
   selectUlarTanggaClass,
   updateUlarTanggaSettings,
 } from '@/lib/platform/room-service';
+import { UlarHeroPawn } from './UlarHeroPawn';
 
 interface UlarTanggaLobbySettingsProps {
   room: RoomDoc;
@@ -302,13 +303,30 @@ export function UlarTanggaLobbySettings({
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className={`text-sm font-bold ${cls.accentClass}`}>
-                      {cls.name}
-                    </p>
-                    <p className="text-[11px] text-slate-400">{cls.archetype}</p>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <UlarHeroPawn
+                      heroClass={cid}
+                      artStyle={activeScenario.artStyle}
+                      size="sm"
+                      showInitialBadge={false}
+                      avatarColor={
+                        cid === 'ksatria'
+                          ? '#F59E0B'
+                          : cid === 'pencuri'
+                            ? '#10B981'
+                            : cid === 'penyihir'
+                              ? '#8B5CF6'
+                              : '#06B6D4'
+                      }
+                    />
+                    <div className="min-w-0">
+                      <p className={`text-sm font-bold ${cls.accentClass}`}>
+                        {cls.name}
+                      </p>
+                      <p className="text-[11px] text-slate-400">{cls.archetype}</p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs font-mono-tabular text-rose-300">
+                  <div className="flex items-center gap-2 text-xs font-mono-tabular text-rose-300 shrink-0">
                     <span className="inline-flex items-center gap-1">
                       <Heart className="w-3.5 h-3.5" />
                       {cls.maxHp}

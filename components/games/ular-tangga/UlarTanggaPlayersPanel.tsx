@@ -3,10 +3,12 @@
 import React, { useMemo } from 'react';
 import { Coins, Crown, Shield, Swords, Users } from 'lucide-react';
 import {
+  getUlarScenarioPack,
   sanitizeUlarTanggaSettings,
   ULAR_HERO_CLASSES,
 } from '@/lib/games/ular-tangga/packs';
 import type { PresenceEntry, RoomDoc, RoomPlayerDoc } from '@/lib/games/types';
+import { UlarHeroPawn } from './UlarHeroPawn';
 
 interface UlarTanggaPlayersPanelProps {
   room: RoomDoc;
@@ -23,6 +25,7 @@ export function UlarTanggaPlayersPanel({
 }: UlarTanggaPlayersPanelProps) {
   const uts = room.ularTanggaState;
   const settings = sanitizeUlarTanggaSettings(room.ularTanggaSettings);
+  const scenarioPack = getUlarScenarioPack(uts?.scenarioId ?? settings.scenarioId);
 
   const orderedPlayers = useMemo(() => {
     if (!uts || room.status === 'lobby') return players;
@@ -77,16 +80,29 @@ export function UlarTanggaPlayersPanel({
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="relative shrink-0">
-                    <div
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white border ${
-                        isCurrentTurn ? 'border-amber-300 ring-2 ring-amber-400/40' : 'border-white/10'
-                      }`}
-                      style={{ backgroundColor: player.avatarColor || '#F59E0B' }}
-                    >
-                      {player.displayName.slice(0, 1).toUpperCase()}
-                    </div>
+                    {hero || (lobbyChoice !== 'acak' && lobbyChoice in ULAR_HERO_CLASSES) ? (
+                      <UlarHeroPawn
+                        heroClass={hero ? hero.heroClass : (lobbyChoice as Exclude<typeof lobbyChoice, 'acak'>)}
+                        displayName={player.displayName}
+                        avatarColor={player.avatarColor || '#F59E0B'}
+                        artStyle={scenarioPack.artStyle}
+                        size="sm"
+                        isTurn={isCurrentTurn}
+                        shielded={Boolean(hero?.shielded)}
+                        bonusSteps={hero?.bonusSteps ?? 0}
+                      />
+                    ) : (
+                      <div
+                        className={`w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold text-white border ${
+                          isCurrentTurn ? 'border-amber-300 ring-2 ring-amber-400/40' : 'border-white/10'
+                        }`}
+                        style={{ backgroundColor: player.avatarColor || '#F59E0B' }}
+                      >
+                        {player.displayName.slice(0, 1).toUpperCase()}
+                      </div>
+                    )}
                     <span
-                      className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#0B1018] ${
+                      className={`absolute -bottom-0.5 -right-0.5 z-30 w-2.5 h-2.5 rounded-full border-2 border-[#0B1018] ${
                         isOnline ? 'bg-emerald-400' : 'bg-slate-600'
                       }`}
                     />

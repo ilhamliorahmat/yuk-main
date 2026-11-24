@@ -21,8 +21,10 @@ import {
 import QRCode from 'qrcode';
 import { PelukisCanvas } from '@/components/games/pelukis-gadungan/PelukisCanvas';
 import { FrequencyDial } from '@/components/games/satu-frekuensi/FrequencyDial';
+import { UlarDice3D } from '@/components/games/ular-tangga/UlarDice3D';
 import { UlarTanggaBoard } from '@/components/games/ular-tangga/UlarTanggaBoard';
 import { MALAM_SILUMAN_ROLES } from '@/lib/games/malam-siluman/roles-id';
+import { getUlarScenarioPack } from '@/lib/games/ular-tangga/packs';
 import type {
   GameType,
   PlayerSecretDoc,
@@ -754,10 +756,11 @@ export function LayarPanggungView({
               {/* GAME #7: ULAR TANGGA RP STAGE (Public Board + Adventure Log, Zero Bag Leaks) */}
               {room.gameType === 'ular_tangga' && room.ularTanggaState && (() => {
                 const uts = room.ularTanggaState;
+                const scenarioPack = getUlarScenarioPack(uts.scenarioId);
                 return (
                   <div className="space-y-4">
-                    <div className="rounded-2xl bg-[#131A24] border border-slate-800 p-5 flex flex-wrap items-center justify-between gap-3">
-                      <div>
+                    <div className="rounded-2xl bg-[#131A24] border border-slate-800 p-5 flex flex-wrap items-center justify-between gap-4">
+                      <div className="space-y-1 min-w-0 flex-1">
                         <p className="text-xs font-bold uppercase tracking-wider text-amber-400">
                           Giliran #{uts.turnNumber} · {uts.boardMode === 'brutal' ? 'Mode Brutal' : 'Mode Standar'}
                         </p>
@@ -766,12 +769,26 @@ export function LayarPanggungView({
                             ? `${uts.winnerName ?? 'Petualang'} Menang!`
                             : `Giliran: ${uts.currentTurnName}`}
                         </h2>
+                        {uts.lastRoll && (
+                          <p className="text-xs sm:text-sm text-slate-300 leading-snug">
+                            {uts.lastRoll.summary}
+                          </p>
+                        )}
                       </div>
-                      {uts.lastRoll && (
-                        <div className="px-4 py-2 rounded-xl bg-[#0B1018] border border-slate-800 text-xs sm:text-sm text-slate-200 max-w-md">
-                          {uts.lastRoll.summary}
-                        </div>
-                      )}
+
+                      <div className="shrink-0">
+                        <UlarDice3D
+                          value={uts.lastRoll?.dice ?? null}
+                          bonus={uts.lastRoll?.bonus ?? 0}
+                          rollKey={
+                            uts.lastRoll
+                              ? `${uts.turnNumber}-${uts.lastRoll.uid}-${uts.lastRoll.dice}-${uts.lastRoll.fromTile}`
+                              : 'initial'
+                          }
+                          rollerName={uts.lastRoll?.displayName ?? null}
+                          artStyle={scenarioPack.artStyle}
+                        />
+                      </div>
                     </div>
 
                     <UlarTanggaBoard state={uts} />
