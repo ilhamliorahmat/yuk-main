@@ -4,6 +4,10 @@ import type {
   SpyMode,
   WordPairItem,
 } from '../types';
+import {
+  evaluateMajorityVoteProgress,
+  type MajorityVoteProgress,
+} from '../voting/engine';
 import { BUILTIN_WORD_PAIRS } from './words-id';
 
 export type RandomFn = () => number;
@@ -170,34 +174,13 @@ export function dealKataKataRound(params: {
   };
 }
 
-export interface KataKataVoteEvaluation {
-  outcome: 'pending' | 'convicted' | 'acquitted';
-  yesCount: number;
-  noCount: number;
-  requiredYes: number;
-}
+export type KataKataVoteEvaluation = MajorityVoteProgress;
 
 export function evaluateKataKataVoteProgress(
   votes: Record<string, 'yes' | 'no'>,
   eligibleAliveVoters: readonly string[],
 ): KataKataVoteEvaluation {
-  let yesCount = 0;
-  let noCount = 0;
-
-  for (const uid of eligibleAliveVoters) {
-    const choice = votes[uid];
-    if (choice === 'yes') yesCount++;
-    else if (choice === 'no') noCount++;
-  }
-
-  const requiredYes = eligibleAliveVoters.length;
-  if (noCount > 0) {
-    return { outcome: 'acquitted', yesCount, noCount, requiredYes };
-  }
-  if (requiredYes > 0 && yesCount >= requiredYes) {
-    return { outcome: 'convicted', yesCount, noCount, requiredYes };
-  }
-  return { outcome: 'pending', yesCount, noCount, requiredYes };
+  return evaluateMajorityVoteProgress(votes, eligibleAliveVoters);
 }
 
 export interface EliminationEvaluation {

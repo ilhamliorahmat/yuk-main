@@ -25,6 +25,10 @@ import { UlarDice3D } from '@/components/games/ular-tangga/UlarDice3D';
 import { UlarTanggaBoard } from '@/components/games/ular-tangga/UlarTanggaBoard';
 import { MALAM_SILUMAN_ROLES } from '@/lib/games/malam-siluman/roles-id';
 import { getUlarScenarioPack } from '@/lib/games/ular-tangga/packs';
+import {
+  evaluateMajorityVoteProgress,
+  getEligibleMajorityVoterUids,
+} from '@/lib/games/voting/engine';
 import type {
   GameType,
   PlayerSecretDoc,
@@ -144,6 +148,16 @@ export function LayarPanggungView({
     }
     return `Hasil Ronde #${res.roundNumber}`;
   }, [room]);
+
+  const stageVoteProgress = useMemo(() => {
+    if (!room.activeVote) return null;
+    const eligible = getEligibleMajorityVoterUids({
+      players,
+      targetUid: room.activeVote.targetUid,
+      excludedUids: room.gameType === 'kata_kata' ? (room.eliminatedUids ?? []) : [],
+    });
+    return evaluateMajorityVoteProgress(room.activeVote.votes, eligible);
+  }, [players, room.activeVote, room.eliminatedUids, room.gameType]);
 
   return (
     <div className="min-h-screen bg-[#070B12] text-slate-100 flex flex-col">
@@ -353,14 +367,42 @@ export function LayarPanggungView({
                     )}
                   </div>
 
-                  {room.activeVote && (
-                    <div className="rounded-xl bg-rose-500/15 border border-rose-400/50 p-4 text-center">
+                  {room.activeVote && stageVoteProgress && (
+                    <div className="rounded-xl bg-rose-500/15 border border-rose-400/50 p-4 text-center space-y-2.5">
                       <p className="text-xs font-bold uppercase tracking-wider text-rose-300">
-                        Voting Tuduhan Sedang Berlangsung
+                        Voting Tuduhan Sedang Berlangsung · Mayoritas 50% + 1
                       </p>
-                      <p className="text-lg font-black text-white mt-1">
+                      <p className="text-lg font-black text-white">
                         {room.activeVote.initiatorName} menuduh {room.activeVote.targetName}!
                       </p>
+                      <div className="max-w-md mx-auto space-y-1.5">
+                        <div className="flex items-center justify-between text-xs font-mono-tabular text-slate-200">
+                          <span className="font-bold text-rose-200">
+                            Setuju {stageVoteProgress.yesCount}/{stageVoteProgress.requiredYes}
+                          </span>
+                          <span className="text-slate-300">
+                            Tolak {stageVoteProgress.noCount} · Belum {stageVoteProgress.remainingCount}
+                          </span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-slate-900/80 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-rose-400 transition-all duration-300"
+                            style={{
+                              width: `${
+                                stageVoteProgress.requiredYes > 0
+                                  ? Math.min(
+                                      100,
+                                      Math.round(
+                                        (stageVoteProgress.yesCount / stageVoteProgress.requiredYes) *
+                                          100,
+                                      ),
+                                    )
+                                  : 0
+                              }%`,
+                            }}
+                          />
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -408,14 +450,42 @@ export function LayarPanggungView({
                     )}
                   </div>
 
-                  {room.activeVote && (
-                    <div className="rounded-xl bg-amber-500/15 border border-amber-400/50 p-4 text-center">
+                  {room.activeVote && stageVoteProgress && (
+                    <div className="rounded-xl bg-amber-500/15 border border-amber-400/50 p-4 text-center space-y-2.5">
                       <p className="text-xs font-bold uppercase tracking-wider text-amber-300">
-                        Voting Eliminasi Berlangsung
+                        Voting Eliminasi Berlangsung · Mayoritas 50% + 1
                       </p>
-                      <p className="text-lg font-black text-white mt-1">
+                      <p className="text-lg font-black text-white">
                         Apakah {room.activeVote.targetName} adalah Penyusup?
                       </p>
+                      <div className="max-w-md mx-auto space-y-1.5">
+                        <div className="flex items-center justify-between text-xs font-mono-tabular text-slate-200">
+                          <span className="font-bold text-amber-200">
+                            Setuju {stageVoteProgress.yesCount}/{stageVoteProgress.requiredYes}
+                          </span>
+                          <span className="text-slate-300">
+                            Tolak {stageVoteProgress.noCount} · Belum {stageVoteProgress.remainingCount}
+                          </span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-slate-900/80 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-amber-400 transition-all duration-300"
+                            style={{
+                              width: `${
+                                stageVoteProgress.requiredYes > 0
+                                  ? Math.min(
+                                      100,
+                                      Math.round(
+                                        (stageVoteProgress.yesCount / stageVoteProgress.requiredYes) *
+                                          100,
+                                      ),
+                                    )
+                                  : 0
+                              }%`,
+                            }}
+                          />
+                        </div>
+                      </div>
                     </div>
                   )}
 

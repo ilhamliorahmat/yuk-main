@@ -587,6 +587,14 @@ function yukmain_leave_room(PDO $pdo, array $user, string $roomId): array
             }
         }
 
+        // Reconcile active majority voting if a voter or target left mid-vote
+        if (($room['status'] ?? 'lobby') === 'voting' && !empty($room['activeVote']) && function_exists('yukmain_reconcile_active_vote_after_roster_change')) {
+            $pushVoteSys = static function (string $text) use ($tx, $roomId): void {
+                yukmain_insert_and_prune_chat($tx, $roomId, 'system', 'Yuk Main', $text, 'system');
+            };
+            yukmain_reconcile_active_vote_after_roster_change($tx, $roomId, $room, $remaining, $now, $pushVoteSys);
+        }
+
         // Check whether any real player remains online
         $presence = yukmain_load_presence_map($tx, $roomId);
         $anyRealOnline = false;

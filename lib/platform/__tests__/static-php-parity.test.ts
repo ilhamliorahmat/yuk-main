@@ -111,6 +111,11 @@ describe('Static Export + PHP 8 + PDO MySQL Architecture Parity', () => {
     for (const action of actionNames) {
       expect(dispatcherSrc).toContain(`case '${action}':`);
     }
+
+    const socialPhp = readFileSync(resolve(ROOT, 'public/api/lib/engine_games_social.php'), 'utf8');
+    expect(socialPhp).toContain('function yukmain_evaluate_majority_vote_progress');
+    expect(socialPhp).toContain('intdiv($totalEligible, 2) + 1');
+    expect(dispatcherSrc).toContain('function yukmain_reconcile_active_vote_after_roster_change');
   });
 
   it('uses 100% Source Available* branding with footer explanation and ships the /about page', () => {

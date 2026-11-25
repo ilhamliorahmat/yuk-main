@@ -102,15 +102,57 @@ function yukmain_deal_spyfall_round(array $playerUids, array $pool, ?string $pre
     ];
 }
 
+function yukmain_get_majority_threshold(int $totalEligible): int
+{
+    if ($totalEligible <= 0) {
+        return 0;
+    }
+    return intdiv($totalEligible, 2) + 1;
+}
+
+function yukmain_evaluate_majority_vote_progress(array $votes, array $eligibleVoterUids): array
+{
+    $uniqueEligible = array_values(array_unique(array_map('strval', $eligibleVoterUids)));
+    $yes = 0;
+    $no = 0;
+
+    foreach ($uniqueEligible as $uid) {
+        $v = $votes[$uid] ?? null;
+        if ($v === 'yes') {
+            $yes++;
+        } elseif ($v === 'no') {
+            $no++;
+        }
+    }
+
+    $totalEligible = count($uniqueEligible);
+    $requiredYes = yukmain_get_majority_threshold($totalEligible);
+    $remaining = max(0, $totalEligible - $yes - $no);
+
+    if ($totalEligible === 0) {
+        $outcome = 'acquitted';
+    } elseif ($yes >= $requiredYes) {
+        $outcome = 'convicted';
+    } elseif (($totalEligible - $no) < $requiredYes) {
+        $outcome = 'acquitted';
+    } else {
+        $outcome = 'pending';
+    }
+
+    return [
+        'outcome'        => $outcome,
+        'yesCount'       => $yes,
+        'noCount'        => $no,
+        'requiredYes'    => $requiredYes,
+        'totalEligible'  => $totalEligible,
+        'remainingCount' => $remaining,
+    ];
+}
+
 function yukmain_evaluate_vote_progress(array $votes, array $eligibleVoterUids): string
 {
-    $yes = 0;
-    foreach ($eligibleVoterUids as $uid) {
-        $v = $votes[$uid] ?? null;
-        if ($v === 'no') return 'acquitted';
-        if ($v === 'yes') $yes++;
-    }
-    return (count($eligibleVoterUids) > 0 && $yes >= count($eligibleVoterUids)) ? 'convicted' : 'pending';
+    $progress = yukmain_evaluate_majority_vote_progress($votes, $eligibleVoterUids);
+    return (string) $progress['outcome'];
 }
 
 function yukmain_calculate_spyfall_deltas(array $playerUids, array $spyUids, string $winnerTeam, ?string $initiatorUid, string $victoryType): array

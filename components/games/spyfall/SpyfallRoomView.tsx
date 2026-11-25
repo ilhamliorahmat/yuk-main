@@ -17,7 +17,6 @@ import {
   Target,
   Trophy,
   Users,
-  Vote,
 } from 'lucide-react';
 import type {
   ChatMessage,
@@ -36,6 +35,8 @@ import {
   startSpyfallRound,
   submitSpyLocationGuess,
 } from '@/lib/platform/room-service';
+import { getEligibleMajorityVoterUids } from '@/lib/games/voting/engine';
+import { AccusationVoteBanner } from '../session/AccusationVoteBanner';
 import { LobbySettingsPanel } from './LobbySettingsPanel';
 import { PlayersAndVotePanel } from './PlayersAndVotePanel';
 import { RoomChatPanel } from './RoomChatPanel';
@@ -234,12 +235,15 @@ export function SpyfallRoomView({
   };
 
   const activeVote = room.activeVote;
-  const isTargetOfVote = activeVote?.targetUid === myUid;
-  const myVoteChoice = activeVote?.votes[myUid];
-  const eligibleCount = Math.max(1, activePlayersCount - 1);
-  const yesVoteCount = activeVote
-    ? Object.values(activeVote.votes).filter((v) => v === 'yes').length
-    : 0;
+  const myPlayer = players.find((p) => p.uid === myUid);
+  const eligibleVoterUids = useMemo(
+    () =>
+      getEligibleMajorityVoterUids({
+        players,
+        targetUid: activeVote?.targetUid,
+      }),
+    [players, activeVote?.targetUid],
+  );
 
   const roundResult = room.lastRoundResult as RoundResult | null;
 
@@ -317,67 +321,22 @@ export function SpyfallRoomView({
           </div>
         )}
 
-        {/* Active Voting Banner */}
+        {/* Active Voting Banner (50% + 1 Majority Module) */}
         {room.status === 'voting' && activeVote && (
-          <section className="bg-[#131A24] border border-amber-600/60 rounded-2xl p-4 sm:p-5 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <Vote className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <h2 className="text-sm sm:text-base font-bold text-white">
-                    Pemungutan Suara: Apakah {activeVote.targetName} Mata-Mata?
-                  </h2>
-                  <p className="text-xs text-slate-300 mt-0.5">
-                    Diajukan oleh {activeVote.initiatorName} ·{' '}
-                    <span className="font-mono-tabular">
-                      {yesVoteCount}/{eligibleCount} Suara Setuju
-                    </span>{' '}
-                    (Wajib sepakat penuh selain tertuduh)
-                  </p>
-                </div>
-              </div>
-
-              {isHost && (
-                <button
-                  type="button"
-                  disabled={actionBusy}
-                  onClick={() => void handleCancelVote()}
-                  className="min-h-[40px] px-3.5 rounded-xl bg-[#0B1018] border border-slate-700 text-xs text-slate-300 hover:text-white whitespace-nowrap shrink-0"
-                >
-                  Batalkan Voting
-                </button>
-              )}
-            </div>
-
-            {isTargetOfVote ? (
-              <p className="text-xs text-amber-300 bg-amber-950/40 border border-amber-800/50 rounded-xl px-3.5 py-2.5">
-                Kamu sedang dituduh! Tunggu hasil suara pemain lain.
-              </p>
-            ) : myVoteChoice ? (
-              <p className="text-xs text-emerald-300 bg-emerald-950/40 border border-emerald-800/50 rounded-xl px-3.5 py-2.5">
-                Suaramu ({myVoteChoice === 'yes' ? 'Setuju Tuduhan' : 'Tidak Setuju'}) telah tercatat.
-              </p>
-            ) : (
-              <div className="flex flex-col sm:flex-row gap-2.5">
-                <button
-                  type="button"
-                  disabled={actionBusy}
-                  onClick={() => void handleCastVote('yes')}
-                  className="flex-1 min-h-[44px] rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold transition-colors"
-                >
-                  Setuju, Dia Mata-Mata
-                </button>
-                <button
-                  type="button"
-                  disabled={actionBusy}
-                  onClick={() => void handleCastVote('no')}
-                  className="flex-1 min-h-[44px] rounded-xl bg-[#0B1018] border border-slate-700 hover:border-slate-500 text-slate-200 text-sm font-semibold transition-colors"
-                >
-                  Tidak Setuju
-                </button>
-              </div>
-            )}
-          </section>
+          <AccusationVoteBanner
+            activeVote={activeVote}
+            eligibleVoterUids={eligibleVoterUids}
+            myUid={myUid}
+            isHost={isHost}
+            isBrb={Boolean(myPlayer?.isBrb)}
+            actionBusy={actionBusy}
+            title={`Pemungutan Suara: Apakah ${activeVote.targetName} Mata-Mata?`}
+            yesButtonLabel="Setuju, Dia Mata-Mata"
+            yesRecordedLabel="Setuju Tuduhan"
+            accentBorderClassName="border-amber-600/60"
+            onCastVote={(choice) => void handleCastVote(choice)}
+            onCancelVote={() => void handleCancelVote()}
+          />
         )}
 
         {/* Convicted Spy Last-Chance Guess Prompt */}

@@ -505,6 +505,70 @@ describe('LanHostAuthority — Zero-Leak Isolation & All 5 Games + Session Platf
     expect(auth.getRoom().gameType).toBe('spyfall');
     expect(auth.getRoom().ularTanggaState).toBeNull();
   });
+
+  it('enforces 50% + 1 majority voting in Spyfall and reconciles mid-vote BRB/leave changes', () => {
+    const auth = setupFourPlayerRoom('spyfall');
+    auth.handleAction('host_1', 'startSpyfallRound', {});
+
+    // 4 active players -> accuse guest_4 -> 3 eligible voters (host_1, guest_2, guest_3) -> requiredYes = 2
+    auth.handleAction('host_1', 'initiateAccusationVote', {
+      targetUid: 'guest_4',
+      actAsUid: 'host_1',
+    });
+    expect(auth.getRoom().status).toBe('voting');
+
+    // Target cannot vote
+    expect(() =>
+      auth.handleAction('guest_4', 'castAccusationVote', { choice: 'no', actAsUid: 'guest_4' }),
+    ).toThrow();
+
+    // 1 'no' vote must NOT immediately drop the vote (still 1 yes, 1 no, 1 pending -> 2 yes still possible)
+    const afterOneNo = auth.handleAction('guest_2', 'castAccusationVote', {
+      choice: 'no',
+      actAsUid: 'guest_2',
+    }) as { outcome: string };
+    expect(afterOneNo.outcome).toBe('pending');
+    expect(auth.getRoom().status).toBe('voting');
+
+    // 2nd 'no' vote makes 50% + 1 impossible -> acquitted back to playing
+    const afterTwoNo = auth.handleAction('guest_3', 'castAccusationVote', {
+      choice: 'no',
+      actAsUid: 'guest_3',
+    }) as { outcome: string };
+    expect(afterTwoNo.outcome).toBe('acquitted');
+    expect(auth.getRoom().status).toBe('playing');
+    expect(auth.getRoom().activeVote).toBeNull();
+
+    // Start another vote against guest_4: 1 yes (host_1), 1 no (guest_2), then guest_3 votes yes -> 2/3 convicted!
+    auth.handleAction('host_1', 'initiateAccusationVote', {
+      targetUid: 'guest_4',
+      actAsUid: 'host_1',
+    });
+    auth.handleAction('guest_2', 'castAccusationVote', { choice: 'no', actAsUid: 'guest_2' });
+    expect(auth.getRoom().status).toBe('voting');
+
+    const convicted = auth.handleAction('guest_3', 'castAccusationVote', {
+      choice: 'yes',
+      actAsUid: 'guest_3',
+    }) as { outcome: string };
+    expect(convicted.outcome).toBe('convicted');
+    expect(auth.getRoom().status).toBe('round_end');
+
+    // Mid-vote BRB reconciliation: start next round, initiate vote, 1 no, then remaining voter goes BRB -> auto-acquitted!
+    auth.handleAction('host_1', 'startSpyfallRound', {});
+    auth.handleAction('host_1', 'initiateAccusationVote', {
+      targetUid: 'guest_4',
+      actAsUid: 'host_1',
+    });
+    auth.handleAction('guest_2', 'castAccusationVote', { choice: 'no', actAsUid: 'guest_2' });
+    expect(auth.getRoom().status).toBe('voting');
+
+    // guest_3 goes BRB -> eligible drops to [host_1, guest_2] (requiredYes = 2), 1 no makes majority impossible
+    auth.handleAction('guest_3', 'togglePlayerBrb', { uid: 'guest_3', isBrb: true });
+    expect(auth.getRoom().status).toBe('playing');
+    expect(auth.getRoom().activeVote).toBeNull();
+  });
 });
+
 
 

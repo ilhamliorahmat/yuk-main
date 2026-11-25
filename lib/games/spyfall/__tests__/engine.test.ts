@@ -142,12 +142,13 @@ describe('Spyfall Core Game Engine', () => {
     expect(wargaCount).toBe(8);
   });
 
-  it('evaluates unanimous accusation voting and immediate acquittal on any no vote', () => {
-    const voters = ['u1', 'u2', 'u3'];
+  it('evaluates 50% + 1 majority accusation voting without dropping immediately on a single no vote', () => {
+    const voters = ['u1', 'u2', 'u3']; // requiredYes = 2
 
-    expect(evaluateVoteProgress({ u1: 'yes', u2: 'yes' }, voters).outcome).toBe('pending');
-    expect(evaluateVoteProgress({ u1: 'yes', u2: 'no', u3: 'yes' }, voters).outcome).toBe('acquitted');
-    expect(evaluateVoteProgress({ u1: 'yes', u2: 'yes', u3: 'yes' }, voters).outcome).toBe('convicted');
+    expect(evaluateVoteProgress({ u1: 'yes' }, voters).outcome).toBe('pending');
+    expect(evaluateVoteProgress({ u1: 'yes', u2: 'no' }, voters).outcome).toBe('pending');
+    expect(evaluateVoteProgress({ u1: 'yes', u2: 'no', u3: 'yes' }, voters).outcome).toBe('convicted');
+    expect(evaluateVoteProgress({ u1: 'yes', u2: 'no', u3: 'no' }, voters).outcome).toBe('acquitted');
   });
 
   it('evaluates Spy location guesses case-insensitively', () => {

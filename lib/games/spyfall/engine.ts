@@ -5,6 +5,11 @@ import type {
   SpyMode,
   SpyfallLocation,
 } from '../types';
+import {
+  evaluateMajorityVoteProgress,
+  type MajorityVoteOutcome,
+  type MajorityVoteProgress,
+} from '../voting/engine';
 
 export type RandomFn = () => number;
 
@@ -213,38 +218,13 @@ export function dealSpyfallRound(input: DealRoundInput): DealRoundOutput {
   };
 }
 
-export type VoteOutcome = 'pending' | 'convicted' | 'acquitted';
+export type VoteOutcome = MajorityVoteOutcome;
 
 export function evaluateVoteProgress(
   votes: Record<string, 'yes' | 'no'>,
   eligibleVoterUids: readonly string[],
-): {
-  outcome: VoteOutcome;
-  yesCount: number;
-  noCount: number;
-  totalEligible: number;
-} {
-  let yesCount = 0;
-  let noCount = 0;
-
-  for (const uid of eligibleVoterUids) {
-    const v = votes[uid];
-    if (v === 'yes') yesCount += 1;
-    else if (v === 'no') noCount += 1;
-  }
-
-  const totalEligible = eligibleVoterUids.length;
-
-  // Classic Spyfall rule: any 'no' vote immediately rejects an accusation
-  if (noCount > 0) {
-    return { outcome: 'acquitted', yesCount, noCount, totalEligible };
-  }
-
-  if (totalEligible > 0 && yesCount >= totalEligible) {
-    return { outcome: 'convicted', yesCount, noCount, totalEligible };
-  }
-
-  return { outcome: 'pending', yesCount, noCount, totalEligible };
+): MajorityVoteProgress {
+  return evaluateMajorityVoteProgress(votes, eligibleVoterUids);
 }
 
 export function evaluateSpyGuess(

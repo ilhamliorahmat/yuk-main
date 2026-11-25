@@ -18,7 +18,6 @@ import {
   Target,
   Trophy,
   Users,
-  Vote,
 } from 'lucide-react';
 import { KATA_KATA_QUICK_PROMPTS_ID } from '@/lib/games/kata-kata/words-id';
 import type {
@@ -38,6 +37,8 @@ import {
   startKataKataRound,
   submitKataKataLastChanceGuess,
 } from '@/lib/platform/room-service';
+import { getEligibleMajorityVoterUids } from '@/lib/games/voting/engine';
+import { AccusationVoteBanner } from '../session/AccusationVoteBanner';
 import { RoomChatPanel } from '../spyfall/RoomChatPanel';
 import { KataKataLobbySettings } from './KataKataLobbySettings';
 import { KataKataPlayersPanel } from './KataKataPlayersPanel';
@@ -258,17 +259,16 @@ export function KataKataRoomView({
   };
 
   const activeVote = room.activeVote;
-  const isTargetOfVote = activeVote?.targetUid === myUid;
-  const myVoteChoice = activeVote?.votes[myUid];
-  const aliveNonTargetCount = Math.max(
-    1,
-    players.filter(
-      (p) => !p.isBrb && !eliminatedSet.has(p.uid) && p.uid !== activeVote?.targetUid,
-    ).length,
+  const myPlayer = players.find((p) => p.uid === myUid);
+  const eligibleVoterUids = useMemo(
+    () =>
+      getEligibleMajorityVoterUids({
+        players,
+        targetUid: activeVote?.targetUid,
+        excludedUids: room.eliminatedUids ?? [],
+      }),
+    [players, activeVote?.targetUid, room.eliminatedUids],
   );
-  const yesVoteCount = activeVote
-    ? Object.values(activeVote.votes).filter((v) => v === 'yes').length
-    : 0;
 
   const isCaughtFinalSpy =
     room.status === 'spy_guess' && room.pendingSpyGuess?.spyUid === myUid;
@@ -345,71 +345,23 @@ export function KataKataRoomView({
           </div>
         )}
 
-        {/* Active Elimination Vote Banner */}
+        {/* Active Elimination Vote Banner (50% + 1 Majority Module) */}
         {room.status === 'voting' && activeVote && (
-          <section className="bg-[#131A24] border border-amber-500/60 rounded-2xl p-4 sm:p-5 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <Vote className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <h2 className="text-sm sm:text-base font-bold text-white">
-                    Voting Eliminasi: Apakah {activeVote.targetName} Penyusup?
-                  </h2>
-                  <p className="text-xs text-slate-300 mt-0.5">
-                    Diajukan oleh {activeVote.initiatorName} ·{' '}
-                    <span className="font-mono-tabular">
-                      {yesVoteCount}/{aliveNonTargetCount} Suara Setuju
-                    </span>{' '}
-                    (Wajib sepakat penuh dari seluruh pemain bertahan selain tertuduh)
-                  </p>
-                </div>
-              </div>
-
-              {isHost && (
-                <button
-                  type="button"
-                  disabled={actionBusy}
-                  onClick={() => void handleCancelVote()}
-                  className="min-h-[40px] px-3.5 rounded-xl bg-[#0B1018] border border-slate-700 text-xs text-slate-300 hover:text-white whitespace-nowrap shrink-0"
-                >
-                  Batalkan Voting
-                </button>
-              )}
-            </div>
-
-            {amIEliminated ? (
-              <p className="text-xs text-slate-300 bg-[#0B1018] border border-slate-800 rounded-xl px-3.5 py-2.5">
-                Kamu sudah tereliminasi dan berstatus penonton. Tunggu pemain yang bertahan menyelesaikan voting.
-              </p>
-            ) : isTargetOfVote ? (
-              <p className="text-xs text-amber-300 bg-amber-950/40 border border-amber-800/50 rounded-xl px-3.5 py-2.5">
-                Kamu sedang dituduh! Tunggu hasil suara pemain lain.
-              </p>
-            ) : myVoteChoice ? (
-              <p className="text-xs text-emerald-300 bg-emerald-950/40 border border-emerald-800/50 rounded-xl px-3.5 py-2.5">
-                Suaramu ({myVoteChoice === 'yes' ? 'Setuju Eliminasi' : 'Tidak Setuju'}) telah tercatat.
-              </p>
-            ) : (
-              <div className="flex flex-col sm:flex-row gap-2.5">
-                <button
-                  type="button"
-                  disabled={actionBusy}
-                  onClick={() => void handleCastVote('yes')}
-                  className="flex-1 min-h-[44px] rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold transition-colors"
-                >
-                  Setuju, Eliminasi Dia
-                </button>
-                <button
-                  type="button"
-                  disabled={actionBusy}
-                  onClick={() => void handleCastVote('no')}
-                  className="flex-1 min-h-[44px] rounded-xl bg-[#0B1018] border border-slate-700 hover:border-slate-500 text-slate-200 text-sm font-semibold transition-colors"
-                >
-                  Tidak Setuju
-                </button>
-              </div>
-            )}
-          </section>
+          <AccusationVoteBanner
+            activeVote={activeVote}
+            eligibleVoterUids={eligibleVoterUids}
+            myUid={myUid}
+            isHost={isHost}
+            isBrb={Boolean(myPlayer?.isBrb)}
+            isEliminated={amIEliminated}
+            actionBusy={actionBusy}
+            title={`Voting Eliminasi: Apakah ${activeVote.targetName} Penyusup?`}
+            yesButtonLabel="Setuju, Eliminasi Dia"
+            yesRecordedLabel="Setuju Eliminasi"
+            accentBorderClassName="border-amber-500/60"
+            onCastVote={(choice) => void handleCastVote(choice)}
+            onCancelVote={() => void handleCancelVote()}
+          />
         )}
 
         {/* Final Caught Spy Last-Chance Word Guess */}

@@ -139,17 +139,21 @@ describe('Kata-Kata Hari Ini pure engine', () => {
     expect(evaluateKataKataLastChanceGuess('   ', 'Mie Ayam')).toBe(false);
   });
 
-  it('evaluates accusation votes strictly over eligible alive voters', () => {
+  it('evaluates 50% + 1 majority accusation votes strictly over eligible alive voters', () => {
+    // 3 eligible alive voters -> requiredYes = 2
     expect(
-      evaluateKataKataVoteProgress({ p1: 'yes', p2: 'yes' }, ['p1', 'p2', 'p3']).outcome,
+      evaluateKataKataVoteProgress({ p1: 'yes' }, ['p1', 'p2', 'p3']).outcome,
     ).toBe('pending');
     expect(
-      evaluateKataKataVoteProgress({ p1: 'yes', p2: 'no' }, ['p1', 'p2', 'p3']).outcome,
-    ).toBe('acquitted');
-    expect(
-      evaluateKataKataVoteProgress({ p1: 'yes', p2: 'yes', p3: 'yes' }, ['p1', 'p2', 'p3'])
+      evaluateKataKataVoteProgress({ p1: 'yes', p2: 'no', eliminated: 'no' }, ['p1', 'p2', 'p3'])
         .outcome,
+    ).toBe('pending');
+    expect(
+      evaluateKataKataVoteProgress({ p1: 'yes', p2: 'yes' }, ['p1', 'p2', 'p3']).outcome,
     ).toBe('convicted');
+    expect(
+      evaluateKataKataVoteProgress({ p1: 'yes', p2: 'no', p3: 'no' }, ['p1', 'p2', 'p3']).outcome,
+    ).toBe('acquitted');
   });
 
   it('sanitizes custom word pairs and rejects identical words', () => {

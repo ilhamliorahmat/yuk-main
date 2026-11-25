@@ -71,6 +71,7 @@ import {
   sanitizeUlarTanggaSettings,
   ULAR_HERO_CLASSES,
 } from '../games/ular-tangga/packs';
+import { getEligibleMajorityVoterUids } from '../games/voting/engine';
 import type {
   ChatMessage,
   CustomDrawingPrompt,
@@ -94,6 +95,7 @@ import type {
   UlarHeroClassId,
   UlarItemId,
   UlarTanggaSettings,
+  VoteState,
   WerewolfRoleId,
 } from '../games/types';
 import {
@@ -596,6 +598,7 @@ export class LanHostAuthority {
             ? `${target.displayName} lagi BRB sebentar (dilewati di ronde baru).`
             : `${target.displayName} sudah balik dan siap ikut ronde berikutnya!`,
         );
+        this.reconcileActiveVoteAfterRosterChange(now);
         return {};
       }
 
@@ -629,6 +632,7 @@ export class LanHostAuthority {
         if (leaving) {
           this.pushSystemMessage(`${leaving.displayName} keluar dari ruang LAN.`);
         }
+        this.reconcileActiveVoteAfterRosterChange(now);
         return {};
       }
 
@@ -826,26 +830,30 @@ export class LanHostAuthority {
         if (this.room.status !== 'playing') {
           throw new Error('Voting tuduhan hanya bisa dimulai saat ronde berjalan.');
         }
+        if (initiator.isBrb) {
+          throw new Error('Pemain yang sedang BRB tidak bisa mengajukan tuduhan.');
+        }
         const targetUid = String(payload.targetUid ?? '');
         const target = this.players.get(targetUid);
         if (!target || target.isBrb || target.uid === initiator.uid) {
           throw new Error('Target tuduhan tidak valid.');
         }
+        const activeVote: VoteState = {
+          initiatorUid: initiator.uid,
+          initiatorName: initiator.displayName,
+          targetUid: target.uid,
+          targetName: target.displayName,
+          startedAtMs: now,
+          votes: { [initiator.uid]: 'yes' },
+        };
         this.room = {
           ...this.room,
           status: 'voting',
-          activeVote: {
-            initiatorUid: initiator.uid,
-            initiatorName: initiator.displayName,
-            targetUid: target.uid,
-            targetName: target.displayName,
-            startedAtMs: now,
-            votes: { [initiator.uid]: 'yes' },
-          },
+          activeVote,
           updatedAt: now,
         };
         this.pushSystemMessage(`${initiator.displayName} menuduh ${target.displayName} sebagai Mata-Mata!`);
-        return {};
+        return this.resolveSpyfallMajorityVote(activeVote, now);
       }
 
       case 'castAccusationVote': {
@@ -853,65 +861,18 @@ export class LanHostAuthority {
         if (this.room.status !== 'voting' || !this.room.activeVote || !this.serverState) {
           throw new Error('Tidak ada voting aktif.');
         }
+        if (voter.isBrb) {
+          throw new Error('Pemain yang sedang BRB tidak bisa ikut voting.');
+        }
+        if (voter.uid === this.room.activeVote.targetUid) {
+          throw new Error('Tertuduh tidak bisa ikut voting.');
+        }
         const vote: 'yes' | 'no' = (payload.vote ?? payload.choice) === 'no' ? 'no' : 'yes';
-        const activeVote = {
+        const activeVote: VoteState = {
           ...this.room.activeVote,
           votes: { ...this.room.activeVote.votes, [voter.uid]: vote },
         };
-
-        const activePlayers = filterActivePlayers(this.getPlayersList());
-        const eligibleVoters = activePlayers
-          .filter((p) => p.uid !== activeVote.targetUid)
-          .map((p) => p.uid);
-
-        const progress = evaluateVoteProgress(activeVote.votes, eligibleVoters);
-
-        if (progress.outcome === 'pending') {
-          this.room = { ...this.room, activeVote, updatedAt: now };
-          return { outcome: 'pending' };
-        }
-
-        if (progress.outcome === 'acquitted') {
-          this.room = { ...this.room, status: 'playing', activeVote: null, updatedAt: now };
-          this.pushSystemMessage(`Tuduhan terhadap ${activeVote.targetName} ditolak. Diskusi lanjut!`);
-          return { outcome: 'acquitted' };
-        }
-
-        // Convicted!
-        const isSpy = this.serverState.spyUids.includes(activeVote.targetUid);
-        const winnerTeam: 'warga' | 'mata_mata' = isSpy ? 'warga' : 'mata_mata';
-        const deltas = calculateRoundScoreDeltas({
-          playerUids: activePlayers.map((p) => p.uid),
-          spyUids: this.serverState.spyUids,
-          winnerTeam,
-          initiatorUid: activeVote.initiatorUid,
-          victoryType: isSpy ? 'caught_no_guess' : 'false_accusation',
-        });
-        this.applyScoreDeltas(deltas);
-
-        this.room = {
-          ...this.room,
-          status: 'round_end',
-          currentMatchRounds: (this.room.currentMatchRounds ?? 0) + 1,
-          activeVote: null,
-          pendingSpyGuess: null,
-          lastRoundResult: {
-            roundNumber: this.room.roundNumber,
-            winnerTeam,
-            reason: isSpy
-              ? `${activeVote.targetName} terbukti Mata-Mata! Warga menang.`
-              : `${activeVote.targetName} ternyata Warga! Tim Mata-Mata menang.`,
-            locationName: this.serverState.locationName,
-            guessedLocation: null,
-            spyUids: this.serverState.spyUids,
-            spyNames: this.serverState.spyNames,
-            resolvedAtMs: now,
-            scoresApplied: true,
-          },
-          updatedAt: now,
-        };
-        this.pushSystemMessage(this.room.lastRoundResult!.reason);
-        return { outcome: 'convicted', winnerTeam };
+        return this.resolveSpyfallMajorityVote(activeVote, now);
       }
 
       case 'cancelActiveVoteOrSpyGuess': {
@@ -1078,30 +1039,40 @@ export class LanHostAuthority {
         }
         const targetUid = String(payload.targetUid ?? '');
         const target = this.players.get(targetUid);
+        if (initiator.isBrb) {
+          throw new Error('Pemain yang sedang BRB tidak bisa mengajukan tuduhan.');
+        }
         if (!target || target.isBrb || eliminated.has(target.uid) || target.uid === initiator.uid) {
           throw new Error('Target tuduhan tidak valid.');
         }
+        const activeVote: VoteState = {
+          initiatorUid: initiator.uid,
+          initiatorName: initiator.displayName,
+          targetUid: target.uid,
+          targetName: target.displayName,
+          startedAtMs: now,
+          votes: { [initiator.uid]: 'yes' },
+        };
         this.room = {
           ...this.room,
           status: 'voting',
-          activeVote: {
-            initiatorUid: initiator.uid,
-            initiatorName: initiator.displayName,
-            targetUid: target.uid,
-            targetName: target.displayName,
-            startedAtMs: now,
-            votes: { [initiator.uid]: 'yes' },
-          },
+          activeVote,
           updatedAt: now,
         };
         this.pushSystemMessage(`${initiator.displayName} menuduh ${target.displayName} sebagai Penyusup!`);
-        return {};
+        return this.resolveKataKataMajorityVote(activeVote, now);
       }
 
       case 'castKataKataVote': {
         const voter = this.resolveActor(senderDeviceUid, payload);
         if (this.room.status !== 'voting' || !this.room.activeVote || !this.serverState) {
           throw new Error('Tidak ada voting aktif.');
+        }
+        if (voter.isBrb) {
+          throw new Error('Pemain yang sedang BRB tidak bisa ikut voting.');
+        }
+        if (voter.uid === this.room.activeVote.targetUid) {
+          throw new Error('Tertuduh tidak bisa ikut voting.');
         }
         const eliminatedList = this.room.eliminatedUids ?? [];
         const eliminatedSet = new Set(eliminatedList);
@@ -1110,116 +1081,11 @@ export class LanHostAuthority {
         }
 
         const vote: 'yes' | 'no' = (payload.vote ?? payload.choice) === 'no' ? 'no' : 'yes';
-        const activeVote = {
+        const activeVote: VoteState = {
           ...this.room.activeVote,
           votes: { ...this.room.activeVote.votes, [voter.uid]: vote },
         };
-
-        const activePlayers = filterActivePlayers(this.getPlayersList());
-        const eligibleAliveVoters = activePlayers
-          .filter((p) => !eliminatedSet.has(p.uid) && p.uid !== activeVote.targetUid)
-          .map((p) => p.uid);
-
-        const progress = evaluateKataKataVoteProgress(activeVote.votes, eligibleAliveVoters);
-        if (progress.outcome === 'pending') {
-          this.room = { ...this.room, activeVote, updatedAt: now };
-          return { outcome: 'pending' };
-        }
-
-        if (progress.outcome === 'acquitted') {
-          this.room = { ...this.room, status: 'playing', activeVote: null, updatedAt: now };
-          this.pushSystemMessage(`Tuduhan ke ${activeVote.targetName} ditolak. Diskusi lanjut!`);
-          return { outcome: 'acquitted' };
-        }
-
-        // Eliminated!
-        const elimEval = evaluateKataKataAfterElimination({
-          allPlayerUids: activePlayers.map((p) => p.uid),
-          previouslyEliminatedUids: eliminatedList,
-          eliminatedUid: activeVote.targetUid,
-          spyUids: this.serverState.spyUids,
-        });
-        const nextEliminatedUids = [...eliminatedList, activeVote.targetUid];
-        const nextEliminationLog = [
-          ...(this.room.eliminationLog ?? []),
-          {
-            uid: activeVote.targetUid,
-            displayName: activeVote.targetName,
-            wasSpy: elimEval.wasSpy,
-            eliminatedAtMs: now,
-          },
-        ];
-
-        if (elimEval.outcome === 'final_spy_last_chance') {
-          this.room = {
-            ...this.room,
-            status: 'spy_guess',
-            eliminatedUids: nextEliminatedUids,
-            eliminationLog: nextEliminationLog,
-            activeVote: null,
-            pendingSpyGuess: {
-              spyUid: activeVote.targetUid,
-              spyName: activeVote.targetName,
-              guessedLocation: '',
-              submittedAtMs: now,
-            },
-            updatedAt: now,
-          };
-          this.pushSystemMessage(
-            `${activeVote.targetName} adalah Penyusup terakhir! Dia dapat 1 Kesempatan Terakhir menebak Kata Warga!`,
-          );
-          return { outcome: 'final_spy_last_chance' };
-        }
-
-        if (elimEval.outcome === 'spies_outnumber') {
-          const deltas = calculateKataKataScoreDeltas({
-            playerUids: activePlayers.map((p) => p.uid),
-            spyUids: this.serverState.spyUids,
-            winnerTeam: 'mata_mata',
-            victoryType: 'spies_outnumber',
-          });
-          this.applyScoreDeltas(deltas);
-          this.room = {
-            ...this.room,
-            status: 'round_end',
-            currentMatchRounds: (this.room.currentMatchRounds ?? 0) + 1,
-            eliminatedUids: nextEliminatedUids,
-            eliminationLog: nextEliminationLog,
-            activeVote: null,
-            pendingSpyGuess: null,
-            lastRoundResult: {
-              roundNumber: this.room.roundNumber,
-              winnerTeam: 'mata_mata',
-              reason: `${activeVote.targetName} tereliminasi! Jumlah Penyusup menyamai Warga — Tim Penyusup menang!`,
-              locationName: this.serverState.locationName,
-              guessedLocation: null,
-              citizenWord: this.serverState.citizenWord,
-              spyWord: this.serverState.spyWord,
-              spyUids: this.serverState.spyUids,
-              spyNames: this.serverState.spyNames,
-              resolvedAtMs: now,
-              scoresApplied: true,
-            },
-            updatedAt: now,
-          };
-          this.pushSystemMessage(this.room.lastRoundResult!.reason);
-          return { outcome: 'spies_outnumber' };
-        }
-
-        this.room = {
-          ...this.room,
-          status: 'playing',
-          eliminatedUids: nextEliminatedUids,
-          eliminationLog: nextEliminationLog,
-          activeVote: null,
-          updatedAt: now,
-        };
-        this.pushSystemMessage(
-          elimEval.wasSpy
-            ? `${activeVote.targetName} (Penyusup) tereliminasi! Masih ada Penyusup lain.`
-            : `${activeVote.targetName} (Warga) tereliminasi! Permainan berlanjut.`,
-        );
-        return { outcome: 'continue' };
+        return this.resolveKataKataMajorityVote(activeVote, now);
       }
 
       case 'cancelKataKataVote': {
@@ -3379,5 +3245,211 @@ export class LanHostAuthority {
     };
     this.pushSystemMessage(`${daySummary} Malam #${nextNightNumber} pun turun kembali...`);
     return { phase: 'night', nightNumber: nextNightNumber };
+  }
+
+  private resolveSpyfallMajorityVote(
+    activeVote: VoteState,
+    now: number,
+  ): Record<string, unknown> {
+    if (!this.serverState) {
+      return { outcome: 'pending' };
+    }
+    const allPlayers = this.getPlayersList();
+    const activePlayers = filterActivePlayers(allPlayers);
+    const eligibleVoters = getEligibleMajorityVoterUids({
+      players: allPlayers,
+      targetUid: activeVote.targetUid,
+    });
+    const progress = evaluateVoteProgress(activeVote.votes, eligibleVoters);
+
+    if (progress.outcome === 'pending') {
+      this.room = { ...this.room, status: 'voting', activeVote, updatedAt: now };
+      return { outcome: 'pending' };
+    }
+
+    if (progress.outcome === 'acquitted') {
+      this.room = { ...this.room, status: 'playing', activeVote: null, updatedAt: now };
+      this.pushSystemMessage(
+        `Tuduhan terhadap ${activeVote.targetName} tidak mencapai mayoritas (50% + 1). Diskusi lanjut!`,
+      );
+      return { outcome: 'acquitted' };
+    }
+
+    // Convicted by 50% + 1 majority!
+    const isSpy = this.serverState.spyUids.includes(activeVote.targetUid);
+    const winnerTeam: 'warga' | 'mata_mata' = isSpy ? 'warga' : 'mata_mata';
+    const deltas = calculateRoundScoreDeltas({
+      playerUids: activePlayers.map((p) => p.uid),
+      spyUids: this.serverState.spyUids,
+      winnerTeam,
+      initiatorUid: activeVote.initiatorUid,
+      victoryType: isSpy ? 'caught_no_guess' : 'false_accusation',
+    });
+    this.applyScoreDeltas(deltas);
+
+    this.room = {
+      ...this.room,
+      status: 'round_end',
+      currentMatchRounds: (this.room.currentMatchRounds ?? 0) + 1,
+      activeVote: null,
+      pendingSpyGuess: null,
+      lastRoundResult: {
+        roundNumber: this.room.roundNumber,
+        winnerTeam,
+        reason: isSpy
+          ? `${activeVote.targetName} terbukti Mata-Mata! Warga menang.`
+          : `${activeVote.targetName} ternyata Warga! Tim Mata-Mata menang.`,
+        locationName: this.serverState.locationName,
+        guessedLocation: null,
+        spyUids: this.serverState.spyUids,
+        spyNames: this.serverState.spyNames,
+        resolvedAtMs: now,
+        scoresApplied: true,
+      },
+      updatedAt: now,
+    };
+    this.pushSystemMessage(this.room.lastRoundResult!.reason);
+    return { outcome: 'convicted', winnerTeam };
+  }
+
+  private resolveKataKataMajorityVote(
+    activeVote: VoteState,
+    now: number,
+  ): Record<string, unknown> {
+    if (!this.serverState) {
+      return { outcome: 'pending' };
+    }
+    const allPlayers = this.getPlayersList();
+    const activePlayers = filterActivePlayers(allPlayers);
+    const eliminatedList = this.room.eliminatedUids ?? [];
+    const eligibleAliveVoters = getEligibleMajorityVoterUids({
+      players: allPlayers,
+      targetUid: activeVote.targetUid,
+      excludedUids: eliminatedList,
+    });
+    const progress = evaluateKataKataVoteProgress(activeVote.votes, eligibleAliveVoters);
+
+    if (progress.outcome === 'pending') {
+      this.room = { ...this.room, status: 'voting', activeVote, updatedAt: now };
+      return { outcome: 'pending' };
+    }
+
+    if (progress.outcome === 'acquitted') {
+      this.room = { ...this.room, status: 'playing', activeVote: null, updatedAt: now };
+      this.pushSystemMessage(
+        `Tuduhan ke ${activeVote.targetName} tidak mencapai mayoritas (50% + 1). Diskusi lanjut!`,
+      );
+      return { outcome: 'acquitted' };
+    }
+
+    // Eliminated by 50% + 1 majority!
+    const elimEval = evaluateKataKataAfterElimination({
+      allPlayerUids: activePlayers.map((p) => p.uid),
+      previouslyEliminatedUids: eliminatedList,
+      eliminatedUid: activeVote.targetUid,
+      spyUids: this.serverState.spyUids,
+    });
+    const nextEliminatedUids = [...eliminatedList, activeVote.targetUid];
+    const nextEliminationLog = [
+      ...(this.room.eliminationLog ?? []),
+      {
+        uid: activeVote.targetUid,
+        displayName: activeVote.targetName,
+        wasSpy: elimEval.wasSpy,
+        eliminatedAtMs: now,
+      },
+    ];
+
+    if (elimEval.outcome === 'final_spy_last_chance') {
+      this.room = {
+        ...this.room,
+        status: 'spy_guess',
+        eliminatedUids: nextEliminatedUids,
+        eliminationLog: nextEliminationLog,
+        activeVote: null,
+        pendingSpyGuess: {
+          spyUid: activeVote.targetUid,
+          spyName: activeVote.targetName,
+          guessedLocation: '',
+          submittedAtMs: now,
+        },
+        updatedAt: now,
+      };
+      this.pushSystemMessage(
+        `${activeVote.targetName} adalah Penyusup terakhir! Dia dapat 1 Kesempatan Terakhir menebak Kata Warga!`,
+      );
+      return { outcome: 'final_spy_last_chance' };
+    }
+
+    if (elimEval.outcome === 'spies_outnumber') {
+      const deltas = calculateKataKataScoreDeltas({
+        playerUids: activePlayers.map((p) => p.uid),
+        spyUids: this.serverState.spyUids,
+        winnerTeam: 'mata_mata',
+        victoryType: 'spies_outnumber',
+      });
+      this.applyScoreDeltas(deltas);
+      this.room = {
+        ...this.room,
+        status: 'round_end',
+        currentMatchRounds: (this.room.currentMatchRounds ?? 0) + 1,
+        eliminatedUids: nextEliminatedUids,
+        eliminationLog: nextEliminationLog,
+        activeVote: null,
+        pendingSpyGuess: null,
+        lastRoundResult: {
+          roundNumber: this.room.roundNumber,
+          winnerTeam: 'mata_mata',
+          reason: `${activeVote.targetName} tereliminasi! Jumlah Penyusup menyamai Warga — Tim Penyusup menang!`,
+          locationName: this.serverState.locationName,
+          guessedLocation: null,
+          citizenWord: this.serverState.citizenWord,
+          spyWord: this.serverState.spyWord,
+          spyUids: this.serverState.spyUids,
+          spyNames: this.serverState.spyNames,
+          resolvedAtMs: now,
+          scoresApplied: true,
+        },
+        updatedAt: now,
+      };
+      this.pushSystemMessage(this.room.lastRoundResult!.reason);
+      return { outcome: 'spies_outnumber' };
+    }
+
+    this.room = {
+      ...this.room,
+      status: 'playing',
+      eliminatedUids: nextEliminatedUids,
+      eliminationLog: nextEliminationLog,
+      activeVote: null,
+      updatedAt: now,
+    };
+    this.pushSystemMessage(
+      elimEval.wasSpy
+        ? `${activeVote.targetName} (Penyusup) tereliminasi! Masih ada Penyusup lain.`
+        : `${activeVote.targetName} (Warga) tereliminasi! Permainan berlanjut.`,
+    );
+    return { outcome: 'continue' };
+  }
+
+  private reconcileActiveVoteAfterRosterChange(now: number): void {
+    if (this.room.status !== 'voting' || !this.room.activeVote) {
+      return;
+    }
+    const activeVote = this.room.activeVote;
+    const targetPlayer = this.players.get(activeVote.targetUid);
+    if (!targetPlayer || targetPlayer.isBrb) {
+      this.room = { ...this.room, status: 'playing', activeVote: null, updatedAt: now };
+      this.pushSystemMessage(
+        `Voting terhadap ${activeVote.targetName} dibatalkan karena tertuduh keluar atau BRB.`,
+      );
+      return;
+    }
+
+    if (this.room.gameType === 'spyfall') {
+      this.resolveSpyfallMajorityVote(activeVote, now);
+    } else if (this.room.gameType === 'kata_kata') {
+      this.resolveKataKataMajorityVote(activeVote, now);
+    }
   }
 }

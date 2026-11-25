@@ -323,6 +323,7 @@ function yukmain_dispatch_room_action(
                         ? "{$target['displayName']} lagi BRB sebentar (dilewati di ronde baru)."
                         : "{$target['displayName']} sudah balik dan siap ikut ronde berikutnya!"
                 );
+                yukmain_reconcile_active_vote_after_roster_change($tx, $roomId, $room, $updatedPlayers, $now, $pushSys);
                 break;
             }
 
@@ -370,6 +371,7 @@ function yukmain_dispatch_room_action(
                 }
                 $room['updatedAt'] = $now;
                 $pushSys("{$playersByUid[$senderUid]['displayName']} keluar dari ruang.");
+                yukmain_reconcile_active_vote_after_roster_change($tx, $roomId, $room, $remaining, $now, $pushSys);
                 break;
             }
 
@@ -529,13 +531,15 @@ function yukmain_dispatch_room_action(
                 if (($room['status'] ?? '') !== 'playing') {
                     throw new RuntimeException('Voting tuduhan hanya bisa dimulai saat ronde berjalan.');
                 }
+                if (!empty($initiator['isBrb'])) {
+                    throw new RuntimeException('Pemain yang sedang BRB tidak bisa mengajukan tuduhan.');
+                }
                 $targetUid = (string) ($payload['targetUid'] ?? '');
                 $target = $playersByUid[$targetUid] ?? null;
                 if (!$target || !empty($target['isBrb']) || $target['uid'] === $initiator['uid']) {
                     throw new RuntimeException('Target tuduhan tidak valid.');
                 }
-                $room['status'] = 'voting';
-                $room['activeVote'] = [
+                $activeVote = [
                     'initiatorUid'  => $initiator['uid'],
                     'initiatorName' => $initiator['displayName'],
                     'targetUid'     => $target['uid'],
@@ -543,8 +547,21 @@ function yukmain_dispatch_room_action(
                     'startedAtMs'   => $now,
                     'votes'         => [$initiator['uid'] => 'yes'],
                 ];
+                $room['status'] = 'voting';
+                $room['activeVote'] = $activeVote;
                 $room['updatedAt'] = $now;
                 $pushSys("{$initiator['displayName']} menuduh {$target['displayName']} sebagai Mata-Mata!");
+                $result = yukmain_resolve_spyfall_majority_vote(
+                    $tx,
+                    $roomId,
+                    $room,
+                    $players,
+                    $playersByUid,
+                    $serverState,
+                    $activeVote,
+                    $now,
+                    $pushSys
+                );
                 break;
             }
 
@@ -553,65 +570,27 @@ function yukmain_dispatch_room_action(
                 if (($room['status'] ?? '') !== 'voting' || empty($room['activeVote']) || !$serverState) {
                     throw new RuntimeException('Tidak ada voting aktif.');
                 }
-                $vote = (($payload['vote'] ?? $payload['choice'] ?? 'yes') === 'no') ? 'no' : 'yes';
+                if (!empty($voter['isBrb'])) {
+                    throw new RuntimeException('Pemain yang sedang BRB tidak bisa ikut voting.');
+                }
                 $activeVote = $room['activeVote'];
+                if ($voter['uid'] === ($activeVote['targetUid'] ?? '')) {
+                    throw new RuntimeException('Tertuduh tidak bisa ikut voting.');
+                }
+                $vote = (($payload['vote'] ?? $payload['choice'] ?? 'yes') === 'no') ? 'no' : 'yes';
                 $activeVote['votes'][$voter['uid']] = $vote;
 
-                $active = yukmain_filter_active_players($players);
-                $eligible = array_values(array_filter(
-                    array_column($active, 'uid'),
-                    static fn(string $u): bool => $u !== $activeVote['targetUid']
-                ));
-                $outcome = yukmain_evaluate_vote_progress($activeVote['votes'], $eligible);
-
-                if ($outcome === 'pending') {
-                    $room['activeVote'] = $activeVote;
-                    $room['updatedAt'] = $now;
-                    $result = ['outcome' => 'pending'];
-                    break;
-                }
-
-                if ($outcome === 'acquitted') {
-                    $room['status'] = 'playing';
-                    $room['activeVote'] = null;
-                    $room['updatedAt'] = $now;
-                    $pushSys("Tuduhan terhadap {$activeVote['targetName']} ditolak. Diskusi lanjut!");
-                    $result = ['outcome' => 'acquitted'];
-                    break;
-                }
-
-                $isSpy = in_array($activeVote['targetUid'], $serverState['spyUids'], true);
-                $winnerTeam = $isSpy ? 'warga' : 'mata_mata';
-                $deltas = yukmain_calculate_spyfall_deltas(
-                    array_column($active, 'uid'),
-                    $serverState['spyUids'],
-                    $winnerTeam,
-                    $activeVote['initiatorUid'],
-                    $isSpy ? 'caught_no_guess' : 'false_accusation'
+                $result = yukmain_resolve_spyfall_majority_vote(
+                    $tx,
+                    $roomId,
+                    $room,
+                    $players,
+                    $playersByUid,
+                    $serverState,
+                    $activeVote,
+                    $now,
+                    $pushSys
                 );
-                yukmain_apply_score_deltas($tx, $roomId, $playersByUid, $deltas, $now);
-
-                $reason = $isSpy
-                    ? "{$activeVote['targetName']} terbukti Mata-Mata! Warga menang."
-                    : "{$activeVote['targetName']} ternyata Warga! Tim Mata-Mata menang.";
-                $room['status'] = 'round_end';
-                $room['currentMatchRounds'] = ((int) ($room['currentMatchRounds'] ?? 0)) + 1;
-                $room['activeVote'] = null;
-                $room['pendingSpyGuess'] = null;
-                $room['lastRoundResult'] = [
-                    'roundNumber'     => $room['roundNumber'],
-                    'winnerTeam'      => $winnerTeam,
-                    'reason'          => $reason,
-                    'locationName'    => $serverState['locationName'],
-                    'guessedLocation' => null,
-                    'spyUids'         => $serverState['spyUids'],
-                    'spyNames'        => $serverState['spyNames'],
-                    'resolvedAtMs'    => $now,
-                    'scoresApplied'   => true,
-                ];
-                $room['updatedAt'] = $now;
-                $pushSys($reason);
-                $result = ['outcome' => 'convicted', 'winnerTeam' => $winnerTeam];
                 break;
             }
 
@@ -761,6 +740,9 @@ function yukmain_dispatch_room_action(
                 if (($room['status'] ?? '') !== 'playing') {
                     throw new RuntimeException('Voting hanya bisa dimulai saat diskusi berjalan.');
                 }
+                if (!empty($initiator['isBrb'])) {
+                    throw new RuntimeException('Pemain yang sedang BRB tidak bisa mengajukan tuduhan.');
+                }
                 $eliminated = $room['eliminatedUids'] ?? [];
                 if (in_array($initiator['uid'], $eliminated, true)) {
                     throw new RuntimeException('Pemain yang tereliminasi tidak bisa menuduh.');
@@ -770,8 +752,7 @@ function yukmain_dispatch_room_action(
                 if (!$target || !empty($target['isBrb']) || in_array($target['uid'], $eliminated, true) || $target['uid'] === $initiator['uid']) {
                     throw new RuntimeException('Target tuduhan tidak valid.');
                 }
-                $room['status'] = 'voting';
-                $room['activeVote'] = [
+                $activeVote = [
                     'initiatorUid'  => $initiator['uid'],
                     'initiatorName' => $initiator['displayName'],
                     'targetUid'     => $target['uid'],
@@ -779,8 +760,21 @@ function yukmain_dispatch_room_action(
                     'startedAtMs'   => $now,
                     'votes'         => [$initiator['uid'] => 'yes'],
                 ];
+                $room['status'] = 'voting';
+                $room['activeVote'] = $activeVote;
                 $room['updatedAt'] = $now;
                 $pushSys("{$initiator['displayName']} menuduh {$target['displayName']} sebagai Penyusup!");
+                $result = yukmain_resolve_kata_kata_majority_vote(
+                    $tx,
+                    $roomId,
+                    $room,
+                    $players,
+                    $playersByUid,
+                    $serverState,
+                    $activeVote,
+                    $now,
+                    $pushSys
+                );
                 break;
             }
 
@@ -789,115 +783,32 @@ function yukmain_dispatch_room_action(
                 if (($room['status'] ?? '') !== 'voting' || empty($room['activeVote']) || !$serverState) {
                     throw new RuntimeException('Tidak ada voting aktif.');
                 }
+                if (!empty($voter['isBrb'])) {
+                    throw new RuntimeException('Pemain yang sedang BRB tidak bisa ikut voting.');
+                }
+                $activeVote = $room['activeVote'];
+                if ($voter['uid'] === ($activeVote['targetUid'] ?? '')) {
+                    throw new RuntimeException('Tertuduh tidak bisa ikut voting.');
+                }
                 $eliminatedList = $room['eliminatedUids'] ?? [];
                 $eliminatedSet = array_flip($eliminatedList);
                 if (isset($eliminatedSet[$voter['uid']])) {
                     throw new RuntimeException('Pemain tereliminasi tidak bisa ikut voting.');
                 }
                 $vote = (($payload['vote'] ?? $payload['choice'] ?? 'yes') === 'no') ? 'no' : 'yes';
-                $activeVote = $room['activeVote'];
                 $activeVote['votes'][$voter['uid']] = $vote;
 
-                $active = yukmain_filter_active_players($players);
-                $eligible = [];
-                foreach ($active as $p) {
-                    if (!isset($eliminatedSet[$p['uid']]) && $p['uid'] !== $activeVote['targetUid']) {
-                        $eligible[] = $p['uid'];
-                    }
-                }
-                $outcome = yukmain_evaluate_vote_progress($activeVote['votes'], $eligible);
-                if ($outcome === 'pending') {
-                    $room['activeVote'] = $activeVote;
-                    $room['updatedAt'] = $now;
-                    $result = ['outcome' => 'pending'];
-                    break;
-                }
-                if ($outcome === 'acquitted') {
-                    $room['status'] = 'playing';
-                    $room['activeVote'] = null;
-                    $room['updatedAt'] = $now;
-                    $pushSys("Tuduhan ke {$activeVote['targetName']} ditolak. Diskusi lanjut!");
-                    $result = ['outcome' => 'acquitted'];
-                    break;
-                }
-
-                $elimEval = yukmain_eval_kata_kata_elimination(
-                    array_column($active, 'uid'),
-                    $eliminatedList,
-                    $activeVote['targetUid'],
-                    $serverState['spyUids']
+                $result = yukmain_resolve_kata_kata_majority_vote(
+                    $tx,
+                    $roomId,
+                    $room,
+                    $players,
+                    $playersByUid,
+                    $serverState,
+                    $activeVote,
+                    $now,
+                    $pushSys
                 );
-                $nextEliminated = array_merge($eliminatedList, [$activeVote['targetUid']]);
-                $nextLog = array_merge($room['eliminationLog'] ?? [], [[
-                    'uid'            => $activeVote['targetUid'],
-                    'displayName'    => $activeVote['targetName'],
-                    'wasSpy'         => $elimEval['wasSpy'],
-                    'eliminatedAtMs' => $now,
-                ]]);
-
-                if ($elimEval['outcome'] === 'final_spy_last_chance') {
-                    $room['status'] = 'spy_guess';
-                    $room['eliminatedUids'] = $nextEliminated;
-                    $room['eliminationLog'] = $nextLog;
-                    $room['activeVote'] = null;
-                    $room['pendingSpyGuess'] = [
-                        'spyUid'          => $activeVote['targetUid'],
-                        'spyName'         => $activeVote['targetName'],
-                        'guessedLocation' => '',
-                        'submittedAtMs'   => $now,
-                    ];
-                    $room['updatedAt'] = $now;
-                    $pushSys("{$activeVote['targetName']} adalah Penyusup terakhir! Dia dapat 1 Kesempatan Terakhir menebak Kata Warga!");
-                    $result = ['outcome' => 'final_spy_last_chance'];
-                    break;
-                }
-
-                if ($elimEval['outcome'] === 'spies_outnumber') {
-                    $deltas = yukmain_calculate_kata_kata_deltas(
-                        array_column($active, 'uid'),
-                        $serverState['spyUids'],
-                        'mata_mata',
-                        'spies_outnumber'
-                    );
-                    yukmain_apply_score_deltas($tx, $roomId, $playersByUid, $deltas, $now);
-
-                    $reason = "{$activeVote['targetName']} tereliminasi! Jumlah Penyusup menyamai Warga — Tim Penyusup menang!";
-                    $room['status'] = 'round_end';
-                    $room['currentMatchRounds'] = ((int) ($room['currentMatchRounds'] ?? 0)) + 1;
-                    $room['eliminatedUids'] = $nextEliminated;
-                    $room['eliminationLog'] = $nextLog;
-                    $room['activeVote'] = null;
-                    $room['pendingSpyGuess'] = null;
-                    $room['lastRoundResult'] = [
-                        'roundNumber'     => $room['roundNumber'],
-                        'winnerTeam'      => 'mata_mata',
-                        'reason'          => $reason,
-                        'locationName'    => $serverState['locationName'],
-                        'guessedLocation' => null,
-                        'citizenWord'     => $serverState['citizenWord'],
-                        'spyWord'         => $serverState['spyWord'],
-                        'spyUids'         => $serverState['spyUids'],
-                        'spyNames'        => $serverState['spyNames'],
-                        'resolvedAtMs'    => $now,
-                        'scoresApplied'   => true,
-                    ];
-                    $room['updatedAt'] = $now;
-                    $pushSys($reason);
-                    $result = ['outcome' => 'spies_outnumber'];
-                    break;
-                }
-
-                $room['status'] = 'playing';
-                $room['eliminatedUids'] = $nextEliminated;
-                $room['eliminationLog'] = $nextLog;
-                $room['activeVote'] = null;
-                $room['updatedAt'] = $now;
-                $pushSys(
-                    $elimEval['wasSpy']
-                        ? "{$activeVote['targetName']} (Penyusup) tereliminasi! Masih ada Penyusup lain."
-                        : "{$activeVote['targetName']} (Warga) tereliminasi! Permainan berlanjut."
-                );
-                $result = ['outcome' => 'continue'];
                 break;
             }
 
@@ -2659,3 +2570,250 @@ function yukmain_finalize_ms_vote(
     $pushSys("{$daySummary} Malam #{$nextNight} pun turun kembali...");
     return ['phase' => 'night', 'nightNumber' => $nextNight];
 }
+
+function yukmain_resolve_spyfall_majority_vote(
+    PDO $tx,
+    string $roomId,
+    array &$room,
+    array $players,
+    array $playersByUid,
+    ?array $serverState,
+    array $activeVote,
+    int $now,
+    callable $pushSys
+): array {
+    if (!$serverState) {
+        return ['outcome' => 'pending'];
+    }
+    $active = yukmain_filter_active_players($players);
+    $eligible = array_values(array_filter(
+        array_column($active, 'uid'),
+        static fn(string $u): bool => $u !== ($activeVote['targetUid'] ?? '')
+    ));
+    $outcome = yukmain_evaluate_vote_progress($activeVote['votes'] ?? [], $eligible);
+
+    if ($outcome === 'pending') {
+        $room['status'] = 'voting';
+        $room['activeVote'] = $activeVote;
+        $room['updatedAt'] = $now;
+        return ['outcome' => 'pending'];
+    }
+
+    if ($outcome === 'acquitted') {
+        $room['status'] = 'playing';
+        $room['activeVote'] = null;
+        $room['updatedAt'] = $now;
+        $pushSys("Tuduhan terhadap {$activeVote['targetName']} tidak mencapai mayoritas (50% + 1). Diskusi lanjut!");
+        return ['outcome' => 'acquitted'];
+    }
+
+    $isSpy = in_array($activeVote['targetUid'], $serverState['spyUids'], true);
+    $winnerTeam = $isSpy ? 'warga' : 'mata_mata';
+    $deltas = yukmain_calculate_spyfall_deltas(
+        array_column($active, 'uid'),
+        $serverState['spyUids'],
+        $winnerTeam,
+        $activeVote['initiatorUid'],
+        $isSpy ? 'caught_no_guess' : 'false_accusation'
+    );
+    yukmain_apply_score_deltas($tx, $roomId, $playersByUid, $deltas, $now);
+
+    $reason = $isSpy
+        ? "{$activeVote['targetName']} terbukti Mata-Mata! Warga menang."
+        : "{$activeVote['targetName']} ternyata Warga! Tim Mata-Mata menang.";
+    $room['status'] = 'round_end';
+    $room['currentMatchRounds'] = ((int) ($room['currentMatchRounds'] ?? 0)) + 1;
+    $room['activeVote'] = null;
+    $room['pendingSpyGuess'] = null;
+    $room['lastRoundResult'] = [
+        'roundNumber'     => $room['roundNumber'],
+        'winnerTeam'      => $winnerTeam,
+        'reason'          => $reason,
+        'locationName'    => $serverState['locationName'],
+        'guessedLocation' => null,
+        'spyUids'         => $serverState['spyUids'],
+        'spyNames'        => $serverState['spyNames'],
+        'resolvedAtMs'    => $now,
+        'scoresApplied'   => true,
+    ];
+    $room['updatedAt'] = $now;
+    $pushSys($reason);
+    return ['outcome' => 'convicted', 'winnerTeam' => $winnerTeam];
+}
+
+function yukmain_resolve_kata_kata_majority_vote(
+    PDO $tx,
+    string $roomId,
+    array &$room,
+    array $players,
+    array $playersByUid,
+    ?array $serverState,
+    array $activeVote,
+    int $now,
+    callable $pushSys
+): array {
+    if (!$serverState) {
+        return ['outcome' => 'pending'];
+    }
+    $eliminatedList = $room['eliminatedUids'] ?? [];
+    $eliminatedSet = array_flip($eliminatedList);
+    $active = yukmain_filter_active_players($players);
+    $eligible = [];
+    foreach ($active as $p) {
+        if (!isset($eliminatedSet[$p['uid']]) && $p['uid'] !== ($activeVote['targetUid'] ?? '')) {
+            $eligible[] = $p['uid'];
+        }
+    }
+    $outcome = yukmain_evaluate_vote_progress($activeVote['votes'] ?? [], $eligible);
+    if ($outcome === 'pending') {
+        $room['status'] = 'voting';
+        $room['activeVote'] = $activeVote;
+        $room['updatedAt'] = $now;
+        return ['outcome' => 'pending'];
+    }
+    if ($outcome === 'acquitted') {
+        $room['status'] = 'playing';
+        $room['activeVote'] = null;
+        $room['updatedAt'] = $now;
+        $pushSys("Tuduhan ke {$activeVote['targetName']} tidak mencapai mayoritas (50% + 1). Diskusi lanjut!");
+        return ['outcome' => 'acquitted'];
+    }
+
+    $elimEval = yukmain_eval_kata_kata_elimination(
+        array_column($active, 'uid'),
+        $eliminatedList,
+        $activeVote['targetUid'],
+        $serverState['spyUids']
+    );
+    $nextEliminated = array_merge($eliminatedList, [$activeVote['targetUid']]);
+    $nextLog = array_merge($room['eliminationLog'] ?? [], [[
+        'uid'            => $activeVote['targetUid'],
+        'displayName'    => $activeVote['targetName'],
+        'wasSpy'         => $elimEval['wasSpy'],
+        'eliminatedAtMs' => $now,
+    ]]);
+
+    if ($elimEval['outcome'] === 'final_spy_last_chance') {
+        $room['status'] = 'spy_guess';
+        $room['eliminatedUids'] = $nextEliminated;
+        $room['eliminationLog'] = $nextLog;
+        $room['activeVote'] = null;
+        $room['pendingSpyGuess'] = [
+            'spyUid'          => $activeVote['targetUid'],
+            'spyName'         => $activeVote['targetName'],
+            'guessedLocation' => '',
+            'submittedAtMs'   => $now,
+        ];
+        $room['updatedAt'] = $now;
+        $pushSys("{$activeVote['targetName']} adalah Penyusup terakhir! Dia dapat 1 Kesempatan Terakhir menebak Kata Warga!");
+        return ['outcome' => 'final_spy_last_chance'];
+    }
+
+    if ($elimEval['outcome'] === 'spies_outnumber') {
+        $deltas = yukmain_calculate_kata_kata_deltas(
+            array_column($active, 'uid'),
+            $serverState['spyUids'],
+            'mata_mata',
+            'spies_outnumber'
+        );
+        yukmain_apply_score_deltas($tx, $roomId, $playersByUid, $deltas, $now);
+
+        $reason = "{$activeVote['targetName']} tereliminasi! Jumlah Penyusup menyamai Warga — Tim Penyusup menang!";
+        $room['status'] = 'round_end';
+        $room['currentMatchRounds'] = ((int) ($room['currentMatchRounds'] ?? 0)) + 1;
+        $room['eliminatedUids'] = $nextEliminated;
+        $room['eliminationLog'] = $nextLog;
+        $room['activeVote'] = null;
+        $room['pendingSpyGuess'] = null;
+        $room['lastRoundResult'] = [
+            'roundNumber'     => $room['roundNumber'],
+            'winnerTeam'      => 'mata_mata',
+            'reason'          => $reason,
+            'locationName'    => $serverState['locationName'],
+            'guessedLocation' => null,
+            'citizenWord'     => $serverState['citizenWord'],
+            'spyWord'         => $serverState['spyWord'],
+            'spyUids'         => $serverState['spyUids'],
+            'spyNames'        => $serverState['spyNames'],
+            'resolvedAtMs'    => $now,
+            'scoresApplied'   => true,
+        ];
+        $room['updatedAt'] = $now;
+        $pushSys($reason);
+        return ['outcome' => 'spies_outnumber'];
+    }
+
+    $room['status'] = 'playing';
+    $room['eliminatedUids'] = $nextEliminated;
+    $room['eliminationLog'] = $nextLog;
+    $room['activeVote'] = null;
+    $room['updatedAt'] = $now;
+    $pushSys(
+        $elimEval['wasSpy']
+            ? "{$activeVote['targetName']} (Penyusup) tereliminasi! Masih ada Penyusup lain."
+            : "{$activeVote['targetName']} (Warga) tereliminasi! Permainan berlanjut."
+    );
+    return ['outcome' => 'continue'];
+}
+
+function yukmain_reconcile_active_vote_after_roster_change(
+    PDO $tx,
+    string $roomId,
+    array &$room,
+    array $players,
+    int $now,
+    callable $pushSys
+): void {
+    if (($room['status'] ?? 'lobby') !== 'voting' || empty($room['activeVote'])) {
+        return;
+    }
+    $activeVote = $room['activeVote'];
+    $playersByUid = [];
+    foreach ($players as $p) {
+        $playersByUid[$p['uid']] = $p;
+    }
+    $targetUid = (string) ($activeVote['targetUid'] ?? '');
+    $target = $playersByUid[$targetUid] ?? null;
+    if (!$target || !empty($target['isBrb'])) {
+        $room['status'] = 'playing';
+        $room['activeVote'] = null;
+        $room['updatedAt'] = $now;
+        $pushSys("Voting terhadap {$activeVote['targetName']} dibatalkan karena tertuduh keluar atau BRB.");
+        return;
+    }
+
+    $serverState = null;
+    if (!empty($room['currentRoundId'])) {
+        $serverState = yukmain_load_server_state($tx, $roomId, (string) $room['currentRoundId']);
+    }
+    if (!$serverState) {
+        return;
+    }
+
+    if (($room['gameType'] ?? '') === 'spyfall') {
+        yukmain_resolve_spyfall_majority_vote(
+            $tx,
+            $roomId,
+            $room,
+            $players,
+            $playersByUid,
+            $serverState,
+            $activeVote,
+            $now,
+            $pushSys
+        );
+    } elseif (($room['gameType'] ?? '') === 'kata_kata') {
+        yukmain_resolve_kata_kata_majority_vote(
+            $tx,
+            $roomId,
+            $room,
+            $players,
+            $playersByUid,
+            $serverState,
+            $activeVote,
+            $now,
+            $pushSys
+        );
+    }
+}
+
