@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import jsQR from 'jsqr';
-import { Camera, CameraOff, ClipboardPaste, Check } from 'lucide-react';
+import { Camera, CameraOff, Check, ClipboardPaste } from 'lucide-react';
 
 interface QrScannerBoxProps {
   label: string;
@@ -11,15 +11,22 @@ interface QrScannerBoxProps {
   pastePlaceholder?: string;
 }
 
+interface NativeBarcodeDetector {
+  detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>;
+}
+
+type BarcodeDetectorCtor = new (options?: { formats?: string[] }) => NativeBarcodeDetector;
+
 /**
- * Zero-dependency-network QR scanner using `getUserMedia` + `jsQR` on an offscreen canvas,
- * paired with a manual paste fallback (useful on laptops without rear cameras or quick 2-tab testing).
+ * Offline-safe QR scanner prioritizing native Android Chrome `BarcodeDetector`
+ * with a throttled high-resolution `jsQR` fallback + manual paste fallback
+ * (essential for Android split-screen where only 1 window can hold the camera).
  */
 export function QrScannerBox({
   label,
   onScan,
   disabled = false,
-  pastePlaceholder = 'Tempel kode YMLAN1:... di sini',
+  pastePlaceholder = 'Tempel kode YMLAN1:... atau YMLAN0:... di sini',
 }: QrScannerBoxProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -40,7 +47,22 @@ export function QrScannerBox({
     let stream: MediaStream | null = null;
     let rafId = 0;
     let cancelled = false;
+    let lastScanAt = 0;
+    let nativeBusy = false;
     hasScannedRef.current = false;
+
+    let nativeDetector: NativeBarcodeDetector | null = null;
+    if (typeof window !== 'undefined') {
+      const Detector = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor })
+        .BarcodeDetector;
+      if (typeof Detector === 'function') {
+        try {
+          nativeDetector = new Detector({ formats: ['qr_code'] });
+        } catch {
+          nativeDetector = null;
+        }
+      }
+    }
 
     const startCamera = async () => {
       if (
@@ -48,7 +70,9 @@ export function QrScannerBox({
         !navigator.mediaDevices ||
         !navigator.mediaDevices.getUserMedia
       ) {
-        setCameraError('Kamera tidak tersedia di browser ini. Gunakan opsi Tempel Kode Manual di bawah.');
+        setCameraError(
+          'Kamera tidak tersedia di browser ini. Gunakan opsi Tempel Kode Manual di bawah.',
+        );
         setManualOpen(true);
         return;
       }
@@ -57,8 +81,8 @@ export function QrScannerBox({
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: 'environment' },
-            width: { ideal: 640 },
-            height: { ideal: 640 },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
           },
           audio: false,
         });
@@ -76,31 +100,70 @@ export function QrScannerBox({
         setCameraActive(true);
         setCameraError(null);
 
-        const tick = () => {
+        const handleDecoded = (text: string) => {
+          const clean = text.trim();
+          if (clean.startsWith('YMLAN') && !hasScannedRef.current) {
+            hasScannedRef.current = true;
+            onScanRef.current(clean);
+            return true;
+          }
+          return false;
+        };
+
+        const tick = (now: number) => {
           if (cancelled || hasScannedRef.current) return;
           const vid = videoRef.current;
-          const canvas = canvasRef.current;
-          if (vid && canvas && vid.readyState === vid.HAVE_ENOUGH_DATA) {
-            const w = vid.videoWidth;
-            const h = vid.videoHeight;
-            if (w > 0 && h > 0) {
-              canvas.width = w;
-              canvas.height = h;
-              const ctx = canvas.getContext('2d', { willReadFrequently: true });
-              if (ctx) {
-                ctx.drawImage(vid, 0, 0, w, h);
-                const imgData = ctx.getImageData(0, 0, w, h);
-                const decoded = jsQR(imgData.data, w, h, {
-                  inversionAttempts: 'attemptBoth',
+
+          if (vid && vid.readyState >= vid.HAVE_CURRENT_DATA && now - lastScanAt >= 85) {
+            lastScanAt = now;
+
+            if (nativeDetector && !nativeBusy) {
+              nativeBusy = true;
+              nativeDetector
+                .detect(vid)
+                .then((codes) => {
+                  if (cancelled || hasScannedRef.current) return;
+                  for (const code of codes) {
+                    if (code.rawValue && handleDecoded(code.rawValue)) {
+                      return;
+                    }
+                  }
+                })
+                .catch(() => {
+                  // Fall back to jsQR if BarcodeDetector fails on this device
+                  nativeDetector = null;
+                })
+                .finally(() => {
+                  nativeBusy = false;
                 });
-                if (decoded?.data && decoded.data.startsWith('YMLAN')) {
-                  hasScannedRef.current = true;
-                  onScanRef.current(decoded.data.trim());
-                  return;
+            } else if (!nativeDetector) {
+              const canvas = canvasRef.current;
+              if (canvas) {
+                const vw = vid.videoWidth;
+                const vh = vid.videoHeight;
+                if (vw > 0 && vh > 0) {
+                  // Cap decode canvas at 900px max side for fast & sharp jsQR decoding
+                  const scale = Math.min(1, 900 / Math.max(vw, vh));
+                  const w = Math.max(1, Math.round(vw * scale));
+                  const h = Math.max(1, Math.round(vh * scale));
+                  canvas.width = w;
+                  canvas.height = h;
+                  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                  if (ctx) {
+                    ctx.drawImage(vid, 0, 0, w, h);
+                    const imgData = ctx.getImageData(0, 0, w, h);
+                    const decoded = jsQR(imgData.data, w, h, {
+                      inversionAttempts: 'attemptBoth',
+                    });
+                    if (decoded?.data && handleDecoded(decoded.data)) {
+                      return;
+                    }
+                  }
                 }
               }
             }
           }
+
           rafId = window.requestAnimationFrame(tick);
         };
 
@@ -109,7 +172,7 @@ export function QrScannerBox({
         if (!cancelled) {
           setCameraActive(false);
           setCameraError(
-            'Izin kamera ditolak atau tidak tersedia. Kamu tetap bisa pakai Tempel Kode Manual di bawah.',
+            'Kamera ditolak atau sedang dipakai jendela lain (Split-Screen). Gunakan Tempel Kode Manual di bawah.',
           );
           setManualOpen(true);
         }
@@ -149,16 +212,16 @@ export function QrScannerBox({
         <button
           type="button"
           onClick={() => setManualOpen((prev) => !prev)}
-          className="text-xs font-medium text-amber-300 hover:text-amber-200 inline-flex items-center gap-1 transition-colors"
+          className="text-xs font-medium text-amber-300 hover:text-amber-200 inline-flex items-center gap-1 transition-colors shrink-0"
         >
           <ClipboardPaste className="w-3.5 h-3.5" />
-          <span>{manualOpen ? 'Tutup Input Manual' : 'Tempel Kode Manual'}</span>
+          <span>{manualOpen ? 'Tutup Manual' : 'Tempel Kode Manual'}</span>
         </button>
       </div>
 
       {/* Camera Viewport */}
       {!cameraError && (
-        <div className="relative rounded-2xl overflow-hidden bg-black border border-slate-700/80 aspect-square max-h-[260px] w-full mx-auto">
+        <div className="relative rounded-2xl overflow-hidden bg-black border border-slate-700/80 aspect-square max-h-[250px] w-full mx-auto">
           <video
             ref={videoRef}
             muted
@@ -186,7 +249,7 @@ export function QrScannerBox({
         </div>
       )}
 
-      {/* Manual Paste Fallback (works offline, on laptops, or across 2 browser tabs) */}
+      {/* Manual Paste Fallback (works offline, on laptops, or in Android split-screen) */}
       {manualOpen && (
         <form onSubmit={handleManualSubmit} className="space-y-2">
           <textarea

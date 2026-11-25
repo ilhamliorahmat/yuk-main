@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 import type { GameType, WerewolfRoleId } from '../../games/types';
 import { LanHostAuthority } from '../lan-host-authority';
 import { isLanRoomId } from '../lan-protocol';
-import { compactLanSdp, decodeLanSignal, encodeLanSignal } from '../lan-signaling';
+import {
+  compactLanSdp,
+  decodeLanSignal,
+  encodeLanSignal,
+  inspectLanSdpCandidates,
+} from '../lan-signaling';
+
+const REAL_FP =
+  'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99';
 
 const SAMPLE_SDP = [
   'v=0',
@@ -16,29 +24,35 @@ const SAMPLE_SDP = [
   'a=ice-ufrag:abcd',
   'a=ice-pwd:supersecretpassword123456',
   'a=ice-options:trickle',
-  'a=fingerprint:sha-256 AA:BB:CC:DD:EE:FF',
+  `a=fingerprint:sha-256 ${REAL_FP}`,
   'a=setup:actpass',
   'a=mid:0',
   'a=sctp-port:5000',
-  'a=candidate:1 1 udp 2122260223 192.168.1.42 54321 typ host generation 0',
-  'a=candidate:2 1 udp 2122194687 10.0.0.5 54322 typ host generation 0',
-  'a=candidate:3 1 tcp 1518280447 192.168.1.42 9 typ host tcptype active',
-  'a=candidate:4 1 udp 1686052607 203.0.113.5 55555 typ srflx raddr 192.168.1.42 rport 54321',
+  'a=candidate:1 1 udp 2122260223 fe80::1234 54300 typ host generation 0',
+  'a=candidate:2 1 udp 2122250000 2001:db8::1 54301 typ host generation 0',
+  'a=candidate:3 1 udp 2122240000 2001:db8::2 54302 typ host generation 0',
+  'a=candidate:4 1 udp 2122230000 2001:db8::3 54303 typ host generation 0',
+  'a=candidate:5 1 udp 2122220000 2001:db8::4 54304 typ host generation 0',
+  'a=candidate:6 1 udp 2122194687 192.168.1.42 54321 typ host generation 0',
+  'a=candidate:7 1 udp 2122184687 10.0.0.5 54322 typ host generation 0',
+  'a=candidate:8 1 tcp 1518280447 192.168.1.42 9 typ host tcptype active generation 0',
+  'a=candidate:9 1 udp 1686052607 203.0.113.5 55555 typ srflx raddr 192.168.1.42 rport 54321',
   '',
 ].join('\r\n');
 
-describe('Zero-Internet WebRTC LAN Signaling Codec', () => {
-  it('compacts SDP by retaining host UDP candidates and stripping srflx/tcp bloat', () => {
+describe('WebRTC LAN Signaling Codec & Diagnostics', () => {
+  it('compacts SDP by prioritizing private LAN IPv4 ahead of IPv6 bloat and stripping srflx/tcp by default', () => {
     const compacted = compactLanSdp(SAMPLE_SDP);
     expect(compacted).toContain('a=fingerprint:sha-256');
     expect(compacted).toContain('192.168.1.42');
     expect(compacted).toContain('10.0.0.5');
+    expect(compacted).not.toContain('fe80::1234');
     expect(compacted).not.toContain('typ srflx');
     expect(compacted).not.toContain('tcptype active');
     expect(compacted.length).toBeLessThan(SAMPLE_SDP.length);
   });
 
-  it('round-trips Offer and Answer signal packets via encodeLanSignal / decodeLanSignal', async () => {
+  it('round-trips compact v2 minimal SDP Offer & Answer packets without deadlocking', async () => {
     const encodedOffer = await encodeLanSignal({
       v: 1,
       t: 'O',
@@ -49,27 +63,59 @@ describe('Zero-Internet WebRTC LAN Signaling Codec', () => {
     });
 
     expect(encodedOffer.startsWith('YMLAN')).toBe(true);
+    // Compact minimal SDP v2 stays small enough for crisp phone QR scanning
+    expect(encodedOffer.length).toBeLessThan(480);
+
     const decodedOffer = await decodeLanSignal(encodedOffer);
     expect(decodedOffer.t).toBe('O');
     expect(decodedOffer.r).toBe('LAN42X');
     expect(decodedOffer.g).toBe('spyfall');
     expect(decodedOffer.h).toBe('Host Budi');
+    expect(decodedOffer.s).toContain(`a=fingerprint:sha-256 ${REAL_FP}`);
     expect(decodedOffer.s).toContain('192.168.1.42');
+    expect(decodedOffer.s).toContain('10.0.0.5');
+    expect(decodedOffer.s).toContain('tcptype active');
+    expect(decodedOffer.s).not.toContain('typ srflx');
 
-    const encodedAnswer = await encodeLanSignal({
-      v: 1,
-      t: 'A',
-      s: SAMPLE_SDP,
-      u: 'lanp_guest1',
-      n: 'Siti',
-      c: '#10B981',
-      st: 1,
-    });
-    const decodedAnswer = await decodeLanSignal(encodedAnswer);
+    // Quick-code mode with STUN enabled preserves RFC-compliant raddr/rport on srflx
+    const encodedStun = await encodeLanSignal(
+      {
+        v: 1,
+        t: 'A',
+        s: SAMPLE_SDP,
+        u: 'lanp_guest1',
+        n: 'Siti',
+        c: '#10B981',
+        st: 1,
+      },
+      { allowStun: true },
+    );
+    const decodedAnswer = await decodeLanSignal(encodedStun);
     expect(decodedAnswer.t).toBe('A');
     expect(decodedAnswer.u).toBe('lanp_guest1');
     expect(decodedAnswer.n).toBe('Siti');
     expect(decodedAnswer.st).toBe(1);
+    expect(decodedAnswer.s).toContain('typ srflx raddr 0.0.0.0 rport 0');
+  });
+
+  it('reports live SDP diagnostics accurately for IPv4 LAN, mDNS-only, and empty states', () => {
+    const okDiag = inspectLanSdpCandidates(SAMPLE_SDP);
+    expect(okDiag.tone).toBe('ok');
+    expect(okDiag.sampleIpv4s).toContain('192.168.1.42');
+    expect(okDiag.summary).toContain('192.168.1.42');
+
+    const mdnsOnlySdp = [
+      'v=0',
+      'm=application 9 UDP/DTLS/SCTP webrtc-datachannel',
+      'a=candidate:1 1 udp 2122260223 abcd1234.local 54321 typ host generation 0',
+    ].join('\r\n');
+    const warnDiag = inspectLanSdpCandidates(mdnsOnlySdp);
+    expect(warnDiag.tone).toBe('warn');
+    expect(warnDiag.mdnsCount).toBe(1);
+
+    const emptyDiag = inspectLanSdpCandidates('v=0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\n');
+    expect(emptyDiag.tone).toBe('error');
+    expect(emptyDiag.totalCandidates).toBe(0);
   });
 });
 

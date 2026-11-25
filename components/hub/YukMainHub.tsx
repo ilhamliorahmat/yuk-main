@@ -114,10 +114,18 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
     const local = getLocalLanProfile();
     return local.displayName === 'Pemain LAN' ? '' : local.displayName;
   });
-  const [lanGuestModal, setLanGuestModal] = useState<{ open: boolean; stage: boolean }>({
+  const [lanGuestModal, setLanGuestModal] = useState<{
+    open: boolean;
+    stage: boolean;
+    method: 'code' | 'qr';
+    code: string;
+  }>({
     open: false,
     stage: false,
+    method: 'code',
+    code: '',
   });
+  const [lanJoinCode, setLanJoinCode] = useState('');
   const [joinCode, setJoinCode] = useState(initialRoomCode.toUpperCase());
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -529,7 +537,7 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
               </form>
             ) : (
               <div className="space-y-2.5">
-                <div className="flex flex-col sm:flex-row items-stretch gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <input
                     type="text"
                     maxLength={32}
@@ -542,33 +550,76 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
                     }}
                     placeholder={profile?.displayName || 'Nama panggilanmu (tanpa login)'}
                     aria-label="Nama Panggilan LAN"
-                    className="flex-1 min-h-[48px] px-4 rounded-xl bg-[#131A24] border border-slate-800 text-white text-sm text-center sm:text-left placeholder:text-slate-500 focus:outline-none focus:border-amber-400/70"
+                    className="min-h-[48px] px-4 rounded-xl bg-[#131A24] border border-slate-800 text-white text-sm text-center sm:text-left placeholder:text-slate-500 focus:outline-none focus:border-amber-400/70"
                   />
-                  <div className="flex items-stretch gap-2.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (lanNickname.trim()) saveLocalLanNickname(lanNickname);
-                        setLanGuestModal({ open: true, stage: false });
-                      }}
-                      className="flex-1 sm:flex-none min-h-[48px] px-5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-sm inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
-                    >
-                      <QrCode className="w-4 h-4" />
-                      <span>Gabung LAN</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLanGuestModal({ open: true, stage: true })}
-                      title="Hubungkan TV/Laptop sebagai Layar Panggung via Wi-Fi LAN"
-                      className="flex-1 sm:flex-none min-h-[48px] px-4 rounded-xl bg-[#131A24] hover:bg-slate-800/90 border border-slate-700 hover:border-amber-400/50 text-slate-200 hover:text-amber-200 font-semibold text-sm inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
-                    >
-                      <Monitor className="w-4 h-4 text-amber-300" />
-                      <span>Layar Panggung</span>
-                    </button>
-                  </div>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={lanJoinCode}
+                    onChange={(e) =>
+                      setLanJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))
+                    }
+                    placeholder="KODE LAN 6 HURUF (OPSIONAL)"
+                    aria-label="Kode Ruang LAN"
+                    className="min-h-[48px] px-4 rounded-xl bg-[#131A24] border border-slate-800 text-white font-mono-tabular text-sm tracking-widest uppercase text-center placeholder:text-slate-500 placeholder:tracking-normal focus:outline-none focus:border-amber-400/70"
+                  />
+                </div>
+                <div className="flex flex-col sm:flex-row items-stretch gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (lanNickname.trim()) saveLocalLanNickname(lanNickname);
+                      setLanGuestModal({
+                        open: true,
+                        stage: false,
+                        method: lanJoinCode.trim().length > 0 || isOnline ? 'code' : 'qr',
+                        code: lanJoinCode.trim(),
+                      });
+                    }}
+                    className="flex-1 min-h-[48px] px-5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-sm inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
+                  >
+                    <ArrowRight className="w-4 h-4" />
+                    <span>
+                      {lanJoinCode.trim().length === 6
+                        ? `Gabung LAN (${lanJoinCode.trim()})`
+                        : 'Gabung LAN (Kode / QR)'}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (lanNickname.trim()) saveLocalLanNickname(lanNickname);
+                      setLanGuestModal({
+                        open: true,
+                        stage: false,
+                        method: 'qr',
+                        code: '',
+                      });
+                    }}
+                    className="min-h-[48px] px-4 rounded-xl bg-[#131A24] hover:bg-slate-800/90 border border-slate-700 hover:border-amber-400/50 text-slate-200 hover:text-amber-200 font-semibold text-sm inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
+                  >
+                    <QrCode className="w-4 h-4 text-amber-300" />
+                    <span>Scan QR (0% Net)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLanGuestModal({
+                        open: true,
+                        stage: true,
+                        method: lanJoinCode.trim().length > 0 || isOnline ? 'code' : 'qr',
+                        code: lanJoinCode.trim(),
+                      })
+                    }
+                    title="Hubungkan TV/Laptop sebagai Layar Panggung via Wi-Fi LAN"
+                    className="min-h-[48px] px-4 rounded-xl bg-[#131A24] hover:bg-slate-800/90 border border-slate-700 hover:border-amber-400/50 text-slate-200 hover:text-amber-200 font-semibold text-sm inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
+                  >
+                    <Monitor className="w-4 h-4 text-amber-300" />
+                    <span>Layar Panggung</span>
+                  </button>
                 </div>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Main 100% lewat Wi-Fi atau Hotspot HP tanpa kuota internet dan tanpa login akun.
+                  Gameplay 100% langsung antar-HP lewat Wi-Fi lokal (tanpa login). Pakai Kode 6 Huruf di Wi-Fi rumah, atau Scan QR jika benar-benar tanpa internet.
                 </p>
               </div>
             )}
@@ -757,9 +808,13 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
         <LanPairingModal
           mode="guest"
           initialStageDisplay={lanGuestModal.stage}
-          onClose={() => setLanGuestModal({ open: false, stage: false })}
+          initialRoomCode={lanGuestModal.code}
+          initialMethod={lanGuestModal.method}
+          onClose={() =>
+            setLanGuestModal({ open: false, stage: false, method: 'code', code: '' })
+          }
           onConnected={(roomId, stageFlag) => {
-            setLanGuestModal({ open: false, stage: false });
+            setLanGuestModal({ open: false, stage: false, method: 'code', code: '' });
             onEnterRoom(roomId, { isStageDisplay: stageFlag });
           }}
         />

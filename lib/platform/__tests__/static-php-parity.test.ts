@@ -44,6 +44,7 @@ describe('Static Export + PHP 8 + PDO MySQL Architecture Parity', () => {
       'public/api/lib/engine_ular_tangga.php',
       'public/api/lib/rooms.php',
       'public/api/lib/dispatcher.php',
+      'public/api/lib/lan_signal.php',
       'public/api/lib/game-packs.json',
     ];
 
@@ -54,7 +55,10 @@ describe('Static Export + PHP 8 + PDO MySQL Architecture Parity', () => {
 
     const schema = readFileSync(resolve(ROOT, 'database/mysql_schema.sql'), 'utf8');
     const phpDb = readFileSync(resolve(ROOT, 'public/api/lib/db.php'), 'utf8');
+    const phpIndex = readFileSync(resolve(ROOT, 'public/api/index.php'), 'utf8');
     expect(schema).toContain('CREATE TABLE IF NOT EXISTS rooms');
+    expect(schema).toContain('CREATE TABLE IF NOT EXISTS lan_signal_rooms');
+    expect(schema).toContain('CREATE TABLE IF NOT EXISTS lan_signal_peers');
     expect(schema).toContain('version INT UNSIGNED');
     expect(schema).toContain('room_messages');
     expect(schema).toContain('ENGINE=InnoDB');
@@ -63,6 +67,11 @@ describe('Static Export + PHP 8 + PDO MySQL Architecture Parity', () => {
     expect(schema).not.toContain('AUTOINCREMENT'); // SQLite keyword forbidden in MySQL
     expect(phpDb).toContain('winner_uids_json LONGTEXT NOT NULL');
     expect(phpDb).toContain('scores_json LONGTEXT NOT NULL');
+    expect(phpDb).toContain('CREATE TABLE IF NOT EXISTS lan_signal_rooms');
+    expect(phpDb).toContain('CREATE TABLE IF NOT EXISTS lan_signal_peers');
+    expect(phpIndex).toContain("route === 'lan/register'");
+    expect(phpIndex).toContain("route === 'lan/request'");
+    expect(phpIndex).toContain("route === 'lan/status'");
 
     const exampleCfg = readFileSync(resolve(ROOT, 'public/api/config.local.example.php'), 'utf8');
     expect(exampleCfg).toContain("'mysql_pass' => ''");

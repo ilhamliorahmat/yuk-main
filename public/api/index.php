@@ -6,6 +6,7 @@ require_once __DIR__ . '/lib/db.php';
 require_once __DIR__ . '/lib/auth.php';
 require_once __DIR__ . '/lib/rooms.php';
 require_once __DIR__ . '/lib/dispatcher.php';
+require_once __DIR__ . '/lib/lan_signal.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate');
@@ -325,6 +326,37 @@ try {
         }
         $msg = yukmain_insert_and_prune_chat($pdo, $roomId, $user['uid'], $user['displayName'], $text, 'chat');
         yukmain_json_response(200, ['ok' => true, 'message' => $msg]);
+    }
+
+    // ===================== EPHEMERAL LAN QUICK-CODE SIGNALING =====================
+    if ($route === 'lan/register' && $method === 'POST') {
+        $body = yukmain_read_json_body();
+        yukmain_json_response(200, yukmain_lan_register_room($pdo, $body));
+    }
+
+    if ($route === 'lan/poll' && $method === 'POST') {
+        $body = yukmain_read_json_body();
+        yukmain_json_response(200, yukmain_lan_host_poll($pdo, $body));
+    }
+
+    if ($route === 'lan/answer' && $method === 'POST') {
+        $body = yukmain_read_json_body();
+        yukmain_json_response(200, yukmain_lan_host_answer($pdo, $body));
+    }
+
+    if ($route === 'lan/close' && $method === 'POST') {
+        $body = yukmain_read_json_body();
+        yukmain_json_response(200, yukmain_lan_close_room($pdo, $body));
+    }
+
+    if ($route === 'lan/request' && $method === 'POST') {
+        $body = yukmain_read_json_body();
+        yukmain_json_response(200, yukmain_lan_guest_request($pdo, $body));
+    }
+
+    if ($route === 'lan/status' && $method === 'POST') {
+        $body = yukmain_read_json_body();
+        yukmain_json_response(200, yukmain_lan_guest_status($pdo, $body));
     }
 
     yukmain_json_response(404, ['error' => 'Endpoint API tidak ditemukan.']);

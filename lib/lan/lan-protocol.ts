@@ -43,23 +43,35 @@ export interface LocalLanProfile {
 const LOCAL_LAN_UID_KEY = 'yukmain_lan_uid';
 const LOCAL_NICKNAME_KEY = 'yukmain_nickname';
 
+/**
+ * Generates a stable per-tab / per-window LAN UID using sessionStorage so
+ * testing 2 browser windows in Android split-screen never collides as 1 player.
+ */
 export function getOrCreateLocalLanUid(): string {
   if (typeof window === 'undefined') return 'lan_local_player';
-  const existing = window.localStorage.getItem(LOCAL_LAN_UID_KEY);
-  if (existing && /^[a-zA-Z0-9_-]{6,64}$/.test(existing)) {
-    return existing;
+  try {
+    const existing = window.sessionStorage.getItem(LOCAL_LAN_UID_KEY);
+    if (existing && /^[a-zA-Z0-9_-]{6,64}$/.test(existing)) {
+      return existing;
+    }
+    const generated = `lanp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    window.sessionStorage.setItem(LOCAL_LAN_UID_KEY, generated);
+    return generated;
+  } catch {
+    return `lanp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   }
-  const generated = `lanp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-  window.localStorage.setItem(LOCAL_LAN_UID_KEY, generated);
-  return generated;
 }
 
 export function getLocalLanProfile(preferredName?: string): LocalLanProfile {
   const uid = getOrCreateLocalLanUid();
-  const savedName =
-    typeof window !== 'undefined'
-      ? window.localStorage.getItem(LOCAL_NICKNAME_KEY) ?? ''
-      : '';
+  let savedName = '';
+  if (typeof window !== 'undefined') {
+    try {
+      savedName = window.localStorage.getItem(LOCAL_NICKNAME_KEY) ?? '';
+    } catch {
+      savedName = '';
+    }
+  }
   const cleanName = (preferredName ?? savedName).trim().slice(0, 40) || 'Pemain LAN';
   return {
     uid,
@@ -71,19 +83,37 @@ export function getLocalLanProfile(preferredName?: string): LocalLanProfile {
 export function saveLocalLanNickname(nickname: string): LocalLanProfile {
   const clean = nickname.trim().slice(0, 40) || 'Pemain LAN';
   if (typeof window !== 'undefined') {
-    window.localStorage.setItem(LOCAL_NICKNAME_KEY, clean);
+    try {
+      window.localStorage.setItem(LOCAL_NICKNAME_KEY, clean);
+    } catch {
+      // Ignore storage quota / private mode failures
+    }
   }
   return getLocalLanProfile(clean);
 }
 
+export type LanQuickCodeStatus = 'idle' | 'registering' | 'ready' | 'offline';
+
+export interface LanSdpDiagnostics {
+  ipv4HostCount: number;
+  mdnsCount: number;
+  tcpHostCount: number;
+  srflxCount: number;
+  ipv6Count: number;
+  totalCandidates: number;
+  sampleIpv4s: string[];
+  tone: 'ok' | 'warn' | 'error';
+  summary: string;
+}
+
 /**
- * Compact QR-encoded WebRTC signaling payload for zero-internet LAN handshake.
- * `t: 'O'` = Host Offer, `t: 'A'` = Guest Answer.
+ * Compact QR-encoded WebRTC signaling payload for LAN handshake.
+ * `t: 'O'` = Offer, `t: 'A'` = Answer.
  */
 export interface LanSignalPacket {
   v: 1;
   t: 'O' | 'A';
-  /** Compacted SDP string */
+  /** Full or reconstructed valid SDP string */
   s: string;
   /** Room code (Offer only) */
   r?: string;

@@ -129,3 +129,30 @@ CREATE TABLE IF NOT EXISTS room_presence (
   PRIMARY KEY (room_id, uid),
   CONSTRAINT fk_presence_room FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS lan_signal_rooms (
+  room_code VARCHAR(16) PRIMARY KEY,
+  host_secret_hash VARCHAR(128) NOT NULL,
+  game_type VARCHAR(32) NOT NULL,
+  host_name VARCHAR(64) NOT NULL,
+  created_at_ms BIGINT NOT NULL,
+  expires_at_ms BIGINT NOT NULL,
+  INDEX idx_lan_signal_rooms_expires (expires_at_ms)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS lan_signal_peers (
+  request_id VARCHAR(64) PRIMARY KEY,
+  room_code VARCHAR(16) NOT NULL,
+  peer_secret_hash VARCHAR(128) NOT NULL,
+  guest_uid VARCHAR(64) NOT NULL,
+  display_name VARCHAR(64) NOT NULL,
+  avatar_color VARCHAR(32) NOT NULL,
+  is_stage TINYINT(1) NOT NULL DEFAULT 0,
+  offer_code MEDIUMTEXT NOT NULL,
+  answer_code MEDIUMTEXT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'pending',
+  created_at_ms BIGINT NOT NULL,
+  expires_at_ms BIGINT NOT NULL,
+  INDEX idx_lan_signal_peers_room (room_code, status, created_at_ms),
+  CONSTRAINT fk_lan_signal_peers_room FOREIGN KEY (room_code) REFERENCES lan_signal_rooms(room_code) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
