@@ -10,6 +10,7 @@ import {
   Moon,
   Radio,
   Search,
+  SmilePlus,
   Sparkles,
   X,
 } from 'lucide-react';
@@ -87,6 +88,14 @@ const GAME_OPTIONS: Array<{
     playersHint: '2–12 pemain',
     icon: Dices,
     accent: 'text-amber-400',
+  },
+  {
+    id: 'cuma_bercanda',
+    title: 'Cuma Bercanda',
+    subtitle: 'Komik 3-panel (Sistem + Sistem + Kamu) lalu upvote terlucu secara anonim.',
+    playersHint: '2–12 pemain',
+    icon: SmilePlus,
+    accent: 'text-amber-300',
   },
 ];
 

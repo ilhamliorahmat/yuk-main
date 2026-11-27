@@ -31,6 +31,8 @@ import silumanCover from '@/src/assets/images/yukmain_siluman_cover_179518005985
 import silumanEmblem from '@/src/assets/images/yukmain_siluman_emblem_1795180059939.jpg';
 import spyEmblem from '@/src/assets/images/yukmain_spy_emblem_1795001425384.jpg';
 import spyfallCover from '@/src/assets/images/yukmain_spyfall_cover_1795001423851.jpg';
+import bercandaCover from '@/src/assets/images/yukmain_bercanda_cover_1795786860693.jpg';
+import bercandaEmblem from '@/src/assets/images/yukmain_bercanda_emblem_1795786860651.jpg';
 import ularCover from '@/src/assets/images/yukmain_ular_cover_1795263812261.jpg';
 import ularEmblem from '@/src/assets/images/yukmain_ular_emblem_1795263811980.jpg';
 import { LanPairingModal } from '@/components/lan/LanPairingModal';
@@ -100,6 +102,11 @@ const GAME_VISUALS: Record<GameType, GameVisualMeta> = {
   ular_tangga: {
     cover: ularCover,
     emblem: ularEmblem,
+    ctaClass: 'bg-amber-400 hover:bg-amber-300 text-slate-950',
+  },
+  cuma_bercanda: {
+    cover: bercandaCover,
+    emblem: bercandaEmblem,
     ctaClass: 'bg-amber-400 hover:bg-amber-300 text-slate-950',
   },
 };

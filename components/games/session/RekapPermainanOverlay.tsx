@@ -48,6 +48,7 @@ const GAME_LABELS: Record<GameType, string> = {
   pelukis_gadungan: 'Pelukis Gadungan',
   malam_siluman: 'Malam Siluman',
   ular_tangga: 'Ular Tangga RP',
+  cuma_bercanda: 'Cuma Bercanda',
 };
 
 const SUIT_OPTIONS: Array<{

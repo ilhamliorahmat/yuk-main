@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { BUILTIN_BERCANDA_CARDS_ID } from '../../games/cuma-bercanda/packs';
 import { BUILTIN_FACTS_ID } from '../../games/fakta-hari-ini/facts-id';
 import { BUILTIN_WORD_PAIRS } from '../../games/kata-kata/words-id';
 import { MALAM_SILUMAN_ROLES } from '../../games/malam-siluman/roles-id';
@@ -42,6 +43,7 @@ describe('Static Export + PHP 8 + PDO MySQL Architecture Parity', () => {
       'public/api/lib/engine_games_social.php',
       'public/api/lib/engine_malam_siluman.php',
       'public/api/lib/engine_ular_tangga.php',
+      'public/api/lib/engine_cuma_bercanda.php',
       'public/api/lib/rooms.php',
       'public/api/lib/dispatcher.php',
       'public/api/lib/lan_signal.php',
@@ -92,6 +94,7 @@ describe('Static Export + PHP 8 + PDO MySQL Architecture Parity', () => {
         items: Record<string, { id: string }>;
         scenarios: Record<string, { id: string }>;
       };
+      cuma_bercanda: { items: Array<{ id: string }> };
     };
 
     expect(packs.spyfall.items).toHaveLength(INDONESIAN_LOCATIONS.length);
@@ -105,6 +108,7 @@ describe('Static Export + PHP 8 + PDO MySQL Architecture Parity', () => {
     expect(Object.keys(packs.ular_tangga.heroClasses)).toHaveLength(ULAR_HERO_CLASS_ORDER.length);
     expect(Object.keys(packs.ular_tangga.items)).toHaveLength(ULAR_ITEM_IDS.length);
     expect(Object.keys(packs.ular_tangga.scenarios)).toHaveLength(ULAR_SCENARIO_ORDER.length);
+    expect(packs.cuma_bercanda.items).toHaveLength(BUILTIN_BERCANDA_CARDS_ID.length);
   });
 
   it('handles every LanActionName case in PHP dispatcher.php', () => {

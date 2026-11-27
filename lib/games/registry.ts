@@ -143,6 +143,25 @@ export const PARTY_GAMES: PartyGameDefinition[] = [
       ],
     },
   },
+  {
+    id: 'cuma_bercanda',
+    number: 8,
+    title: 'Cuma Bercanda',
+    subtitle: 'Komik 3-Panel & Upvote Tanpa Batas',
+    description:
+      'Sistem melempar 2 panel komik pembuka yang absurd—giliranmu menutup panel ke-3 dari 7 kartu rahasia di tangan! Semua komik tampil anonim untuk di-upvote tongkrongan.',
+    minPlayers: 2,
+    maxPlayers: 12,
+    durationLabel: '5–8 Menit · Tanpa Timer',
+    available: true,
+    rulesSummary: [
+      'Minimal 2 pemain berkumpul di satu ruang. Setiap ronde, sistem membuka Panel 1 dan Panel 2 komik secara publik di semua layar.',
+      'Setiap pemain memegang 7 kartu panel komik rahasia di tangan dan diam-diam memilih 1 kartu untuk menjadi Panel 3 (penutup/punchline) versinya masing-masing.',
+      'Semua komik 3-panel yang terkumpul ditampilkan secara acak dan ANONIM—penulis tiap komik disembunyikan selama fase voting.',
+      'Setiap pemain hanya bisa memberi maksimal 1 upvote per ronde: Upvote Biasa (+1 poin), Lewati (0 poin), atau Golden Upvote (+3 poin, HANYA 1 kali per seluruh sesi game!). Dilarang meng-upvote komik sendiri.',
+      'Tidak ada batas maksimal poin: pemain dapat mengumpulkan poin upvote sebanyak mungkin sepanjang permainan!',
+    ],
+  },
 ];
 
 export function getPartyGame(gameType: GameType): PartyGameDefinition {

@@ -12,6 +12,7 @@ const YUKMAIN_ALLOWED_GAME_TYPES = [
     'pelukis_gadungan',
     'malam_siluman',
     'ular_tangga',
+    'cuma_bercanda',
 ];
 
 function yukmain_row_to_player(array $row): array
@@ -185,9 +186,11 @@ function yukmain_build_default_room(string $roomId, string $code, string $gameTy
         'customSpectrums'       => [],
         'customFacts'           => [],
         'customDrawingPrompts'  => [],
+        'customBercandaCards'   => [],
         'pelukisStrokeRounds'   => 2,
         'malamSilumanSettings'  => yukmain_default_malam_siluman_settings(),
         'ularTanggaSettings'    => yukmain_default_ular_tangga_settings(),
+        'cumaBercandaSettings'  => yukmain_default_cuma_bercanda_settings(),
         'eliminatedUids'        => [],
         'eliminationLog'        => [],
         'frequencyState'        => null,
@@ -195,6 +198,7 @@ function yukmain_build_default_room(string $roomId, string $code, string $gameTy
         'lukisanState'          => null,
         'malamSilumanState'     => null,
         'ularTanggaState'       => null,
+        'cumaBercandaState'     => null,
         'activeVote'            => null,
         'pendingSpyGuess'       => null,
         'lastRoundResult'       => null,
@@ -325,6 +329,7 @@ function yukmain_perform_empty_room_reset_locked(PDO $tx, array $roomRow, int $n
     $room['lukisanState'] = null;
     $room['malamSilumanState'] = null;
     $room['ularTanggaState'] = null;
+    $room['cumaBercandaState'] = null;
     $room['activeVote'] = null;
     $room['pendingSpyGuess'] = null;
     $room['lastRoundResult'] = null;

@@ -614,6 +614,98 @@ describe('LanHostAuthority — Zero-Leak Isolation & All 5 Games + Session Platf
     expect(auth.getRoom().status).toBe('playing');
     expect(auth.getRoom().activeVote).toBeNull();
   });
+
+  it('runs Cuma Bercanda over LAN with min 2 players, strict anonymous voting, and 1x/session Golden Upvote carry-over', () => {
+    const auth = new LanHostAuthority({
+      hostUid: 'host_1',
+      hostName: 'Host',
+      avatarColor: '#DC2626',
+      gameType: 'cuma_bercanda',
+      code: 'CB1234',
+    });
+    auth.registerPeer({
+      uid: 'guest_2',
+      displayName: 'Guest 2',
+      avatarColor: '#2563EB',
+      isStageDisplay: false,
+    });
+
+    auth.handleAction('host_1', 'updateCumaBercandaSettings', {
+      enabledPacks: ['tongkrongan', 'absurd_gelap'],
+      customCards: [],
+      settings: { allowGoldenUpvote: true },
+    });
+
+    // Round 1 starts with 2 active players
+    auth.handleAction('host_1', 'startCumaBercandaRound', {});
+    const started = auth.getRoom();
+    expect(started.status).toBe('playing');
+    expect(started.cumaBercandaState?.phase).toBe('picking');
+
+    // Stage display has zero secrets; each player sees ONLY their own 7-card hand
+    expect(auth.getSnapshotForPeer('tv_stage', true).secretsByOwnedSeat).toEqual({});
+    const hostHand = auth.getSnapshotForPeer('host_1', false).secretsByOwnedSeat.host_1!.bercandaHand!;
+    const guestHand = auth.getSnapshotForPeer('guest_2', false).secretsByOwnedSeat.guest_2!.bercandaHand!;
+    expect(hostHand).toHaveLength(7);
+    expect(guestHand).toHaveLength(7);
+
+    // Both submit Panel 3 -> auto-advances to anonymous voting
+    auth.handleAction('host_1', 'submitCumaBercandaCard', {
+      cardId: hostHand[0].id,
+      actAsUid: 'host_1',
+    });
+    auth.handleAction('guest_2', 'submitCumaBercandaCard', {
+      cardId: guestHand[0].id,
+      actAsUid: 'guest_2',
+    });
+
+    const votingRoom = auth.getRoom();
+    expect(votingRoom.cumaBercandaState?.phase).toBe('voting');
+    expect(votingRoom.cumaBercandaState?.entries).toHaveLength(2);
+    for (const entry of votingRoom.cumaBercandaState!.entries) {
+      expect(entry.authorUid).toBeNull();
+      expect(entry.authorName).toBeNull();
+    }
+
+    const hostOwned = auth.getSnapshotForPeer('host_1', false).secretsByOwnedSeat.host_1!
+      .bercandaOwnedEntryId!;
+    const guestOwned = auth.getSnapshotForPeer('guest_2', false).secretsByOwnedSeat.guest_2!
+      .bercandaOwnedEntryId!;
+
+    // Self-upvote blocked
+    expect(() =>
+      auth.handleAction('host_1', 'castCumaBercandaUpvote', {
+        kind: 'standard',
+        targetEntryId: hostOwned,
+        actAsUid: 'host_1',
+      }),
+    ).toThrow(/sendiri/i);
+
+    // host_1 uses Golden (+3) for guest_2; guest_2 uses Standard (+1) for host_1 -> auto-reveals!
+    auth.handleAction('host_1', 'castCumaBercandaUpvote', {
+      kind: 'golden',
+      targetEntryId: guestOwned,
+      actAsUid: 'host_1',
+    });
+    auth.handleAction('guest_2', 'castCumaBercandaUpvote', {
+      kind: 'standard',
+      targetEntryId: hostOwned,
+      actAsUid: 'guest_2',
+    });
+
+    const revealed = auth.getRoom();
+    expect(revealed.status).toBe('round_end');
+    expect(revealed.cumaBercandaState?.phase).toBe('reveal');
+    expect(auth.getPlayersList().find((p) => p.uid === 'guest_2')?.score).toBe(3);
+    expect(auth.getPlayersList().find((p) => p.uid === 'host_1')?.score).toBe(1);
+
+    // Round 2 carries host_1's spent Golden Upvote & replenishes hands back to 7
+    auth.handleAction('host_1', 'startCumaBercandaRound', {});
+    expect(auth.getRoom().cumaBercandaState?.goldenUsedByUid).toEqual(['host_1']);
+    expect(
+      auth.getSnapshotForPeer('host_1', false).secretsByOwnedSeat.host_1!.bercandaHand,
+    ).toHaveLength(7);
+  });
 });
 
 

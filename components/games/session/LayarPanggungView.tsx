@@ -12,6 +12,7 @@ import {
   Radio,
   Search,
   Smartphone,
+  SmilePlus,
   Sparkles,
   Timer,
   Trophy,
@@ -19,6 +20,7 @@ import {
   Wifi,
 } from 'lucide-react';
 import QRCode from 'qrcode';
+import { BercandaComicPanel, VoteScoreBadge } from '@/components/games/cuma-bercanda/BercandaComicPanel';
 import { PelukisCanvas } from '@/components/games/pelukis-gadungan/PelukisCanvas';
 import { FrequencyDial } from '@/components/games/satu-frekuensi/FrequencyDial';
 import { UlarDice3D } from '@/components/games/ular-tangga/UlarDice3D';
@@ -58,6 +60,7 @@ const GAME_META: Record<
   pelukis_gadungan: { title: 'Pelukis Gadungan', icon: Brush, accent: 'text-emerald-400' },
   malam_siluman: { title: 'Malam Siluman', icon: Moon, accent: 'text-rose-400' },
   ular_tangga: { title: 'Ular Tangga RP', icon: Dices, accent: 'text-amber-400' },
+  cuma_bercanda: { title: 'Cuma Bercanda', icon: SmilePlus, accent: 'text-amber-300' },
 };
 
 function formatClock(sec: number): string {
@@ -875,6 +878,81 @@ export function LayarPanggungView({
                         ))}
                       </ul>
                     </div>
+                  </div>
+                );
+              })()}
+
+              {/* GAME #8: CUMA BERCANDA STAGE (Public Setup -> Anonymous Strips -> Author Reveal) */}
+              {room.gameType === 'cuma_bercanda' && room.cumaBercandaState && (() => {
+                const cb = room.cumaBercandaState;
+                return (
+                  <div className="space-y-4">
+                    <div className="rounded-2xl bg-[#131A24] border border-slate-800 p-5 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                          {cb.phase === 'picking'
+                            ? `Panel Pembuka Ronde #${room.roundNumber} (${cb.submittedUids.length}/${cb.participantUids.length} kirim)`
+                            : cb.phase === 'voting'
+                              ? `Voting Upvote Anonim (${cb.votedUids.length}/${cb.participantUids.length} vote)`
+                              : `Hasil Voting Ronde #${room.roundNumber}`}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <BercandaComicPanel card={cb.panel1} panelNumber={1} />
+                        <BercandaComicPanel card={cb.panel2} panelNumber={2} />
+                        <div className="rounded-2xl border-2 border-dashed border-slate-700 bg-[#0B1018] p-4 flex flex-col items-center justify-center text-center min-h-[200px]">
+                          <span className="text-2xl font-black text-amber-300">?</span>
+                          <p className="text-sm font-bold text-white mt-1">
+                            {cb.phase === 'picking'
+                              ? 'Menunggu Panel 3 dari Pemain'
+                              : cb.phase === 'voting'
+                                ? 'Pilih Punchline Terlucu!'
+                                : 'Penulis Terbongkar'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {(cb.phase === 'voting' || cb.phase === 'reveal') && cb.entries.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {cb.entries.map((entry, idx) => {
+                          const isWin = cb.winnerEntryIds.includes(entry.entryId);
+                          return (
+                            <div
+                              key={entry.entryId}
+                              className={`rounded-2xl border p-4 space-y-2.5 ${
+                                isWin && cb.phase === 'reveal'
+                                  ? 'bg-amber-500/10 border-amber-400/60'
+                                  : 'bg-[#131A24] border-slate-800'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between text-xs font-bold text-slate-300">
+                                <span>Karya #{idx + 1}</span>
+                                <span>
+                                  {cb.phase === 'reveal'
+                                    ? entry.authorName ?? 'Pemain'
+                                    : 'Anonim'}
+                                </span>
+                              </div>
+                              <BercandaComicPanel
+                                card={entry.panel3}
+                                panelNumber={3}
+                                compact
+                                isWinner={cb.phase === 'reveal' && isWin}
+                                authorLabel={cb.phase === 'reveal' ? entry.authorName : null}
+                              />
+                              {cb.phase === 'reveal' && (
+                                <VoteScoreBadge
+                                  standardCount={entry.standardVoterUids.length}
+                                  goldenCount={entry.goldenVoterUids.length}
+                                  totalPoints={entry.totalPoints}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })()}

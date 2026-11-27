@@ -11,6 +11,7 @@ import kataCover from '@/src/assets/images/yukmain_kata_cover_1795098826342.jpg'
 import pelukisCover from '@/src/assets/images/yukmain_pelukis_cover_1795178136981.jpg';
 import silumanCover from '@/src/assets/images/yukmain_siluman_cover_1795180059853.jpg';
 import spyfallCover from '@/src/assets/images/yukmain_spyfall_cover_1795001423851.jpg';
+import bercandaCover from '@/src/assets/images/yukmain_bercanda_cover_1795786860693.jpg';
 import ularCover from '@/src/assets/images/yukmain_ular_cover_1795263812261.jpg';
 import { PARTY_GAMES } from '@/lib/games/registry';
 
@@ -26,6 +27,7 @@ const GAME_SHOWCASE = [
   { id: 'pelukis_gadungan', title: 'Pelukis Gadungan', cover: pelukisCover },
   { id: 'malam_siluman', title: 'Malam Siluman', cover: silumanCover },
   { id: 'ular_tangga', title: 'Ular Tangga RP', cover: ularCover },
+  { id: 'cuma_bercanda', title: 'Cuma Bercanda', cover: bercandaCover },
 ];
 
 const DESIGN_PRINCIPLES = [
@@ -45,7 +47,7 @@ const DESIGN_PRINCIPLES = [
     number: '03.',
     title: 'Satu Kode Ruang untuk Semalaman',
     description:
-      'Host bisa berpindah antar 7 permainan di ruang yang sama tanpa mengusir pemain atau membuat kode baru, lalu menutup malam dengan Rekap Permainan dan Duel Suit Best-of-3.',
+      `Host bisa berpindah antar ${PARTY_GAMES.length} permainan di ruang yang sama tanpa mengusir pemain atau membuat kode baru, lalu menutup malam dengan Rekap Permainan dan Duel Suit Best-of-3.`,
   },
 ];
 
@@ -225,9 +227,9 @@ export function AboutCreatorView() {
             </div>
             <div className="space-y-1">
               <p className="font-display font-mono-tabular text-2xl sm:text-3xl font-bold text-white">
-                283+
+                373+
               </p>
-              <p className="text-xs text-slate-400">Lokasi, Kata, Spektrum &amp; Fakta</p>
+              <p className="text-xs text-slate-400">Lokasi, Kata, Spektrum, Fakta &amp; Komik</p>
             </div>
             <div className="space-y-1">
               <p className="font-display font-mono-tabular text-2xl sm:text-3xl font-bold text-white">

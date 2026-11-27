@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Yuk Main — Platform Game Tongkrongan Indonesia',
     description:
-      '4 permainan grup interaktif berbahasa Indonesia—Online maupun LAN Party lewat Wi-Fi tanpa kuota internet.',
+      '8 permainan grup interaktif berbahasa Indonesia—Online maupun LAN Party lewat Wi-Fi tanpa kuota internet.',
   },
 };
 

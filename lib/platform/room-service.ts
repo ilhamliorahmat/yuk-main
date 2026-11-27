@@ -1,8 +1,12 @@
 'use client';
 
 import { sanitizeMalamSilumanSettings } from '@/lib/games/malam-siluman/engine';
+import { sanitizeCumaBercandaSettings } from '@/lib/games/cuma-bercanda/packs';
 import { sanitizeUlarTanggaSettings } from '@/lib/games/ular-tangga/packs';
 import type {
+  CumaBercandaSettings,
+  CumaBercandaVoteKind,
+  CustomBercandaCard,
   CustomDrawingPrompt,
   CustomFactItem,
   CustomLocation,
@@ -728,6 +732,69 @@ export async function returnUlarTanggaToLobby(params: {
   roomId: string;
 }): Promise<void> {
   await dispatchRoomAction(params.roomId, 'returnUlarTanggaToLobby', {});
+}
+
+// --- Settings & Actions: Game #8 (Cuma Bercanda / cuma_bercanda) ---
+
+export async function updateCumaBercandaSettings(params: {
+  roomId: string;
+  enabledPacks: string[];
+  customCards: CustomBercandaCard[];
+  settings: Partial<CumaBercandaSettings>;
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'updateCumaBercandaSettings', {
+    enabledPacks: params.enabledPacks,
+    customCards: params.customCards,
+    settings: sanitizeCumaBercandaSettings(params.settings),
+  });
+}
+
+export async function startCumaBercandaRound(params: {
+  roomId: string;
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'startCumaBercandaRound', {});
+}
+
+export async function submitCumaBercandaCard(params: {
+  roomId: string;
+  actorUid: string;
+  cardId: string;
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'submitCumaBercandaCard', {
+    cardId: params.cardId,
+    actAsUid: params.actorUid,
+  });
+}
+
+export async function advanceCumaBercandaToVoting(params: {
+  roomId: string;
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'advanceCumaBercandaToVoting', {});
+}
+
+export async function castCumaBercandaUpvoteAction(params: {
+  roomId: string;
+  actorUid: string;
+  kind: CumaBercandaVoteKind;
+  targetEntryId?: string | null;
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'castCumaBercandaUpvote', {
+    kind: params.kind,
+    targetEntryId: params.targetEntryId ?? null,
+    actAsUid: params.actorUid,
+  });
+}
+
+export async function revealCumaBercandaRound(params: {
+  roomId: string;
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'revealCumaBercandaRound', {});
+}
+
+export async function returnCumaBercandaToLobby(params: {
+  roomId: string;
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'returnCumaBercandaToLobby', {});
 }
 
 // --- Session & Cross-Game Actions (v3.1.0) ---

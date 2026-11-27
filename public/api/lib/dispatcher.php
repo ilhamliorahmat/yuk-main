@@ -5,6 +5,7 @@ require_once __DIR__ . '/rooms.php';
 require_once __DIR__ . '/engine_games_social.php';
 require_once __DIR__ . '/engine_malam_siluman.php';
 require_once __DIR__ . '/engine_ular_tangga.php';
+require_once __DIR__ . '/engine_cuma_bercanda.php';
 
 function yukmain_owns_seat(string $deviceUid, string $targetUid, array $playersByUid): bool
 {
@@ -1992,6 +1993,176 @@ function yukmain_dispatch_room_action(
                 break;
             }
 
+            // ===================== GAME #8: CUMA BERCANDA =====================
+            case 'updateCumaBercandaSettings': {
+                yukmain_require_host($senderUid, $room);
+                $rawPacks = is_array($payload['enabledPacks'] ?? null)
+                    ? $payload['enabledPacks']
+                    : ['tongkrongan', 'kantor_kampus'];
+                $cleanPacks = [];
+                foreach ($rawPacks as $pk) {
+                    $cleanPacks[] = (string) $pk;
+                    if (count($cleanPacks) >= 10) break;
+                }
+                $customCards = [];
+                if (is_array($payload['customCards'] ?? null)) {
+                    foreach ($payload['customCards'] as $idx => $rawCard) {
+                        $clean = yukmain_sanitize_custom_bercanda_card($rawCard, (int) $idx);
+                        if ($clean !== null) {
+                            $customCards[] = $clean;
+                        }
+                        if (count($customCards) >= 30) break;
+                    }
+                }
+                $settings = yukmain_sanitize_cuma_bercanda_settings(
+                    $payload['settings'] ?? ($room['cumaBercandaSettings'] ?? null)
+                );
+                $room['enabledPacks'] = !empty($cleanPacks) ? $cleanPacks : ['tongkrongan'];
+                $room['customBercandaCards'] = $customCards;
+                $room['cumaBercandaSettings'] = $settings;
+                $room['updatedAt'] = $now;
+                break;
+            }
+
+            case 'startCumaBercandaRound': {
+                yukmain_require_host($senderUid, $room);
+                if (($room['gameType'] ?? '') !== 'cuma_bercanda') {
+                    throw new RuntimeException('Ruangan ini bukan permainan Cuma Bercanda.');
+                }
+                $nextRoundNum = ((int) ($room['roundNumber'] ?? 0)) + 1;
+                $roundId = 'r_' . $nextRoundNum . '_' . $now;
+                $prevCb = $room['cumaBercandaState'] ?? null;
+
+                $deal = yukmain_create_cuma_bercanda_round(
+                    $players,
+                    $nextRoundNum,
+                    $room['enabledPacks'] ?? ['tongkrongan', 'kantor_kampus'],
+                    $room['customBercandaCards'] ?? [],
+                    $room['cumaBercandaSettings'] ?? null,
+                    $prevCb ? ($serverState['bercandaHandsByUid'] ?? null) : null,
+                    $prevCb ? ($serverState['bercandaDeckIds'] ?? null) : null,
+                    $prevCb ? ($prevCb['goldenUsedByUid'] ?? []) : [],
+                    $roundId,
+                    $now
+                );
+
+                yukmain_save_round_secrets($tx, $roomId, $roundId, $deal['secretsByUid'], $now);
+                yukmain_save_server_state($tx, $roomId, $roundId, $deal['serverState'], $now);
+
+                $room['status'] = 'playing';
+                $room['roundNumber'] = $nextRoundNum;
+                $room['currentRoundId'] = $roundId;
+                $room['activeVote'] = null;
+                $room['pendingSpyGuess'] = null;
+                $room['lastRoundResult'] = null;
+                $room['cumaBercandaState'] = $deal['cumaBercandaState'];
+                $room['updatedAt'] = $now;
+
+                $pushSys("Ronde #{$nextRoundNum} Cuma Bercanda dimulai! Sistem melepas 2 panel pembuka — pilih Panel 3 terlucu dari kartu tanganmu.");
+                $result = ['roundId' => $roundId, 'roundNumber' => $nextRoundNum];
+                break;
+            }
+
+            case 'submitCumaBercandaCard': {
+                $actor = yukmain_resolve_actor($senderUid, $payload, $playersByUid);
+                if (($room['status'] ?? '') !== 'playing' || empty($room['cumaBercandaState'])) {
+                    throw new RuntimeException('Tidak ada ronde Cuma Bercanda yang aktif.');
+                }
+                $cb = $room['cumaBercandaState'];
+                $cardId = (string) ($payload['cardId'] ?? '');
+                $actorSecret = yukmain_load_round_secret($tx, $roomId, $currentRoundId, $actor['uid']) ?? [];
+                $currentHand = is_array($actorSecret['bercandaHand'] ?? null)
+                    ? $actorSecret['bercandaHand']
+                    : (is_array($serverState['bercandaHandsByUid'][$actor['uid']] ?? null)
+                        ? $serverState['bercandaHandsByUid'][$actor['uid']]
+                        : []);
+
+                $res = yukmain_submit_bercanda_punchline($cb, $actor['uid'], $cardId, $currentHand);
+
+                if (is_array($serverState)) {
+                    $serverState['bercandaHandsByUid'][$actor['uid']] = $res['nextHand'];
+                    yukmain_save_server_state($tx, $roomId, $currentRoundId, $serverState, $now);
+                }
+                if (!empty($actorSecret)) {
+                    $actorSecret['bercandaHand'] = $res['nextHand'];
+                    $actorSecret['bercandaSubmittedCardId'] = $res['chosenCard']['id'];
+                    yukmain_save_round_secret_single($tx, $roomId, $currentRoundId, $actor['uid'], $actorSecret, $now);
+                }
+
+                yukmain_save_submission($tx, $roomId, 'bercanda_pick', $currentRoundId, $actor['uid'], $res['chosenCard'], $now);
+                $cb['submittedUids'] = $res['nextSubmittedUids'];
+
+                if (!empty($res['allSubmitted'])) {
+                    $result = yukmain_enter_cuma_bercanda_voting($tx, $roomId, $currentRoundId, $room, $serverState, $cb, $now, $pushSys);
+                    break;
+                }
+
+                $room['cumaBercandaState'] = $cb;
+                $room['updatedAt'] = $now;
+                $result = ['allSubmitted' => false];
+                break;
+            }
+
+            case 'advanceCumaBercandaToVoting': {
+                yukmain_require_host($senderUid, $room);
+                if (($room['status'] ?? '') !== 'playing' || empty($room['cumaBercandaState'])) {
+                    throw new RuntimeException('Tidak ada ronde Cuma Bercanda yang aktif.');
+                }
+                $cb = $room['cumaBercandaState'];
+                if (($cb['phase'] ?? '') !== 'picking') {
+                    throw new RuntimeException('Fase pemilihan kartu sudah berakhir.');
+                }
+                $result = yukmain_enter_cuma_bercanda_voting($tx, $roomId, $currentRoundId, $room, $serverState, $cb, $now, $pushSys);
+                break;
+            }
+
+            case 'castCumaBercandaUpvote': {
+                $actor = yukmain_resolve_actor($senderUid, $payload, $playersByUid);
+                if (($room['status'] ?? '') !== 'playing' || empty($room['cumaBercandaState'])) {
+                    throw new RuntimeException('Tidak ada sesi voting Cuma Bercanda yang aktif.');
+                }
+                $cb = $room['cumaBercandaState'];
+                $kind = (string) ($payload['kind'] ?? 'standard');
+                $targetEntryId = isset($payload['targetEntryId']) && is_string($payload['targetEntryId']) && $payload['targetEntryId'] !== ''
+                    ? $payload['targetEntryId']
+                    : null;
+                $entriesMeta = is_array($serverState['bercandaEntriesMeta'] ?? null)
+                    ? $serverState['bercandaEntriesMeta']
+                    : [];
+
+                $castRes = yukmain_cast_bercanda_upvote(
+                    $cb,
+                    $entriesMeta,
+                    $actor['uid'],
+                    $actor['displayName'],
+                    $kind,
+                    $targetEntryId
+                );
+
+                if (!empty($castRes['allParticipantsVoted'])) {
+                    $result = yukmain_finalize_cuma_bercanda_reveal_php($tx, $roomId, $playersByUid, $room, $serverState, $castRes['nextState'], $now, $pushSys);
+                    break;
+                }
+
+                $room['cumaBercandaState'] = $castRes['nextState'];
+                $room['updatedAt'] = $now;
+                $result = ['revealed' => false];
+                break;
+            }
+
+            case 'revealCumaBercandaRound': {
+                yukmain_require_host($senderUid, $room);
+                if (($room['status'] ?? '') !== 'playing' || empty($room['cumaBercandaState'])) {
+                    throw new RuntimeException('Tidak ada ronde Cuma Bercanda yang aktif.');
+                }
+                $cb = $room['cumaBercandaState'];
+                if (($cb['phase'] ?? '') !== 'voting') {
+                    throw new RuntimeException('Buka hasil upvote hanya bisa dilakukan pada fase voting.');
+                }
+                $result = yukmain_finalize_cuma_bercanda_reveal_php($tx, $roomId, $playersByUid, $room, $serverState, $cb, $now, $pushSys);
+                break;
+            }
+
             // ===================== RETURN TO LOBBY =====================
             case 'returnRoomToLobby':
             case 'returnKataKataToLobby':
@@ -1999,7 +2170,8 @@ function yukmain_dispatch_room_action(
             case 'returnFaktaHariIniToLobby':
             case 'returnPelukisToLobby':
             case 'returnMalamSilumanToLobby':
-            case 'returnUlarTanggaToLobby': {
+            case 'returnUlarTanggaToLobby':
+            case 'returnCumaBercandaToLobby': {
                 yukmain_require_host($senderUid, $room);
                 $room['status'] = 'lobby';
                 $room['activeVote'] = null;
@@ -2011,6 +2183,7 @@ function yukmain_dispatch_room_action(
                 $room['lukisanState'] = null;
                 $room['malamSilumanState'] = null;
                 $room['ularTanggaState'] = null;
+                $room['cumaBercandaState'] = null;
                 $room['updatedAt'] = $now;
                 break;
             }
@@ -2057,6 +2230,7 @@ function yukmain_dispatch_room_action(
                 $room['lukisanState'] = null;
                 $room['malamSilumanState'] = null;
                 $room['ularTanggaState'] = null;
+                $room['cumaBercandaState'] = null;
                 $room['activeVote'] = null;
                 $room['pendingSpyGuess'] = null;
                 $room['lastRoundResult'] = null;
@@ -2816,4 +2990,73 @@ function yukmain_reconcile_active_vote_after_roster_change(
         );
     }
 }
+
+function yukmain_enter_cuma_bercanda_voting(
+    PDO $tx,
+    string $roomId,
+    string $roundId,
+    array &$room,
+    ?array &$serverState,
+    array $cb,
+    int $now,
+    callable $pushSys
+): array {
+    $submissionsByUid = yukmain_load_submissions($tx, $roomId, 'bercanda_pick', $roundId);
+    $trans = yukmain_transition_bercanda_to_voting($cb, $submissionsByUid);
+
+    if (is_array($serverState)) {
+        $serverState['bercandaEntriesMeta'] = $trans['entriesMeta'];
+        yukmain_save_server_state($tx, $roomId, $roundId, $serverState, $now);
+    }
+
+    foreach ($trans['ownedEntryIdsByUid'] as $uid => $entryId) {
+        $sec = yukmain_load_round_secret($tx, $roomId, $roundId, (string) $uid);
+        if (is_array($sec)) {
+            $sec['bercandaOwnedEntryId'] = $entryId;
+            yukmain_save_round_secret_single($tx, $roomId, $roundId, (string) $uid, $sec, $now);
+        }
+    }
+
+    $room['cumaBercandaState'] = $trans['nextState'];
+    $room['updatedAt'] = $now;
+    $count = count($trans['nextState']['entries']);
+    $pushSys("Semua {$count} komik 3-panel siap! Saatnya voting upvote secara anonim.");
+    return ['phase' => 'voting', 'entryCount' => $count];
+}
+
+function yukmain_finalize_cuma_bercanda_reveal_php(
+    PDO $tx,
+    string $roomId,
+    array &$playersByUid,
+    array &$room,
+    ?array $serverState,
+    array $cb,
+    int $now,
+    callable $pushSys
+): array {
+    $entriesMeta = is_array($serverState['bercandaEntriesMeta'] ?? null)
+        ? $serverState['bercandaEntriesMeta']
+        : [];
+    $rev = yukmain_finalize_bercanda_reveal(
+        $cb,
+        $entriesMeta,
+        (int) ($room['roundNumber'] ?? 1),
+        $now
+    );
+
+    yukmain_apply_score_deltas($tx, $roomId, $playersByUid, $rev['scoreDeltas'], $now);
+
+    $room['status'] = 'round_end';
+    $room['currentMatchRounds'] = ((int) ($room['currentMatchRounds'] ?? 0)) + 1;
+    $room['cumaBercandaState'] = $rev['nextState'];
+    $room['lastRoundResult'] = $rev['roundResult'];
+    $room['updatedAt'] = $now;
+
+    $pushSys((string) $rev['roundResult']['reason']);
+    return [
+        'revealed'       => true,
+        'winnerEntryIds' => $rev['nextState']['winnerEntryIds'],
+    ];
+}
+
 

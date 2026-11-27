@@ -47,6 +47,7 @@ function yukmain_default_packs_for_game(string $gameType): array
         'pelukis_gadungan' => ['kuliner', 'tongkrongan', 'hewan_alam'],
         'malam_siluman'    => ['malam_siluman'],
         'ular_tangga'      => ['menara_nusantara'],
+        'cuma_bercanda'    => ['tongkrongan', 'kantor_kampus'],
         default            => ['nusantara', 'klasik'],
     };
 }
@@ -218,6 +219,64 @@ function yukmain_sanitize_ular_tangga_settings($raw): array
         'exactFinishBounce'   => $exactFinishBounce,
         'classSelectionByUid' => empty($cleanClasses) ? new stdClass() : $cleanClasses,
     ];
+}
+
+function yukmain_default_cuma_bercanda_settings(): array
+{
+    return [
+        'allowGoldenUpvote' => true,
+    ];
+}
+
+function yukmain_sanitize_cuma_bercanda_settings($raw): array
+{
+    if (!is_array($raw)) {
+        return yukmain_default_cuma_bercanda_settings();
+    }
+    return [
+        'allowGoldenUpvote' => isset($raw['allowGoldenUpvote']) && is_bool($raw['allowGoldenUpvote'])
+            ? $raw['allowGoldenUpvote']
+            : true,
+    ];
+}
+
+function yukmain_sanitize_custom_bercanda_card($raw, int $fallbackIndex = 0): ?array
+{
+    if (!is_array($raw)) return null;
+    $caption = mb_substr(trim((string) ($raw['caption'] ?? '')), 0, 120, 'UTF-8');
+    if (mb_strlen($caption, 'UTF-8') < 3) return null;
+
+    $speaker = mb_substr(trim((string) ($raw['speaker'] ?? '')), 0, 28, 'UTF-8') ?: 'Tokoh';
+    $subtext = mb_substr(trim((string) ($raw['subtext'] ?? '')), 0, 60, 'UTF-8');
+    $allowedScenes = [
+        'ngobrol_santai',
+        'kaget_melotot',
+        'bisik_rahasia',
+        'tunjuk_marah',
+        'nangis_lebay',
+        'cengar_cengir',
+        'mikir_keras',
+        'panik_keringat',
+        'sombong_kacamata',
+        'pingsan_tepuk_jidat',
+        'pegang_hp',
+        'pose_menang',
+    ];
+    $rawScene = (string) ($raw['scene'] ?? 'ngobrol_santai');
+    $scene = in_array($rawScene, $allowedScenes, true) ? $rawScene : 'ngobrol_santai';
+    $id = mb_substr(trim((string) ($raw['id'] ?? '')), 0, 48, 'UTF-8')
+        ?: ('cb_custom_' . $fallbackIndex . '_' . yukmain_random_hex(4));
+
+    $card = [
+        'id'      => $id,
+        'scene'   => $scene,
+        'speaker' => $speaker,
+        'caption' => $caption,
+    ];
+    if ($subtext !== '') {
+        $card['subtext'] = $subtext;
+    }
+    return $card;
 }
 
 function yukmain_finalize_completed_game_record(int $matchIndex, string $gameType, int $roundsPlayed, array $players, int $finishedAtMs): ?array

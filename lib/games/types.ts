@@ -5,7 +5,8 @@ export type GameType =
   | 'fakta_hari_ini'
   | 'pelukis_gadungan'
   | 'malam_siluman'
-  | 'ular_tangga';
+  | 'ular_tangga'
+  | 'cuma_bercanda';
 
 export type RoomStatus = 'lobby' | 'playing' | 'voting' | 'spy_guess' | 'round_end';
 
@@ -309,6 +310,76 @@ export interface UlarTanggaState {
   winnerName?: string | null;
 }
 
+export type BercandaPanelScene =
+  | 'ngobrol_santai'
+  | 'kaget_melotot'
+  | 'bisik_rahasia'
+  | 'tunjuk_marah'
+  | 'nangis_lebay'
+  | 'cengar_cengir'
+  | 'mikir_keras'
+  | 'panik_keringat'
+  | 'sombong_kacamata'
+  | 'pingsan_tepuk_jidat'
+  | 'pegang_hp'
+  | 'pose_menang';
+
+export type BercandaCardPackId = 'tongkrongan' | 'kantor_kampus' | 'absurd_gelap';
+
+export interface CustomBercandaCard {
+  id: string;
+  scene: BercandaPanelScene;
+  speaker: string;
+  caption: string;
+  subtext?: string;
+}
+
+export interface BercandaCard extends CustomBercandaCard {
+  packId: BercandaCardPackId | 'custom';
+  packLabel: string;
+}
+
+export type CumaBercandaPhase = 'picking' | 'voting' | 'reveal';
+
+export type CumaBercandaVoteKind = 'standard' | 'golden' | 'skip';
+
+export interface BercandaComicEntry {
+  entryId: string;
+  panel3: BercandaCard;
+  authorUid: string | null;
+  authorName: string | null;
+  standardVoterUids: string[];
+  goldenVoterUids: string[];
+  totalPoints: number;
+}
+
+export interface CumaBercandaVoteRecord {
+  voterUid: string;
+  voterName: string;
+  targetEntryId: string | null;
+  kind: CumaBercandaVoteKind;
+  points: number;
+}
+
+export interface CumaBercandaSettings {
+  allowGoldenUpvote: boolean;
+}
+
+export interface CumaBercandaState {
+  phase: CumaBercandaPhase;
+  allowGoldenUpvote: boolean;
+  panel1: BercandaCard;
+  panel2: BercandaCard;
+  participantUids: string[];
+  participantNamesByUid: Record<string, string>;
+  submittedUids: string[];
+  votedUids: string[];
+  goldenUsedByUid: string[];
+  entries: BercandaComicEntry[];
+  winnerEntryIds: string[];
+  votesByUid?: Record<string, CumaBercandaVoteRecord>;
+}
+
 export interface EliminationEntry {
   uid: string;
   displayName: string;
@@ -344,7 +415,8 @@ export interface RoundResult {
     | 'gadungan'
     | 'siluman'
     | 'tumbal'
-    | 'petualang';
+    | 'petualang'
+    | 'komikus';
   reason: string;
   locationName: string;
   guessedLocation: string | null;
@@ -383,6 +455,13 @@ export interface ServerRoundStateDoc {
   wolfRolesByUid?: Record<string, WerewolfRoleId>;
   wolfNamesByUid?: Record<string, string>;
   lastProtectedByDoctor?: string | null;
+  // Cuma Bercanda authoritative deck, private hands & hidden comic authorship
+  bercandaHandsByUid?: Record<string, BercandaCard[]>;
+  bercandaDeckIds?: string[];
+  bercandaEntriesMeta?: Record<
+    string,
+    { entryId: string; authorUid: string; authorName: string; panel3: BercandaCard }
+  >;
   createdAtMs: number;
 }
 
@@ -460,9 +539,11 @@ export interface RoomDoc {
   customSpectrums?: CustomSpectrum[];
   customFacts?: CustomFactItem[];
   customDrawingPrompts?: CustomDrawingPrompt[];
+  customBercandaCards?: CustomBercandaCard[];
   pelukisStrokeRounds?: 1 | 2;
   malamSilumanSettings?: MalamSilumanSettings | null;
   ularTanggaSettings?: UlarTanggaSettings | null;
+  cumaBercandaSettings?: CumaBercandaSettings | null;
   eliminatedUids?: string[];
   eliminationLog?: EliminationEntry[];
   frequencyState?: FrequencyState | null;
@@ -470,6 +551,7 @@ export interface RoomDoc {
   lukisanState?: LukisanState | null;
   malamSilumanState?: MalamSilumanState | null;
   ularTanggaState?: UlarTanggaState | null;
+  cumaBercandaState?: CumaBercandaState | null;
   activeVote: VoteState | null;
   pendingSpyGuess: PendingSpyGuess | null;
   lastRoundResult: RoundResult | null;
@@ -535,6 +617,9 @@ export interface PlayerSecretDoc {
   lastProtectedUid?: string | null;
   ularHeroClass?: UlarHeroClassId;
   ularBag?: UlarItemId[];
+  bercandaHand?: BercandaCard[];
+  bercandaOwnedEntryId?: string | null;
+  bercandaSubmittedCardId?: string | null;
   createdAt?: unknown;
 }
 

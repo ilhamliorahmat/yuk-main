@@ -57,6 +57,18 @@ import {
   sanitizeCustomLocation,
 } from '../games/spyfall/engine';
 import {
+  castCumaBercandaUpvote,
+  createCumaBercandaRound,
+  finalizeCumaBercandaReveal,
+  submitCumaBercandaPunchline,
+  transitionCumaBercandaToVoting,
+} from '../games/cuma-bercanda/engine';
+import {
+  defaultCumaBercandaSettings,
+  sanitizeCumaBercandaSettings,
+  sanitizeCustomBercandaCard,
+} from '../games/cuma-bercanda/packs';
+import {
   advanceUlarTurn,
   applyUlarBagItem,
   applyUlarSkill,
@@ -73,7 +85,10 @@ import {
 } from '../games/ular-tangga/packs';
 import { getEligibleMajorityVoterUids } from '../games/voting/engine';
 import type {
+  BercandaCard,
   ChatMessage,
+  CumaBercandaVoteKind,
+  CustomBercandaCard,
   CustomDrawingPrompt,
   CustomFactItem,
   CustomLocation,
@@ -121,6 +136,7 @@ export interface HydratedAuthorityState {
   pelukisVotes?: Record<string, Record<string, string>>;
   malamSilumanNightActions?: Record<string, Record<string, string>>;
   malamSilumanVotes?: Record<string, Record<string, string>>;
+  bercandaSubmissions?: Record<string, Record<string, BercandaCard>>;
   suitPicks?: Record<string, Record<string, SuitPick>>;
   messages?: ChatMessage[];
   presence?: Record<string, PresenceEntry>;
@@ -135,6 +151,7 @@ export class LanHostAuthority {
   private pelukisVotesByRound: Map<string, Map<string, string>> = new Map();
   private malamSilumanNightActionsByRound: Map<string, Map<string, string>> = new Map();
   private malamSilumanVotesByRound: Map<string, Map<string, string>> = new Map();
+  private bercandaSubmissionsByRound: Map<string, Map<string, BercandaCard>> = new Map();
   private suitPicksByClash: Map<string, Map<string, SuitPick>> = new Map();
   private messages: ChatMessage[] = [];
   private pendingSystemMessages: string[] = [];
@@ -172,6 +189,12 @@ export class LanHostAuthority {
     );
     instance.malamSilumanVotesByRound = new Map(
       Object.entries(state.malamSilumanVotes ?? {}).map(([k, v]) => [
+        k,
+        new Map(Object.entries(v)),
+      ]),
+    );
+    instance.bercandaSubmissionsByRound = new Map(
+      Object.entries(state.bercandaSubmissions ?? {}).map(([k, v]) => [
         k,
         new Map(Object.entries(v)),
       ]),
@@ -216,9 +239,11 @@ export class LanHostAuthority {
       customSpectrums: [],
       customFacts: [],
       customDrawingPrompts: [],
+      customBercandaCards: [],
       pelukisStrokeRounds: 2,
       malamSilumanSettings: DEFAULT_MALAM_SILUMAN_SETTINGS,
       ularTanggaSettings: getDefaultUlarTanggaSettings(),
+      cumaBercandaSettings: defaultCumaBercandaSettings(),
       eliminatedUids: [],
       eliminationLog: [],
       frequencyState: null,
@@ -226,6 +251,7 @@ export class LanHostAuthority {
       lukisanState: null,
       malamSilumanState: null,
       ularTanggaState: null,
+      cumaBercandaState: null,
       activeVote: null,
       pendingSpyGuess: null,
       lastRoundResult: null,
@@ -2481,6 +2507,198 @@ export class LanHostAuthority {
         return { finished: false, message: res.message };
       }
 
+      // ===================== GAME #8: CUMA BERCANDA =====================
+      case 'updateCumaBercandaSettings': {
+        this.requireHost(senderDeviceUid);
+        const rawPacks = Array.isArray(payload.enabledPacks)
+          ? (payload.enabledPacks as string[])
+          : ['tongkrongan', 'kantor_kampus'];
+        const customCards = (Array.isArray(payload.customCards)
+          ? (payload.customCards as CustomBercandaCard[])
+          : []
+        )
+          .map((c, idx) => sanitizeCustomBercandaCard(c, idx))
+          .filter((c): c is CustomBercandaCard => c !== null)
+          .slice(0, 30);
+        const settings = sanitizeCumaBercandaSettings(
+          (payload.settings as Partial<{ allowGoldenUpvote: boolean }> | undefined) ??
+            this.room.cumaBercandaSettings,
+        );
+        this.room = {
+          ...this.room,
+          enabledPacks: rawPacks.length > 0 ? rawPacks.slice(0, 10) : ['tongkrongan'],
+          customBercandaCards: customCards,
+          cumaBercandaSettings: settings,
+          updatedAt: now,
+        };
+        return {};
+      }
+
+      case 'startCumaBercandaRound': {
+        this.requireHost(senderDeviceUid);
+        if (this.room.gameType !== 'cuma_bercanda') {
+          throw new Error('Ruangan ini bukan permainan Cuma Bercanda.');
+        }
+        const nextRoundNum = this.room.roundNumber + 1;
+        const roundId = `r_${nextRoundNum}_${now}`;
+        const prevBercanda = this.room.cumaBercandaState;
+
+        const deal = createCumaBercandaRound({
+          players: this.getPlayersList(),
+          roundNumber: nextRoundNum,
+          enabledPacks: this.room.enabledPacks ?? ['tongkrongan', 'kantor_kampus'],
+          customCards: this.room.customBercandaCards ?? [],
+          settings: this.room.cumaBercandaSettings,
+          previousHandsByUid: prevBercanda ? this.serverState?.bercandaHandsByUid : undefined,
+          previousDeckIds: prevBercanda ? this.serverState?.bercandaDeckIds : undefined,
+          previousGoldenUsedByUid: prevBercanda ? prevBercanda.goldenUsedByUid : [],
+          roundId,
+        });
+
+        this.secretsByRound.set(
+          roundId,
+          new Map(Object.entries(deal.secretsByUid)),
+        );
+        this.bercandaSubmissionsByRound.set(roundId, new Map());
+        this.serverState = deal.serverState;
+
+        this.room = {
+          ...this.room,
+          status: 'playing',
+          roundNumber: nextRoundNum,
+          currentRoundId: roundId,
+          activeVote: null,
+          pendingSpyGuess: null,
+          lastRoundResult: null,
+          cumaBercandaState: deal.cumaBercandaState,
+          updatedAt: now,
+        };
+        this.pushSystemMessage(
+          `Ronde #${nextRoundNum} Cuma Bercanda dimulai! Sistem melepas 2 panel pembuka — pilih Panel 3 terlucu dari kartu tanganmu.`,
+        );
+        return { roundId, roundNumber: nextRoundNum };
+      }
+
+      case 'submitCumaBercandaCard': {
+        const actor = this.resolveActor(senderDeviceUid, payload);
+        const actorUid = actor.uid;
+        if (this.room.status !== 'playing' || !this.room.cumaBercandaState) {
+          throw new Error('Tidak ada ronde Cuma Bercanda yang aktif.');
+        }
+        const cb = this.room.cumaBercandaState;
+        if (cb.phase !== 'picking') {
+          throw new Error('Fase pemilihan kartu sudah berakhir.');
+        }
+        const cardId = String(payload.cardId ?? '');
+        const roundSecrets = this.secretsByRound.get(this.room.currentRoundId);
+        const actorSecret = roundSecrets?.get(actorUid);
+        const currentHand =
+          actorSecret?.bercandaHand ??
+          this.serverState?.bercandaHandsByUid?.[actorUid] ??
+          [];
+
+        const res = submitCumaBercandaPunchline({
+          state: cb,
+          uid: actorUid,
+          cardId,
+          currentHand,
+        });
+
+        if (this.serverState) {
+          this.serverState = {
+            ...this.serverState,
+            bercandaHandsByUid: {
+              ...(this.serverState.bercandaHandsByUid ?? {}),
+              [actorUid]: res.nextHand,
+            },
+          };
+        }
+        if (roundSecrets && actorSecret) {
+          roundSecrets.set(actorUid, {
+            ...actorSecret,
+            bercandaHand: res.nextHand,
+            bercandaSubmittedCardId: res.chosenCard.id,
+          });
+        }
+
+        const subMap =
+          this.bercandaSubmissionsByRound.get(this.room.currentRoundId) ??
+          new Map<string, BercandaCard>();
+        subMap.set(actorUid, res.chosenCard);
+        this.bercandaSubmissionsByRound.set(this.room.currentRoundId, subMap);
+
+        const updatedCb = {
+          ...cb,
+          submittedUids: res.nextSubmittedUids,
+        };
+
+        if (res.allSubmitted) {
+          return this.enterCumaBercandaVoting(updatedCb, now);
+        }
+
+        this.room = {
+          ...this.room,
+          cumaBercandaState: updatedCb,
+          updatedAt: now,
+        };
+        return { allSubmitted: false };
+      }
+
+      case 'advanceCumaBercandaToVoting': {
+        this.requireHost(senderDeviceUid);
+        if (this.room.status !== 'playing' || !this.room.cumaBercandaState) {
+          throw new Error('Tidak ada ronde Cuma Bercanda yang aktif.');
+        }
+        if (this.room.cumaBercandaState.phase !== 'picking') {
+          throw new Error('Fase pemilihan kartu sudah berakhir.');
+        }
+        return this.enterCumaBercandaVoting(this.room.cumaBercandaState, now);
+      }
+
+      case 'castCumaBercandaUpvote': {
+        const actor = this.resolveActor(senderDeviceUid, payload);
+        const actorUid = actor.uid;
+        if (this.room.status !== 'playing' || !this.room.cumaBercandaState) {
+          throw new Error('Tidak ada sesi voting Cuma Bercanda yang aktif.');
+        }
+        const cb = this.room.cumaBercandaState;
+        const actorName = this.players.get(actorUid)?.displayName ?? 'Pemain';
+        const kind = String(payload.kind ?? 'standard') as CumaBercandaVoteKind;
+        const targetEntryId = payload.targetEntryId ? String(payload.targetEntryId) : null;
+        const entriesMeta = this.serverState?.bercandaEntriesMeta ?? {};
+
+        const castRes = castCumaBercandaUpvote({
+          state: cb,
+          entriesMeta,
+          voterUid: actorUid,
+          voterName: actorName,
+          kind,
+          targetEntryId,
+        });
+
+        if (castRes.allParticipantsVoted) {
+          return this.finalizeCumaBercandaLanReveal(castRes.nextState, now);
+        }
+
+        this.room = {
+          ...this.room,
+          cumaBercandaState: castRes.nextState,
+          updatedAt: now,
+        };
+        return { revealed: false };
+      }
+
+      case 'revealCumaBercandaRound': {
+        this.requireHost(senderDeviceUid);
+        if (this.room.status !== 'playing' || !this.room.cumaBercandaState) {
+          throw new Error('Tidak ada ronde Cuma Bercanda yang aktif.');
+        }
+        if (this.room.cumaBercandaState.phase !== 'voting') {
+          throw new Error('Buka hasil upvote hanya bisa dilakukan pada fase voting.');
+        }
+        return this.finalizeCumaBercandaLanReveal(this.room.cumaBercandaState, now);
+      }
+
       // ===================== RETURN TO LOBBY =====================
       case 'returnRoomToLobby':
       case 'returnKataKataToLobby':
@@ -2488,7 +2706,8 @@ export class LanHostAuthority {
       case 'returnFaktaHariIniToLobby':
       case 'returnPelukisToLobby':
       case 'returnMalamSilumanToLobby':
-      case 'returnUlarTanggaToLobby': {
+      case 'returnUlarTanggaToLobby':
+      case 'returnCumaBercandaToLobby': {
         this.requireHost(senderDeviceUid);
         this.room = {
           ...this.room,
@@ -2502,6 +2721,7 @@ export class LanHostAuthority {
           lukisanState: null,
           malamSilumanState: null,
           ularTanggaState: null,
+          cumaBercandaState: null,
           updatedAt: now,
         };
         return {};
@@ -2523,6 +2743,7 @@ export class LanHostAuthority {
             'pelukis_gadungan',
             'malam_siluman',
             'ular_tangga',
+            'cuma_bercanda',
           ].includes(nextGameType)
         ) {
           throw new Error('Jenis permainan tidak valid.');
@@ -2564,6 +2785,7 @@ export class LanHostAuthority {
           lukisanState: null,
           malamSilumanState: null,
           ularTanggaState: null,
+          cumaBercandaState: null,
           activeVote: null,
           pendingSpyGuess: null,
           lastRoundResult: null,
@@ -3430,6 +3652,83 @@ export class LanHostAuthority {
         : `${activeVote.targetName} (Warga) tereliminasi! Permainan berlanjut.`,
     );
     return { outcome: 'continue' };
+  }
+
+  private enterCumaBercandaVoting(
+    cb: NonNullable<RoomDoc['cumaBercandaState']>,
+    now: number,
+  ): Record<string, unknown> {
+    const subMap =
+      this.bercandaSubmissionsByRound.get(this.room.currentRoundId) ??
+      new Map<string, BercandaCard>();
+    const submissionsByUid: Record<string, BercandaCard> = {};
+    for (const [uid, card] of subMap.entries()) {
+      submissionsByUid[uid] = card;
+    }
+
+    const trans = transitionCumaBercandaToVoting({
+      state: cb,
+      submissionsByUid,
+    });
+
+    if (this.serverState) {
+      this.serverState = {
+        ...this.serverState,
+        bercandaEntriesMeta: trans.entriesMeta,
+      };
+    }
+
+    const roundSecrets = this.secretsByRound.get(this.room.currentRoundId);
+    if (roundSecrets) {
+      for (const [uid, entryId] of Object.entries(trans.ownedEntryIdsByUid)) {
+        const sec = roundSecrets.get(uid);
+        if (sec) {
+          roundSecrets.set(uid, {
+            ...sec,
+            bercandaOwnedEntryId: entryId,
+          });
+        }
+      }
+    }
+
+    this.room = {
+      ...this.room,
+      cumaBercandaState: trans.nextState,
+      updatedAt: now,
+    };
+    this.pushSystemMessage(
+      `Semua ${trans.nextState.entries.length} komik 3-panel siap! Saatnya voting upvote secara anonim.`,
+    );
+    return { phase: 'voting', entryCount: trans.nextState.entries.length };
+  }
+
+  private finalizeCumaBercandaLanReveal(
+    cb: NonNullable<RoomDoc['cumaBercandaState']>,
+    now: number,
+  ): Record<string, unknown> {
+    const entriesMeta = this.serverState?.bercandaEntriesMeta ?? {};
+    const rev = finalizeCumaBercandaReveal({
+      state: cb,
+      entriesMeta,
+      roundNumber: this.room.roundNumber,
+      resolvedAtMs: now,
+    });
+
+    this.applyScoreDeltas(rev.scoreDeltas);
+
+    this.room = {
+      ...this.room,
+      status: 'round_end',
+      currentMatchRounds: (this.room.currentMatchRounds ?? 0) + 1,
+      cumaBercandaState: rev.nextState,
+      lastRoundResult: rev.roundResult,
+      updatedAt: now,
+    };
+    this.pushSystemMessage(rev.roundResult.reason);
+    return {
+      revealed: true,
+      winnerEntryIds: rev.nextState.winnerEntryIds,
+    };
   }
 
   private reconcileActiveVoteAfterRosterChange(now: number): void {
