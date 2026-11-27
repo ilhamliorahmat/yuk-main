@@ -8,6 +8,7 @@ import {
   BERCANDA_SCENES_LIST,
   defaultCumaBercandaSettings,
   sanitizeCumaBercandaSettings,
+  sanitizeCustomBercandaCard,
 } from '@/lib/games/cuma-bercanda/packs';
 import type { BercandaPanelScene, CustomBercandaCard, RoomDoc } from '@/lib/games/types';
 import { updateCumaBercandaSettings } from '@/lib/platform/room-service';
@@ -77,18 +78,19 @@ export function CumaBercandaLobbySettings({
   const handleAddCustom = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isHost || saving) return;
-    const cleanCaption = caption.trim();
-    if (cleanCaption.length < 3) {
+    const newCard = sanitizeCustomBercandaCard(
+      {
+        scene,
+        speaker,
+        caption,
+        subtext,
+      },
+      customCards.length + 1,
+    );
+    if (!newCard) {
       setError('Dialog komik minimal 3 karakter.');
       return;
     }
-    const newCard: CustomBercandaCard = {
-      id: `cb_custom_${Date.now().toString(36)}`,
-      scene,
-      speaker: speaker.trim() || 'Tokoh',
-      caption: cleanCaption.slice(0, 120),
-      ...(subtext.trim() ? { subtext: subtext.trim().slice(0, 60) } : {}),
-    };
     const nextCustom = [newCard, ...customCards].slice(0, 30);
     setSpeaker('');
     setCaption('');
