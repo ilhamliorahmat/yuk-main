@@ -29,11 +29,69 @@ export function RoomChatPanel({
   const [sending, setSending] = useState(false);
   const [showPrompts, setShowPrompts] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const messagesScrollRef = useRef<HTMLDivElement | null>(null);
+  const isPinnedToBottomRef = useRef(true);
+  const prevMessageCountRef = useRef(0);
+  const lastHeightRef = useRef(0);
+
+  const scrollMessagesToBottom = (behavior: ScrollBehavior) => {
+    const el = messagesScrollRef.current;
+    if (!el || el.clientHeight === 0) return;
+    if (behavior === 'smooth' && typeof el.scrollTo === 'function') {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
+  };
+
+  const handleMessagesScroll = () => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isPinnedToBottomRef.current = distanceFromBottom <= 64;
+  };
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
+    const el = messagesScrollRef.current;
+    const prevCount = prevMessageCountRef.current;
+    const nextCount = messages.length;
+    prevMessageCountRef.current = nextCount;
+
+    if (!el || nextCount === 0) return;
+
+    const latestMsg = messages[nextCount - 1];
+    const sentByMe = latestMsg?.senderUid === myUid;
+
+    if (prevCount === 0) {
+      isPinnedToBottomRef.current = true;
+      scrollMessagesToBottom('auto');
+      return;
+    }
+
+    if (nextCount > prevCount && (isPinnedToBottomRef.current || sentByMe)) {
+      isPinnedToBottomRef.current = true;
+      scrollMessagesToBottom('smooth');
+    }
+  }, [messages, myUid]);
+
+  useEffect(() => {
+    const el = messagesScrollRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+
+    lastHeightRef.current = el.clientHeight;
+    const observer = new ResizeObserver(() => {
+      const prevHeight = lastHeightRef.current;
+      const nextHeight = el.clientHeight;
+      lastHeightRef.current = nextHeight;
+
+      if (prevHeight === 0 && nextHeight > 0 && isPinnedToBottomRef.current) {
+        el.scrollTop = el.scrollHeight;
+      }
+    });
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +100,7 @@ export function RoomChatPanel({
 
     setSending(true);
     setChatError(null);
+    isPinnedToBottomRef.current = true;
     try {
       await sendRoomChatMessage({
         roomId,
@@ -51,6 +110,7 @@ export function RoomChatPanel({
         type: 'chat',
       });
       setText('');
+      scrollMessagesToBottom('smooth');
     } catch {
       setChatError('Gagal mengirim pesan. Periksa aturan RTDB atau koneksi.');
     } finally {
@@ -59,7 +119,7 @@ export function RoomChatPanel({
   };
 
   return (
-    <section className="bg-[#131A24] border border-slate-800 rounded-2xl flex flex-col h-[460px] lg:h-[620px] overflow-hidden">
+    <section className="bg-[#131A24] border border-slate-800 rounded-2xl flex flex-col h-[min(460px,62dvh)] lg:h-[min(620px,calc(100dvh-9rem))] min-h-0 overflow-hidden overscroll-contain">
       <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <MessageSquare className="w-4 h-4 text-rose-400 shrink-0" />
@@ -76,7 +136,7 @@ export function RoomChatPanel({
       </div>
 
       {showPrompts && (
-        <div className="p-3 bg-[#0B1018] border-b border-slate-800 space-y-2 max-h-44 overflow-y-auto shrink-0">
+        <div className="p-3 bg-[#0B1018] border-b border-slate-800 space-y-2 max-h-44 overflow-y-auto overscroll-contain shrink-0">
           <p className="text-[11px] font-medium text-slate-400">
             Ketuk contoh kalimat untuk langsung dimasukkan ke kolom ketik:
           </p>
@@ -98,7 +158,11 @@ export function RoomChatPanel({
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div
+        ref={messagesScrollRef}
+        onScroll={handleMessagesScroll}
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-3"
+      >
         {messages.length === 0 ? (
           <div className="h-full flex items-center justify-center text-center text-xs text-slate-500 px-6">
             {emptyPlaceholder}
@@ -138,11 +202,10 @@ export function RoomChatPanel({
             );
           })
         )}
-        <div ref={bottomRef} />
       </div>
 
       {chatError && (
-        <div className="px-4 py-2 bg-rose-950/60 text-xs text-rose-200 border-t border-rose-800/60">
+        <div className="px-4 py-2 bg-rose-950/60 text-xs text-rose-200 border-t border-rose-800/60 shrink-0">
           {chatError}
         </div>
       )}
@@ -157,7 +220,7 @@ export function RoomChatPanel({
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Tulis pertanyaan atau jawaban..."
-          className="flex-1 min-h-[44px] px-3.5 rounded-xl bg-[#0B1018] border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-rose-500"
+          className="flex-1 min-w-0 min-h-[44px] px-3.5 rounded-xl bg-[#0B1018] border border-slate-800 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-rose-500"
         />
         <button
           type="submit"

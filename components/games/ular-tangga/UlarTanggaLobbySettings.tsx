@@ -56,6 +56,7 @@ export function UlarTanggaLobbySettings({
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lobbySection, setLobbySection] = useState<'scenario' | 'hero'>('hero');
 
   const handleUpdateScenario = async (scenarioId: UlarScenarioId) => {
     if (!isHost || saving) return;
@@ -123,14 +124,44 @@ export function UlarTanggaLobbySettings({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* Mobile Section Toggle so Lobby fits comfortably without heavy scroll */}
+      <div className="md:hidden grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => setLobbySection('hero')}
+          className={`min-h-[42px] rounded-xl text-xs font-bold border transition-colors ${
+            lobbySection === 'hero'
+              ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200'
+              : 'bg-[#131A24] border-slate-800 text-slate-300'
+          }`}
+        >
+          1. Kelas Hero ({mySelectedClass === 'acak' ? 'Acak' : ULAR_HERO_CLASSES[mySelectedClass]?.name})
+        </button>
+        <button
+          type="button"
+          onClick={() => setLobbySection('scenario')}
+          className={`min-h-[42px] rounded-xl text-xs font-bold border transition-colors ${
+            lobbySection === 'scenario'
+              ? 'bg-amber-500/20 border-amber-400 text-amber-200'
+              : 'bg-[#131A24] border-slate-800 text-slate-300'
+          }`}
+        >
+          2. Skenario ({activeScenario.name})
+        </button>
+      </div>
+
       {/* 1. Bundle Pack Skenario & Art Style */}
-      <section className="bg-[#131A24] border border-slate-800 rounded-2xl p-5 sm:p-6 space-y-4">
+      <section
+        className={`bg-[#131A24] border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3.5 ${
+          lobbySection === 'scenario' ? 'block' : 'hidden md:block'
+        }`}
+      >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <MapPin className="w-4 h-4 text-amber-400" />
-            <h2 className="text-base font-bold text-white">
-              Pilih Skenario &amp; Art Pack
+            <h2 className="text-sm sm:text-base font-bold text-white">
+              Skenario &amp; Aturan Papan
             </h2>
           </div>
           {!isHost && (
@@ -138,7 +169,7 @@ export function UlarTanggaLobbySettings({
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
           {ULAR_SCENARIO_ORDER.map((id) => {
             const pack = ULAR_SCENARIO_PACKS[id];
             const isSelected = settings.scenarioId === id;
@@ -148,7 +179,7 @@ export function UlarTanggaLobbySettings({
                 type="button"
                 disabled={!isHost || saving}
                 onClick={() => handleUpdateScenario(id)}
-                className={`text-left rounded-xl p-4 border transition-all space-y-2 ${
+                className={`text-left rounded-xl p-3.5 border transition-all space-y-1.5 ${
                   isSelected
                     ? `bg-gradient-to-br ${SCENARIO_SWATCH[id]} ring-1 ring-amber-400/35`
                     : 'bg-[#0B1018] border-slate-800 hover:border-slate-700'
@@ -163,7 +194,7 @@ export function UlarTanggaLobbySettings({
                   </div>
                   {isSelected && <Check className="w-4 h-4 text-amber-400 shrink-0" />}
                 </div>
-                <p className="text-xs text-slate-300 leading-relaxed line-clamp-3">
+                <p className="text-xs text-slate-300 leading-snug line-clamp-2">
                   {pack.prologue}
                 </p>
               </button>
@@ -172,32 +203,29 @@ export function UlarTanggaLobbySettings({
         </div>
 
         {/* Selected Scenario Lore & RP Prompt Preview */}
-        <div className="rounded-xl bg-[#0B1018] border border-slate-800 p-4 space-y-2">
+        <div className="rounded-xl bg-[#0B1018] border border-slate-800 p-3.5 space-y-1.5">
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
             <span className="font-bold text-amber-300">
-              Prolog Skenario · {activeScenario.name}
+              {activeScenario.name}
             </span>
-            <span className="text-slate-400">
-              {activeScenario.ladderLabel} · {activeScenario.snakeLabel} · {activeScenario.merchantLabel}
+            <span className="text-slate-400 text-[11px]">
+              {activeScenario.ladderLabel} · {activeScenario.snakeLabel}
             </span>
           </div>
-          <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
-            {activeScenario.prologue}
-          </p>
-          <p className="text-xs text-cyan-300/90 flex items-start gap-1.5 pt-1">
+          <p className="text-xs text-cyan-300/90 flex items-start gap-1.5">
             <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5" />
             <span>
-              <strong>Momen Roleplay:</strong> {activeScenario.roleplayPrompt}
+              <strong>Momen RP:</strong> {activeScenario.roleplayPrompt}
             </span>
           </p>
         </div>
 
         {/* Board Mode & Petak 100 Rule */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-          <div className="rounded-xl bg-[#0B1018] border border-slate-800 p-3.5 space-y-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="rounded-xl bg-[#0B1018] border border-slate-800 p-3 space-y-2">
             <p className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
               <Flame className="w-3.5 h-3.5 text-rose-400" />
-              <span>Tingkat Kesulitan Papan</span>
+              <span>Kesulitan Papan</span>
             </p>
             <div className="grid grid-cols-2 gap-2">
               {(['standar', 'brutal'] as UlarBoardMode[]).map((mode) => {
@@ -208,7 +236,7 @@ export function UlarTanggaLobbySettings({
                     type="button"
                     disabled={!isHost || saving}
                     onClick={() => handleBoardMode(mode)}
-                    className={`min-h-[42px] rounded-lg border px-3 text-xs font-bold transition-colors ${
+                    className={`min-h-[40px] rounded-lg border px-2.5 text-xs font-bold transition-colors ${
                       active
                         ? mode === 'brutal'
                           ? 'bg-rose-500/20 border-rose-400 text-rose-200'
@@ -216,20 +244,20 @@ export function UlarTanggaLobbySettings({
                         : 'bg-[#131A24] border-slate-800 text-slate-400 hover:text-white'
                     } disabled:cursor-default`}
                   >
-                    {mode === 'standar' ? 'Standar (7 Ular)' : 'Brutal (9 Ular +1 Power)'}
+                    {mode === 'standar' ? 'Standar (7 Ular)' : 'Brutal (9 Ular +1)'}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          <div className="rounded-xl bg-[#0B1018] border border-slate-800 p-3.5 flex items-center justify-between gap-3">
+          <div className="rounded-xl bg-[#0B1018] border border-slate-800 p-3 flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-bold text-slate-200">Pantul Balik di Petak 100</p>
+              <p className="text-xs font-bold text-slate-200">Pantul Balik Petak 100</p>
               <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
                 {settings.exactFinishBounce
-                  ? 'Aktif: Dadu berlebih dari 100 akan memantul mundur.'
-                  : 'Mati: Lewat 100 langsung dianggap finish.'}
+                  ? 'Aktif: Dadu berlebih memantul mundur.'
+                  : 'Mati: Lewat 100 langsung finish.'}
               </p>
             </div>
             <button
@@ -242,23 +270,27 @@ export function UlarTanggaLobbySettings({
                   : 'bg-slate-800 border-slate-700 text-slate-300'
               } disabled:opacity-60`}
             >
-              {settings.exactFinishBounce ? 'Aktif' : 'Nonaktif'}
+              {settings.exactFinishBounce ? 'Aktif' : 'Mati'}
             </button>
           </div>
         </div>
       </section>
 
       {/* 2. Per-Seat Hero Class Picker */}
-      <section className="bg-[#131A24] border border-slate-800 rounded-2xl p-5 sm:p-6 space-y-4">
+      <section
+        className={`bg-[#131A24] border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3.5 ${
+          lobbySection === 'hero' ? 'block' : 'hidden md:block'
+        }`}
+      >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Swords className="w-4 h-4 text-emerald-400" />
-            <h2 className="text-base font-bold text-white">
+            <h2 className="text-sm sm:text-base font-bold text-white">
               Pilih Kelas Hero ({myName})
             </h2>
           </div>
           <span className="text-xs text-slate-400">
-            Jika berbagi HP (Numpang), ganti kursi di strip atas
+            Atau ganti kursi Numpang di strip atas
           </span>
         </div>
 

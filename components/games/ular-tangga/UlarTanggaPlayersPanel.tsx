@@ -101,11 +101,6 @@ export function UlarTanggaPlayersPanel({
                         {player.displayName.slice(0, 1).toUpperCase()}
                       </div>
                     )}
-                    <span
-                      className={`absolute -bottom-0.5 -right-0.5 z-30 w-2.5 h-2.5 rounded-full border-2 border-[#0B1018] ${
-                        isOnline ? 'bg-emerald-400' : 'bg-slate-600'
-                      }`}
-                    />
                   </div>
 
                   <div className="min-w-0">
@@ -124,6 +119,12 @@ export function UlarTanggaPlayersPanel({
 
                     <div className="text-xs text-slate-400 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                       <span>{classLabel}</span>
+                      {!isOnline && (
+                        <>
+                          <span>·</span>
+                          <span className="text-slate-500 font-medium">Offline</span>
+                        </>
+                      )}
                       {player.isBrb && (
                         <>
                           <span>·</span>

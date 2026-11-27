@@ -385,50 +385,120 @@ export function UlarTanggaBoard({
       ? `monster-${state.turnNumber}-${state.activeEncounter.tile}`
       : 'calm';
 
+  const [selectedTile, setSelectedTile] = useState<number | null>(null);
+
   const effective3D = is3D && !reducedMotion;
 
+  const selectedTileInfo = useMemo(() => {
+    if (compact || selectedTile === null) return null;
+    const tile = selectedTile;
+    const ladderDest = ladderFromMap.get(tile);
+    const snakeIndex = snakes.findIndex((s) => s.from === tile);
+    const snakeDest = snakeIndex >= 0 ? snakes[snakeIndex].to : undefined;
+    const isChest = chestSet.has(tile);
+    const isMonster = monsterSet.has(tile);
+    const isShop = shopSet.has(tile);
+    const heroesHere = state
+      ? Object.values(state.heroesByUid).filter((h) => h.tile === tile)
+      : [];
+
+    let badge = 'Petak Biasa';
+    let badgeColor = 'text-slate-300';
+    let detail = 'Petak aman untuk berhenti sebelum giliran berikutnya.';
+
+    if (tile === 100) {
+      badge = 'Puncak Juara';
+      badgeColor = 'text-amber-300';
+      detail = 'Petualang pertama yang menapak tepat di Petak 100 memenangkan ronde.';
+    } else if (tile === 1) {
+      badge = 'Titik Awal';
+      badgeColor = 'text-emerald-300';
+      detail = 'Semua petualang memulai pendakian dari petak ini.';
+    } else if (ladderDest !== undefined) {
+      badge = pack.ladderLabel;
+      badgeColor = 'text-emerald-300';
+      detail = `Naik cepat ke Petak ${ladderDest} (+5 HP & bonus kelas Tabib jika ada).`;
+    } else if (snakeDest !== undefined) {
+      badge = `${pack.snakeLabel}${snakeIndex >= pack.snakesStandard.length ? ' (Brutal)' : ''}`;
+      badgeColor = 'text-rose-300';
+      detail = `Terseret turun ke Petak ${snakeDest} (-2 HP, dapat ditangkis Perisai).`;
+    } else if (isChest) {
+      badge = 'Peti Harta';
+      badgeColor = 'text-amber-300';
+      detail = 'Beri tambahan Koin acak atau peluang mendapat item rahasia.';
+    } else if (isMonster) {
+      badge = 'Sarang Monster';
+      badgeColor = 'text-orange-300';
+      const activeHere =
+        state?.phase === 'encounter' &&
+        state.activeEncounter?.type === 'monster' &&
+        state.activeEncounter.tile === tile
+          ? state.activeEncounter
+          : null;
+      detail = activeHere
+        ? `Hadangan aktif: ${activeHere.monsterName} (Power ${activeHere.monsterPower}, Damage ${activeHere.monsterDamage} HP, +${activeHere.monsterRewardGold}G).`
+        : `Memicu duel lawan penjaga skenario: ${pack.monsters
+            .map((m) => `${m.name} (P${m.power})`)
+            .join(', ')}.`;
+    } else if (isShop) {
+      badge = pack.merchantLabel;
+      badgeColor = 'text-cyan-300';
+      detail = 'Kesempatan membeli 1 item taktis ke Tas Rahasia (maks. 3 slot).';
+    }
+
+    return {
+      tile,
+      badge,
+      badgeColor,
+      detail,
+      jumpDest: ladderDest ?? snakeDest ?? null,
+      jumpKind: ladderDest !== undefined ? ('ladder' as const) : snakeDest !== undefined ? ('snake' as const) : null,
+      heroesHere,
+    };
+  }, [compact, selectedTile, ladderFromMap, snakes, chestSet, monsterSet, shopSet, state, pack]);
+
   return (
-    <div className={`rounded-2xl border p-2.5 sm:p-4 space-y-3 ${theme.frame}`}>
-      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-        <div className="flex flex-wrap items-center gap-3">
-          <p className={`text-[11px] font-bold uppercase tracking-wider ${theme.legendAccent}`}>
-            {pack.name} · {pack.genre}
+    <div className={`rounded-2xl border p-2.5 sm:p-3.5 space-y-2.5 ${theme.frame}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <p className={`text-[11px] font-bold uppercase tracking-wider truncate ${theme.legendAccent}`}>
+            {pack.name}
           </p>
           {!compact && (
             <button
               type="button"
               onClick={handleToggle3D}
-              className={`min-h-[30px] px-2.5 rounded-lg border text-[11px] font-bold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap ${
+              className={`min-h-[28px] px-2 rounded-lg border text-[11px] font-bold inline-flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
                 effective3D
                   ? 'bg-amber-400/15 border-amber-400/50 text-amber-200'
                   : 'bg-[#0B1018] border-slate-700 text-slate-300 hover:text-white'
               }`}
             >
-              {effective3D ? <Box className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
-              <span>{effective3D ? '3D Meja' : '2D Datar'}</span>
+              {effective3D ? <Box className="w-3 h-3" /> : <Square className="w-3 h-3" />}
+              <span>{effective3D ? '3D' : '2D'}</span>
             </button>
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-300">
-          <span className="inline-flex items-center gap-1">
-            <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
-            <span>{pack.ladderLabel}</span>
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] sm:text-[11px] text-slate-300">
+          <span className="inline-flex items-center gap-1" title={pack.ladderLabel}>
+            <ArrowUpRight className="w-3 h-3 text-emerald-400" />
+            <span>Tangga</span>
+          </span>
+          <span className="inline-flex items-center gap-1" title={pack.snakeLabel}>
+            <TriangleAlert className="w-3 h-3 text-rose-400" />
+            <span>Ular</span>
           </span>
           <span className="inline-flex items-center gap-1">
-            <TriangleAlert className="w-3.5 h-3.5 text-rose-400" />
-            <span>{pack.snakeLabel}</span>
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Coins className="w-3.5 h-3.5 text-amber-400" />
+            <Coins className="w-3 h-3 text-amber-400" />
             <span>Peti</span>
           </span>
           <span className="inline-flex items-center gap-1">
-            <Swords className="w-3.5 h-3.5 text-orange-400" />
+            <Swords className="w-3 h-3 text-orange-400" />
             <span>Monster</span>
           </span>
           <span className="inline-flex items-center gap-1">
-            <Store className="w-3.5 h-3.5 text-cyan-400" />
+            <Store className="w-3 h-3 text-cyan-400" />
             <span>Kedai</span>
           </span>
         </div>
@@ -436,7 +506,7 @@ export function UlarTanggaBoard({
 
       {/* 3D Perspective Tabletop Wrapper */}
       <div
-        className="w-full flex justify-center overflow-visible py-1"
+        className="w-full flex justify-center overflow-visible py-0.5"
         style={{
           perspective: effective3D ? '1150px' : 'none',
         }}
@@ -450,12 +520,12 @@ export function UlarTanggaBoard({
               : { x: [0, -6, 6, -4, 4, 0] }
           }
           transition={{ duration: 0.36 }}
-          className={`relative w-full aspect-square max-w-[680px] mx-auto select-none rounded-xl transition-transform duration-500 ${
+          className={`relative w-full aspect-square max-w-[590px] mx-auto select-none rounded-xl transition-transform duration-500 ${
             effective3D ? theme.boardSlab : ''
           }`}
           style={{
             transformStyle: effective3D ? 'preserve-3d' : 'flat',
-            transform: effective3D ? 'rotateX(20deg) scale(0.96)' : 'rotateX(0deg) scale(1)',
+            transform: effective3D ? 'rotateX(18deg) scale(0.96)' : 'rotateX(0deg) scale(1)',
           }}
         >
           {/* Base Grid */}
@@ -469,19 +539,27 @@ export function UlarTanggaBoard({
               const ladderDest = ladderFromMap.get(cell.tile);
               const snakeDest = snakeFromMap.get(cell.tile);
               const isHighlighted = activeTileHighlight === cell.tile;
+              const isSelected = !compact && selectedTile === cell.tile;
+              const isLinkedDest =
+                !compact && selectedTileInfo?.jumpDest === cell.tile;
               const tileClass = isFinish
                 ? theme.finishTile
                 : (cell.rowFromTop + cell.col) % 2 === 0
                   ? theme.evenTile
                   : theme.oddTile;
 
-              return (
-                <div
-                  key={cell.tile}
-                  className={`relative rounded-[4px] sm:rounded-md border p-0.5 sm:p-1 flex flex-col justify-between overflow-hidden transition-colors duration-200 ${tileClass} ${
-                    isHighlighted ? 'ring-2 ring-amber-300/90 brightness-125' : ''
-                  }`}
-                >
+              const highlightRing = isSelected
+                ? 'ring-2 ring-white brightness-125 z-10'
+                : isLinkedDest
+                  ? selectedTileInfo?.jumpKind === 'ladder'
+                    ? 'ring-2 ring-emerald-400 brightness-125 z-10'
+                    : 'ring-2 ring-rose-400 brightness-125 z-10'
+                  : isHighlighted
+                    ? 'ring-2 ring-amber-300/90 brightness-125'
+                    : '';
+
+              const inner = (
+                <>
                   <span
                     className={`font-mono-tabular leading-none font-bold ${
                       compact ? 'text-[8px] sm:text-[10px]' : 'text-[9px] sm:text-[11px]'
@@ -511,7 +589,32 @@ export function UlarTanggaBoard({
                       </span>
                     )}
                   </div>
-                </div>
+                </>
+              );
+
+              if (compact) {
+                return (
+                  <div
+                    key={cell.tile}
+                    className={`relative rounded-[4px] sm:rounded-md border p-0.5 sm:p-1 flex flex-col justify-between overflow-hidden transition-colors duration-200 ${tileClass} ${highlightRing}`}
+                  >
+                    {inner}
+                  </div>
+                );
+              }
+
+              return (
+                <button
+                  key={cell.tile}
+                  type="button"
+                  onClick={() =>
+                    setSelectedTile((prev) => (prev === cell.tile ? null : cell.tile))
+                  }
+                  aria-label={`Periksa Petak ${cell.tile}`}
+                  className={`relative text-left rounded-[4px] sm:rounded-md border p-0.5 sm:p-1 flex flex-col justify-between overflow-hidden transition-colors duration-150 hover:brightness-125 focus:outline-none ${tileClass} ${highlightRing}`}
+                >
+                  {inner}
+                </button>
               );
             })}
           </div>
@@ -716,6 +819,40 @@ export function UlarTanggaBoard({
           )}
         </motion.div>
       </div>
+
+      {/* Interactive Tile Inspector */}
+      {selectedTileInfo && (
+        <div className="rounded-xl bg-[#0B1018]/95 border border-slate-700/80 px-3 py-2.5 flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="font-mono-tabular font-black text-white">
+                Petak {selectedTileInfo.tile}
+              </span>
+              <span className={`font-bold ${selectedTileInfo.badgeColor}`}>
+                · {selectedTileInfo.badge}
+              </span>
+            </div>
+            <p className="text-[11px] sm:text-xs text-slate-300 leading-snug">
+              {selectedTileInfo.detail}
+            </p>
+            {selectedTileInfo.heroesHere.length > 0 && (
+              <p className="text-[11px] text-amber-200 font-mono-tabular">
+                Di petak ini:{' '}
+                {selectedTileInfo.heroesHere
+                  .map((h) => `${h.displayName} (${h.hp} HP · ${h.gold}G)`)
+                  .join(', ')}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setSelectedTile(null)}
+            className="text-[11px] font-semibold text-slate-400 hover:text-white px-2 py-1 rounded-lg border border-slate-800 bg-[#131A24] shrink-0"
+          >
+            Tutup
+          </button>
+        </div>
+      )}
     </div>
   );
 }
