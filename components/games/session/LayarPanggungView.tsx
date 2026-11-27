@@ -6,6 +6,7 @@ import {
   Brush,
   Coffee,
   Dices,
+  Flame,
   LogOut,
   Monitor,
   Moon,
@@ -21,11 +22,13 @@ import {
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { BercandaComicPanel, VoteScoreBadge } from '@/components/games/cuma-bercanda/BercandaComicPanel';
+import { MejaCardGraphic, MejaChamberIndicator } from '@/components/games/meja-pembohong/MejaCardGraphic';
 import { PelukisCanvas } from '@/components/games/pelukis-gadungan/PelukisCanvas';
 import { FrequencyDial } from '@/components/games/satu-frekuensi/FrequencyDial';
 import { UlarDice3D } from '@/components/games/ular-tangga/UlarDice3D';
 import { UlarTanggaBoard } from '@/components/games/ular-tangga/UlarTanggaBoard';
 import { MALAM_SILUMAN_ROLES } from '@/lib/games/malam-siluman/roles-id';
+import { MEJA_RANK_LABELS } from '@/lib/games/meja-pembohong/engine';
 import { getUlarScenarioPack } from '@/lib/games/ular-tangga/packs';
 import {
   evaluateMajorityVoteProgress,
@@ -61,6 +64,7 @@ const GAME_META: Record<
   malam_siluman: { title: 'Malam Siluman', icon: Moon, accent: 'text-rose-400' },
   ular_tangga: { title: 'Ular Tangga RP', icon: Dices, accent: 'text-amber-400' },
   cuma_bercanda: { title: 'Cuma Bercanda', icon: SmilePlus, accent: 'text-amber-300' },
+  meja_pembohong: { title: 'Meja Pembohong', icon: Flame, accent: 'text-emerald-400' },
 };
 
 function formatClock(sec: number): string {
@@ -148,6 +152,12 @@ export function LayarPanggungView({
     }
     if (room.gameType === 'ular_tangga') {
       return `${room.ularTanggaState?.winnerName ?? 'Juara'} Menaklukkan Petak 100!`;
+    }
+    if (room.gameType === 'meja_pembohong') {
+      const winners = room.mejaPembohongState?.winnerNames ?? [];
+      return winners.length > 0
+        ? `${winners.join(' & ')} Menaklukkan Meja!`
+        : 'Meja Pembohong Selesai!';
     }
     return `Hasil Ronde #${res.roundNumber}`;
   }, [room]);
@@ -953,6 +963,159 @@ export function LayarPanggungView({
                         })}
                       </div>
                     )}
+                  </div>
+                );
+              })()}
+
+              {/* GAME #9: MEJA PEMBOHONG STAGE (Public Table Rank, Face-Down Pile & Challenge Reveal) */}
+              {room.gameType === 'meja_pembohong' && room.mejaPembohongState && (() => {
+                const mp = room.mejaPembohongState;
+                const eliminatedSet = new Set(mp.eliminatedUids);
+                return (
+                  <div className="space-y-4">
+                    <div className="rounded-2xl bg-gradient-to-br from-[#0F241C] via-[#131A24] to-[#111824] border border-emerald-500/35 p-6 space-y-5">
+                      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/90 pb-4">
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                            {mp.mode === 'cepat'
+                              ? `Tangan ${mp.subRoundNumber}/${mp.maxSubRounds ?? 5} · Mode Skor Cepat`
+                              : `Tangan #${mp.subRoundNumber} · Silinder 1/6 Eliminasi`}
+                          </p>
+                          <h2 className="text-2xl sm:text-3xl font-black text-white mt-1">
+                            {mp.phase === 'reveal'
+                              ? `Pemenang: ${mp.winnerNames.join(' & ') || '—'}`
+                              : mp.phase === 'challenge_reveal'
+                                ? 'Pembukaan Kartu Tantangan!'
+                                : `Giliran: ${mp.currentTurnName}`}
+                          </h2>
+                        </div>
+                        <div className="px-4 py-2 rounded-xl bg-[#0B1018] border border-emerald-500/40 text-right">
+                          <p className="text-[11px] uppercase tracking-wider text-slate-400">
+                            Meja Wajib
+                          </p>
+                          <p className="text-xl font-black text-emerald-300">
+                            Kartu {MEJA_RANK_LABELS[mp.tableRank]}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                        <div className="md:col-span-4 flex flex-col items-center justify-center rounded-xl bg-[#0B1018]/80 border border-slate-800 p-4 gap-2">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                            Kartu Meja Ronde Ini
+                          </span>
+                          <MejaCardGraphic rank={mp.tableRank} />
+                        </div>
+
+                        <div className="md:col-span-8 rounded-xl bg-[#0B1018]/80 border border-slate-800 p-4 space-y-3">
+                          {mp.phase === 'challenge_reveal' && mp.lastChallenge ? (
+                            <div className="space-y-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                                  {mp.lastChallenge.challengerName} Teriak BOHONG ke{' '}
+                                  {mp.lastChallenge.accusedName}!
+                                </span>
+                                <span
+                                  className={`text-xs font-black px-2.5 py-1 rounded-lg ${
+                                    mp.lastChallenge.wasLie
+                                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                  }`}
+                                >
+                                  {mp.lastChallenge.wasLie ? 'TERBUKTI BOHONG!' : 'TERNYATA JUJUR!'}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                {mp.lastChallenge.revealedCards.map((c) => (
+                                  <MejaCardGraphic
+                                    key={c.id}
+                                    rank={c.rank}
+                                    compact
+                                    matchedTableRank={mp.tableRank}
+                                  />
+                                ))}
+                              </div>
+                              <p className="text-sm text-slate-200 leading-relaxed">
+                                {mp.lastChallenge.summary}
+                              </p>
+                            </div>
+                          ) : mp.lastClaim ? (
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between text-xs font-bold text-slate-300">
+                                <span>Tumpukan Meja ({mp.pileCardCount} kartu)</span>
+                                <span className="text-amber-300">
+                                  Klaim Terakhir: {mp.lastClaim.byName}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                {Array.from({ length: mp.lastClaim.cardCount }, (_, idx) => (
+                                  <MejaCardGraphic key={idx} faceDown compact />
+                                ))}
+                              </div>
+                              <p className="text-sm font-bold text-white">
+                                “Saya menaruh {mp.lastClaim.cardCount} kartu{' '}
+                                <span className="text-emerald-300">
+                                  {MEJA_RANK_LABELS[mp.lastClaim.claimedRank]}
+                                </span>
+                                .”
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="py-6 text-center space-y-1">
+                              <p className="text-base font-bold text-white">
+                                Meja Bersih — Menunggu Kartu Pembuka
+                              </p>
+                              <p className="text-xs text-slate-400">
+                                Semua kartu rahasia hanya terlihat di HP pemain masing-masing.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Player Seats & Chamber/Card Count Status */}
+                    <div className="rounded-2xl bg-[#131A24] border border-slate-800 p-5 space-y-3">
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                        Status Kursi Meja ({mp.livingUids.length} Bertahan · {mp.eliminatedUids.length} Gugur)
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {mp.participantUids.map((uid) => {
+                          const isElim = eliminatedSet.has(uid);
+                          const isTurn = mp.phase === 'playing' && mp.currentTurnUid === uid;
+                          const cardsLeft = mp.handCountByUid[uid] ?? 0;
+                          const shots = mp.shotsTakenByUid[uid] ?? 0;
+                          return (
+                            <div
+                              key={uid}
+                              className={`rounded-xl px-4 py-3 border flex items-center justify-between gap-2 ${
+                                isElim
+                                  ? 'bg-[#0B1018]/60 border-rose-900/50 opacity-65'
+                                  : isTurn
+                                    ? 'bg-emerald-500/10 border-emerald-400/60'
+                                    : 'bg-[#0B1018] border-slate-800'
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <p className={`text-sm font-bold truncate ${isElim ? 'line-through text-slate-400' : 'text-white'}`}>
+                                  {mp.participantNamesByUid[uid] ?? 'Pemain'}
+                                </p>
+                                <p className="text-[11px] text-slate-400 tabular-nums">
+                                  {isElim ? 'Tersingkir' : `${cardsLeft} kartu di tangan`}
+                                </p>
+                              </div>
+                              {mp.mode === 'silinder' && (
+                                <MejaChamberIndicator
+                                  shotsTaken={shots}
+                                  eliminated={isElim}
+                                  compact
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 );
               })()}

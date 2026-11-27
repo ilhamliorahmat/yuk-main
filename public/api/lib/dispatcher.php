@@ -6,6 +6,7 @@ require_once __DIR__ . '/engine_games_social.php';
 require_once __DIR__ . '/engine_malam_siluman.php';
 require_once __DIR__ . '/engine_ular_tangga.php';
 require_once __DIR__ . '/engine_cuma_bercanda.php';
+require_once __DIR__ . '/engine_meja_pembohong.php';
 
 function yukmain_owns_seat(string $deviceUid, string $targetUid, array $playersByUid): bool
 {
@@ -317,6 +318,10 @@ function yukmain_dispatch_room_action(
                 $nextUt = yukmain_ut_ensure_turn_valid($room, $updatedPlayers);
                 if ($nextUt !== null) {
                     $room['ularTanggaState'] = $nextUt;
+                }
+                $mpFailoverMsg = yukmain_mp_ensure_turn_valid($room, $updatedPlayers, $now);
+                if ($mpFailoverMsg !== null) {
+                    $pushSys($mpFailoverMsg);
                 }
                 $room['updatedAt'] = $now;
                 $pushSys(
@@ -2163,6 +2168,208 @@ function yukmain_dispatch_room_action(
                 break;
             }
 
+            // ===================== GAME #9: MEJA PEMBOHONG =====================
+            case 'updateMejaPembohongSettings': {
+                yukmain_require_host($senderUid, $room);
+                $settings = yukmain_sanitize_meja_pembohong_settings(
+                    $payload['settings'] ?? ($room['mejaPembohongSettings'] ?? null)
+                );
+                $room['mejaPembohongSettings'] = $settings;
+                $room['updatedAt'] = $now;
+                break;
+            }
+
+            case 'startMejaPembohongRound': {
+                yukmain_require_host($senderUid, $room);
+                if (($room['gameType'] ?? '') !== 'meja_pembohong') {
+                    throw new RuntimeException('Ruang tidak disetel untuk Meja Pembohong.');
+                }
+                $nextRoundNum = ((int) ($room['roundNumber'] ?? 0)) + 1;
+                $roundId = "r_{$now}_{$nextRoundNum}";
+                $deal = yukmain_deal_meja_pembohong_round(
+                    $roundId,
+                    $nextRoundNum,
+                    $players,
+                    $room['mejaPembohongSettings'] ?? null,
+                    $now
+                );
+
+                yukmain_save_server_state($tx, $roomId, $roundId, $deal['serverState'], $now);
+                yukmain_save_round_secrets($tx, $roomId, $roundId, $deal['playerSecrets'], $now);
+
+                $room['status'] = 'playing';
+                $room['roundNumber'] = $nextRoundNum;
+                $room['currentRoundId'] = $roundId;
+                $room['roundEndsAtMs'] = 0;
+                $room['firstSpeakerUid'] = $deal['mejaPembohongState']['currentTurnUid'];
+                $room['mejaPembohongState'] = $deal['mejaPembohongState'];
+                $room['activeVote'] = null;
+                $room['pendingSpyGuess'] = null;
+                $room['lastRoundResult'] = null;
+                $room['updatedAt'] = $now;
+
+                $rankUpper = mb_strtoupper(yukmain_meja_rank_label($deal['mejaPembohongState']['tableRank']), 'UTF-8');
+                $pushSys("Meja Pembohong Ronde #{$nextRoundNum} dimulai! Meja: {$rankUpper} · Giliran: {$deal['mejaPembohongState']['currentTurnName']}.");
+                $result = ['roundId' => $roundId, 'roundNumber' => $nextRoundNum];
+                break;
+            }
+
+            case 'playMejaPembohongCards': {
+                $actor = yukmain_resolve_actor($senderUid, $payload, $playersByUid);
+                $actorUid = $actor['uid'];
+                if (($room['status'] ?? '') !== 'playing' || empty($room['mejaPembohongState']) || !is_array($serverState)) {
+                    throw new RuntimeException('Tidak ada ronde Meja Pembohong yang aktif.');
+                }
+                $rawIds = is_array($payload['cardIds'] ?? null) ? $payload['cardIds'] : [];
+                $claimId = 'cl_' . $now . '_' . yukmain_random_hex(2);
+                $res = yukmain_play_meja_cards(
+                    $room['mejaPembohongState'],
+                    $serverState['mejaHandsByUid'] ?? [],
+                    $actorUid,
+                    $rawIds,
+                    $claimId
+                );
+
+                $serverState['mejaHandsByUid'] = $res['nextHandsByUid'];
+                $serverState['mejaPendingClaimCards'] = $res['playedCards'];
+                yukmain_save_server_state($tx, $roomId, $currentRoundId, $serverState, $now);
+
+                $sec = yukmain_load_round_secret($tx, $roomId, $currentRoundId, $actorUid);
+                if (is_array($sec)) {
+                    $sec['mejaHand'] = $res['nextHandsByUid'][$actorUid] ?? [];
+                    yukmain_save_round_secret_single($tx, $roomId, $currentRoundId, $actorUid, $sec, $now);
+                }
+
+                $room['mejaPembohongState'] = $res['nextState'];
+                $room['updatedAt'] = $now;
+                $result = [
+                    'pileCardCount' => $res['nextState']['pileCardCount'],
+                    'nextTurnUid'   => $res['nextState']['currentTurnUid'],
+                ];
+                break;
+            }
+
+            case 'callMejaPembohongLiar': {
+                $actor = yukmain_resolve_actor($senderUid, $payload, $playersByUid);
+                $actorUid = $actor['uid'];
+                if (($room['status'] ?? '') !== 'playing' || empty($room['mejaPembohongState']) || !is_array($serverState)) {
+                    throw new RuntimeException('Tidak ada ronde Meja Pembohong yang aktif.');
+                }
+
+                $scoresByUid = [];
+                foreach ($players as $p) {
+                    $scoresByUid[$p['uid']] = (int) ($p['score'] ?? 0);
+                }
+
+                $res = yukmain_resolve_meja_challenge(
+                    $room['mejaPembohongState'],
+                    $actorUid,
+                    $serverState['mejaPendingClaimCards'] ?? [],
+                    $serverState['mejaTrapSlotByUid'] ?? [],
+                    $scoresByUid,
+                    (int) ($room['roundNumber'] ?? 1),
+                    $now
+                );
+
+                yukmain_apply_score_deltas($tx, $roomId, $playersByUid, $res['scoreDeltas'], $now);
+                $serverState['mejaPendingClaimCards'] = [];
+                yukmain_save_server_state($tx, $roomId, $currentRoundId, $serverState, $now);
+
+                if (!empty($res['matchFinished'])) {
+                    $room['status'] = 'round_end';
+                    $room['currentMatchRounds'] = ((int) ($room['currentMatchRounds'] ?? 0)) + 1;
+                    $room['lastRoundResult'] = $res['roundResult'];
+                }
+                $room['mejaPembohongState'] = $res['nextState'];
+                $room['updatedAt'] = $now;
+                $pushSys($res['challengeReveal']['summary']);
+                $result = [
+                    'wasLie'        => $res['challengeReveal']['wasLie'],
+                    'hitBullet'     => $res['challengeReveal']['hitBullet'],
+                    'matchFinished' => $res['matchFinished'],
+                ];
+                break;
+            }
+
+            case 'nextMejaPembohongSubRound': {
+                if (($room['status'] ?? '') !== 'playing' || empty($room['mejaPembohongState']) || !is_array($serverState)) {
+                    throw new RuntimeException('Tidak ada ronde Meja Pembohong yang aktif.');
+                }
+                $mp = $room['mejaPembohongState'];
+                $currUid = (string) ($mp['currentTurnUid'] ?? '');
+                $canAcceptEmpty =
+                    (($mp['phase'] ?? '') === 'playing') &&
+                    ((int) ($mp['handCountByUid'][$currUid] ?? 0) === 0) &&
+                    ($senderUid === ($room['hostUid'] ?? '') || yukmain_owns_seat($senderUid, $currUid, $playersByUid));
+
+                if (($mp['phase'] ?? '') === 'challenge_reveal') {
+                    yukmain_require_host($senderUid, $room);
+                } elseif (!$canAcceptEmpty) {
+                    throw new RuntimeException('Belum saatnya membagikan tangan kartu baru.');
+                }
+
+                $nextSub = yukmain_start_next_meja_sub_round($mp);
+                if (!empty($nextSub['matchFinished'])) {
+                    $scoresByUid = [];
+                    foreach ($players as $p) {
+                        $scoresByUid[$p['uid']] = (int) ($p['score'] ?? 0);
+                    }
+                    $leaders = yukmain_meja_compute_leaders(
+                        $mp['participantUids'] ?? [],
+                        $mp['participantNamesByUid'] ?? [],
+                        $scoresByUid
+                    );
+                    $champText = !empty($leaders['winnerNames']) ? implode(' & ', $leaders['winnerNames']) : 'Juara';
+                    $reason = "Meja Pembohong selesai! Pemenang: {$champText}.";
+                    $tableLabel = yukmain_meja_rank_label((string) ($mp['tableRank'] ?? 'raja'));
+
+                    $room['status'] = 'round_end';
+                    $room['currentMatchRounds'] = ((int) ($room['currentMatchRounds'] ?? 0)) + 1;
+                    $room['mejaPembohongState'] = array_merge($nextSub['nextState'], [
+                        'phase'       => 'reveal',
+                        'winnerUids'  => $leaders['winnerUids'],
+                        'winnerNames' => $leaders['winnerNames'],
+                    ]);
+                    $room['lastRoundResult'] = [
+                        'roundNumber'     => (int) ($room['roundNumber'] ?? 1),
+                        'winnerTeam'      => 'pembohong',
+                        'reason'          => $reason,
+                        'locationName'    => "Meja {$tableLabel}",
+                        'guessedLocation' => null,
+                        'spyUids'         => $leaders['winnerUids'],
+                        'spyNames'        => $leaders['winnerNames'],
+                        'resolvedAtMs'    => $now,
+                        'scoresApplied'   => true,
+                    ];
+                    $room['updatedAt'] = $now;
+                    $pushSys($reason);
+                    $result = ['matchFinished' => true];
+                    break;
+                }
+
+                $serverState['mejaHandsByUid'] = $nextSub['nextHandsByUid'];
+                $serverState['mejaPendingClaimCards'] = [];
+                yukmain_save_server_state($tx, $roomId, $currentRoundId, $serverState, $now);
+
+                foreach (($mp['participantUids'] ?? []) as $uid) {
+                    $sec = yukmain_load_round_secret($tx, $roomId, $currentRoundId, (string) $uid);
+                    if (is_array($sec)) {
+                        $sec['mejaHand'] = $nextSub['nextHandsByUid'][$uid] ?? [];
+                        yukmain_save_round_secret_single($tx, $roomId, $currentRoundId, (string) $uid, $sec, $now);
+                    }
+                }
+
+                $room['mejaPembohongState'] = $nextSub['nextState'];
+                $room['updatedAt'] = $now;
+                $rankUpper = mb_strtoupper(yukmain_meja_rank_label($nextSub['nextState']['tableRank']), 'UTF-8');
+                $pushSys("Tangan #{$nextSub['nextState']['subRoundNumber']} dibuka! Meja: {$rankUpper} · Giliran: {$nextSub['nextState']['currentTurnName']}.");
+                $result = [
+                    'subRoundNumber' => $nextSub['nextState']['subRoundNumber'],
+                    'matchFinished'  => false,
+                ];
+                break;
+            }
+
             // ===================== RETURN TO LOBBY =====================
             case 'returnRoomToLobby':
             case 'returnKataKataToLobby':
@@ -2171,7 +2378,8 @@ function yukmain_dispatch_room_action(
             case 'returnPelukisToLobby':
             case 'returnMalamSilumanToLobby':
             case 'returnUlarTanggaToLobby':
-            case 'returnCumaBercandaToLobby': {
+            case 'returnCumaBercandaToLobby':
+            case 'returnMejaPembohongToLobby': {
                 yukmain_require_host($senderUid, $room);
                 $room['status'] = 'lobby';
                 $room['activeVote'] = null;
@@ -2184,6 +2392,7 @@ function yukmain_dispatch_room_action(
                 $room['malamSilumanState'] = null;
                 $room['ularTanggaState'] = null;
                 $room['cumaBercandaState'] = null;
+                $room['mejaPembohongState'] = null;
                 $room['updatedAt'] = $now;
                 break;
             }
@@ -2231,6 +2440,7 @@ function yukmain_dispatch_room_action(
                 $room['malamSilumanState'] = null;
                 $room['ularTanggaState'] = null;
                 $room['cumaBercandaState'] = null;
+                $room['mejaPembohongState'] = null;
                 $room['activeVote'] = null;
                 $room['pendingSpyGuess'] = null;
                 $room['lastRoundResult'] = null;

@@ -13,6 +13,7 @@ import silumanCover from '@/src/assets/images/yukmain_siluman_cover_179518005985
 import spyfallCover from '@/src/assets/images/yukmain_spyfall_cover_1795001423851.jpg';
 import bercandaCover from '@/src/assets/images/yukmain_bercanda_cover_1795786860693.jpg';
 import ularCover from '@/src/assets/images/yukmain_ular_cover_1795263812261.jpg';
+import mejaCover from '@/src/assets/images/yukmain_meja_cover_1795790293388.jpg';
 import { PARTY_GAMES } from '@/lib/games/registry';
 
 const CREATOR_GITHUB_URL = 'https://github.com/ilhamliorahmat/';
@@ -28,6 +29,7 @@ const GAME_SHOWCASE = [
   { id: 'malam_siluman', title: 'Malam Siluman', cover: silumanCover },
   { id: 'ular_tangga', title: 'Ular Tangga RP', cover: ularCover },
   { id: 'cuma_bercanda', title: 'Cuma Bercanda', cover: bercandaCover },
+  { id: 'meja_pembohong', title: 'Meja Pembohong', cover: mejaCover },
 ];
 
 const DESIGN_PRINCIPLES = [
@@ -229,7 +231,7 @@ export function AboutCreatorView() {
               <p className="font-display font-mono-tabular text-2xl sm:text-3xl font-bold text-white">
                 373+
               </p>
-              <p className="text-xs text-slate-400">Lokasi, Kata, Spektrum, Fakta &amp; Komik</p>
+              <p className="text-xs text-slate-400">Lokasi, Kata, Fakta, Komik &amp; Kartu</p>
             </div>
             <div className="space-y-1">
               <p className="font-display font-mono-tabular text-2xl sm:text-3xl font-bold text-white">

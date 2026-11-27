@@ -1,6 +1,6 @@
 # Yuk Main — Indonesian Multiplayer Party Game Hub
 
-> **Current Release:** `5.0.0` (`Version.Iteration.build`)  
+> **Current Release:** `6.0.0` (`Version.Iteration.build`)  
 > **License:** PolyForm Noncommercial License 1.0.0 — Copyright © 2026 **Ilham Liorahmat**
 
 [Read in English](#english) · [Baca dalam Bahasa Indonesia](#bahasa-indonesia)
@@ -13,10 +13,10 @@
 
 **Yuk Main** is an Indonesian-localized, mobile-first multiplayer party game hub built with **Next.js 15 (App Router)**, **React 19**, **Tailwind CSS v4**, **PHP 8 + PDO MySQL** (for InfinityFree / shared LAMP hosting), and zero-internet **WebRTC LAN Party** mode.
 
-It brings together **8 Indonesian party games** under one modular hub — **Game #1: Yang Bener Yang Mana**, **Game #2: Kata-Kata Hari Ini**, **Game #3: Satu Frekuensi**, **Game #4: Fakta Hari Ini**, **Game #5: Pelukis Gadungan**, **Game #6: Malam Siluman**, **Game #7: Ular Tangga RP**, and **Game #8: Cuma Bercanda** — with automated static export + PHP API deployment to **InfinityFree**, strict server-side secret isolation, and 100% offline LAN Party parity.
+It brings together **9 Indonesian party games** under one modular hub — **Game #1: Yang Bener Yang Mana**, **Game #2: Kata-Kata Hari Ini**, **Game #3: Satu Frekuensi**, **Game #4: Fakta Hari Ini**, **Game #5: Pelukis Gadungan**, **Game #6: Malam Siluman**, **Game #7: Ular Tangga RP**, **Game #8: Cuma Bercanda**, and **Game #9: Meja Pembohong** — with automated static export + PHP API deployment to **InfinityFree**, strict server-side secret isolation, and 100% offline LAN Party parity.
 
 ### Key Features
-- **Modular 8-Game Party Registry:** Extensible game catalog (`lib/games/registry.ts`), 2-column hub showcase (`YukMainHub.tsx`), and single-subscription `ActiveRoomContainer` routing rooms cleanly by `gameType`.
+- **Modular 9-Game Party Registry:** Extensible game catalog (`lib/games/registry.ts`), 2-column hub showcase (`YukMainHub.tsx`), and single-subscription `ActiveRoomContainer` routing rooms cleanly by `gameType`.
 - **Game #1 — Yang Bener Yang Mana** *(internal ID: `spyfall` · 3–12 players)*:
   - 26 curated Indonesian locations across 3 packs (*Nusantara & Kota*, *Klasik & Profesi*, *Seru & Fantasi*) plus a Host custom location & role builder.
   - **Privacy Shield Role Card** (tap to peek/hide on mobile) and interactive location deduction checklist.
@@ -46,6 +46,9 @@ It brings together **8 Indonesian party games** under one modular hub — **Game
   - **System + System + Player 3-Panel Comic Flow:** Every round deals public **Panel 1** and **Panel 2** from the system deck while each active player holds a 7-card private hand (replenished between rounds) and secretly submits **Panel 3**.
   - **Anonymous Upvote Voting:** Submitted 3-panel comics shuffle into opaque anonymous entries (`comic_1`, `comic_2`, ... with zero author leakage). Each participant casts 1 vote per round: **Upvote (+1)**, **Golden Upvote (+3, strictly once per match session)**, or **Lewati (+0)**—with strict self-upvote blocking.
   - **Uncapped Score Gathering & Custom Deck Builder:** Players can accumulate unlimited upvote points across rounds, backed by 90 illustrated Indonesian comic cards across 3 packs (*Tongkrongan*, *Kantor & Kampus*, *Absurd & Gelap*) plus a Host custom card builder.
+- **Game #9 — Meja Pembohong** *(internal ID: `meja_pembohong` · 2–12 players)*:
+  - **High-Stakes Card Bluffing (*Raja / Ratu / As / Joker*):** Each sub-round sets a public `tableRank` and deals 5 private cards per player (`PlayerSecretDoc.mejaHand`, zero leakage on `RoomDoc` or `Layar Panggung`). Players play 1–3 cards face-down claiming `tableRank` (with **Joker** acting as wild card) or shout **"TERIAK BOHONG!"** to inspect the previous claim.
+  - **Dual Game Modes:** **Silinder 1/6 (Klasik)** assigns each player a secret server/Host-side trap slot (`1..6`) where lying losers pull the trigger (`+1` courage survival, `+1` duel win, `+4` Last Survivor Champion bonus) and **Skor Cepat (5 Tangan)** plays 5 fast hands without elimination (`+2` duel win).
 - **v3.1.0 Nongkrong-Grade Session Platform (Across All 4 Games):**
   - **In-Room Game Switcher & QR Lobby Invite:** Host switches seamlessly between all 4 games inside the same room without changing the 6-letter code or kicking players. Switching with `0` completed rounds records no phantom match, and returning to a game played earlier in the night logs as a separate match starting fresh at `0` points. Includes scannable QR codes for both Player Join (`?room=CODE`) and Layar Panggung (`?room=CODE&stage=1`).
   - **Hybrid Table + Cast View (`Layar Panggung`):** Open the room on a TV or laptop in read-only public stage mode (zero secrets ever read or displayed until `round_end`; marked `isStage: true` in RTDB presence so an unattended TV never blocks the 15-second empty-room auto-reset).
@@ -216,6 +219,8 @@ Yuk Main uses a 3-segment versioning format: **`Version.Iteration.build`**
 
 #### Changelog
 
+- **`6.0.0`** — Game #9 **Meja Pembohong** (Liar's Table Card Bluffing Party Game):
+  - **Launched Game #9: Meja Pembohong (`meja_pembohong`, 2–12 players):** Added Indonesian *Table of Lies / Liar's Deck* card bluffing with `Raja`, `Ratu`, `As`, and wild `Joker` cards (auto-scaling 40/80-card deck), strict zero-leak private hands (`handCountByUid` only on `RoomDoc` and `Layar Panggung`), secret per-player `1/6` revolver cylinder trap slots, two selectable modes (**Silinder 1/6 Klasik** & **Skor Cepat 5 Tangan**), full PHP 8 + PDO MySQL + WebRTC LAN Party parity, and comprehensive unit + LAN + parity Vitest suites.
 - **`5.0.0`** — Game #8 **Cuma Bercanda**, Reusable Upvote Engine & Platform Refinements:
   - **Launched Game #8: Cuma Bercanda (`cuma_bercanda`, 2–12 players):** Added *Joking Hazard*-inspired 3-panel comic gameplay (`System Panel 1 + System Panel 2 + Player Panel 3`), 7-card persistent private hands, anonymous voting entries with zero author leakage, custom illustrated SVG comic panels (`12` expressive scene moods), 90 Indonesian comic cards across 3 packs + Host custom card builder, reusable `lib/games/voting/upvote.ts` engine (1 vote/round, strict self-upvote block, `Golden Upvote +3` once per match session, uncapped cumulative upvote scoring), *Layar Panggung* public display, and full PHP 8 + PDO MySQL + WebRTC LAN Party parity.
   - **UI & Chat Polish:** Redesigned *Ular Tangga RP* with an interactive 10×10 SVG sinuous path board, hero portraits, and compact HUD; upgraded shared `RoomChatPanel` (`overscroll-contain` + inner container scroll lock) across all games so chat messages never hijack page scrolling.
@@ -258,10 +263,10 @@ Yuk Main uses a 3-segment versioning format: **`Version.Iteration.build`**
 
 **Yuk Main** adalah platform hub permainan pesta multipemain berbahasa Indonesia (*mobile-first*) yang dibangun dengan **Next.js 15 (App Router)**, **React 19**, **Tailwind CSS v4**, **PHP 8 + PDO MySQL** (untuk InfinityFree / shared hosting), serta mode **LAN Party WebRTC** tanpa kuota internet.
 
-Platform ini menyatukan **8 permainan pesta Indonesia** dalam satu hub modular — **Game #1: Yang Bener Yang Mana**, **Game #2: Kata-Kata Hari Ini**, **Game #3: Satu Frekuensi**, **Game #4: Fakta Hari Ini**, **Game #5: Pelukis Gadungan**, **Game #6: Malam Siluman**, **Game #7: Ular Tangga RP**, dan **Game #8: Cuma Bercanda** — dengan ekspor statis + API PHP otomatis ke **InfinityFree**, isolasi rahasia ketat di sisi server/Host, serta paritas 100% di mode LAN Party offline.
+Platform ini menyatukan **9 permainan pesta Indonesia** dalam satu hub modular — **Game #1: Yang Bener Yang Mana**, **Game #2: Kata-Kata Hari Ini**, **Game #3: Satu Frekuensi**, **Game #4: Fakta Hari Ini**, **Game #5: Pelukis Gadungan**, **Game #6: Malam Siluman**, **Game #7: Ular Tangga RP**, **Game #8: Cuma Bercanda**, dan **Game #9: Meja Pembohong** — dengan ekspor statis + API PHP otomatis ke **InfinityFree**, isolasi rahasia ketat di sisi server/Host, serta paritas 100% di mode LAN Party offline.
 
 ### Fitur Utama
-- **Registri Modular 8 Game:** Katalog game (`lib/games/registry.ts`), etalase grid 2 kolom (`YukMainHub.tsx`), dan `ActiveRoomContainer` berlangganan tunggal yang merutekan ruang permainan berdasarkan `gameType`.
+- **Registri Modular 9 Game:** Katalog game (`lib/games/registry.ts`), etalase grid 2 kolom (`YukMainHub.tsx`), dan `ActiveRoomContainer` berlangganan tunggal yang merutekan ruang permainan berdasarkan `gameType`.
 - **Game #1 — Yang Bener Yang Mana** *(ID internal: `spyfall` · 3–12 pemain)*:
   - 26 lokasi Indonesia pilihan dalam 3 paket (*Nusantara & Kota*, *Klasik & Profesi*, *Seru & Fantasi*) ditambah pembuat lokasi & peran kustom oleh Host.
   - **Kartu Identitas Privasi (*Privacy Shield*)** dan daftar centang deduksi lokasi interaktif.
@@ -291,6 +296,9 @@ Platform ini menyatukan **8 permainan pesta Indonesia** dalam satu hub modular �
   - **Alur Komik 3-Panel (Sistem + Sistem + Pemain):** Setiap ronde, sistem membuka **Panel 1** dan **Panel 2** secara publik; tiap pemain memegang 7 kartu tangan rahasia (diisi ulang tiap ronde) dan mengirim 1 kartu sebagai **Panel 3**.
   - **Voting Upvote Anonim:** Semua komik diacak ke ID buram tanpa nama penulis selama fase voting. Tiap pemain hanya boleh memberi 1 suara per ronde: **Upvote (+1)**, **Golden Upvote (+3, maksimal 1× per seluruh sesi game)**, atau **Lewati (+0)**, dengan blokir upvote komik sendiri.
   - **Skor Upvote Tanpa Batas & Pembuat Kartu Kustom:** Pemain bebas mengumpulkan poin upvote sebanyak mungkin sepanjang sesi, didukung 90 kartu komik ilustrasi dalam 3 paket (*Tongkrongan*, *Kantor & Kampus*, *Absurd & Gelap*) serta pembuat kartu kustom oleh Host.
+- **Game #9 — Meja Pembohong** *(ID internal: `meja_pembohong` · 2–12 pemain)*:
+  - **Gertakan Kartu Meja (*Raja / Ratu / As / Joker*):** Tiap tangan menetapkan pangkat meja publik dan membagikan 5 kartu rahasia per pemain (`PlayerSecretDoc.mejaHand`, tanpa kebocoran di `RoomDoc` maupun *Layar Panggung*). Pemain membuang 1–3 kartu tertutup dengan klaim pangkat meja (**Joker** berlaku bebas) atau meneriakkan **"TERIAK BOHONG!"** untuk memeriksa klaim sebelumnya.
+  - **Dua Mode Permainan:** **Silinder 1/6 (Klasik)** menyimpan slot peluru rahasia (`1..6`) di sisi server/Host (`+1` nyali selamat, `+1` menang tantangan, `+4` bonus Juara Terakhir Bertahan) dan **Skor Cepat (5 Tangan)** memainkan 5 tangan cepat tanpa eliminasi (`+2` menang tantangan).
 - **Platform Sesi Tongkrongan v3.1.0 (Berlaku di Seluruh 4 Game):**
   - **Ganti Game Dalam Ruang & QR Undangan Lobi:** Host dapat berpindah antar keempat game di ruang yang sama tanpa mengganti kode 6 huruf atau mengeluarkan pemain. Pengaman salah klik (`0` ronde = tidak dicatat), kunjungan ulang ke game yang sama dicatat sebagai sesi terpisah mulai dari `0` poin, lengkap dengan QR Code untuk Gabung Pemain (`?room=CODE`) dan Layar Panggung (`?room=CODE&stage=1`).
   - **Tampilan Hibrida Meja + TV (`Layar Panggung`):** Buka ruang di TV atau laptop dalam mode panggung publik bebas rahasia (`isStage: true` di RTDB presence agar TV yang tidak dijaga tidak menghalangi reset otomatis 15 detik).
@@ -441,6 +449,8 @@ Yuk Main menggunakan format penomoran 3 bagian: **`Version.Iteration.build`**
 
 #### Riwayat Pembaruan (Changelog)
 
+- **`6.0.0`** — Peluncuran Game #9 **Meja Pembohong** (Game Kartu Gertakan *Table of Lies*):
+  - **Peluncuran Game #9: Meja Pembohong (`meja_pembohong`, 2–12 pemain):** Permainan kartu gertakan *Raja / Ratu / As / Joker* (dek otomatis 40/80 kartu), kartu tangan pribadi tanpa kebocoran di `RoomDoc` maupun *Layar Panggung*, slot peluru rahasia `1/6` per pemain di sisi server/Host, dua pilihan mode (**Silinder 1/6 Klasik** & **Skor Cepat 5 Tangan**), paritas penuh PHP 8 + PDO MySQL + LAN Party WebRTC, serta rangkaian unit test mesin, LAN, dan paritas statis-PHP.
 - **`5.0.0`** — Peluncuran Game #8 **Cuma Bercanda**, Modul Upvote & Pembaruan Platform:
   - **Peluncuran Game #8: Cuma Bercanda (`cuma_bercanda`, 2–12 pemain):** Permainan komik 3-panel terinspirasi *Joking Hazard* (`Panel 1 Sistem + Panel 2 Sistem + Panel 3 Pemain`), kartu tangan rahasia 7 kartu yang terjaga antar ronde, voting anonim bebas kebocoran penulis, ilustrasi panel komik SVG kustom (12 ekspresi suasana), 90 kartu komik Indonesia dalam 3 paket + pembuat kartu kustom, modul voting `lib/games/voting/upvote.ts` (1 upvote/ronde, blokir upvote karya sendiri, `Golden Upvote +3` 1× per sesi, poin akumulatif tanpa batas), dukungan *Layar Panggung*, serta paritas penuh PHP 8 + PDO MySQL + LAN Party WebRTC.
   - **Pembaruan Antarmuka & Obrolan:** Perombakan UI *Ular Tangga RP* dengan papan jalur SVG 10×10 berliku, potret kelas hero, dan HUD ringkas; perbaikan komponen terpadu `RoomChatPanel` (`overscroll-contain` + pengguliran terkunci di dalam div chat) untuk semua game agar tidak menyeret halaman utama.

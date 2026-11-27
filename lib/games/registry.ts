@@ -162,6 +162,25 @@ export const PARTY_GAMES: PartyGameDefinition[] = [
       'Tidak ada batas maksimal poin: pemain dapat mengumpulkan poin upvote sebanyak mungkin sepanjang permainan!',
     ],
   },
+  {
+    id: 'meja_pembohong',
+    number: 9,
+    title: 'Meja Pembohong',
+    subtitle: 'Gertak Kartu Tertutup & Silinder 1/6',
+    description:
+      'Setiap ronde menentukan Meja Raja, Ratu, atau As. Taruh 1–3 kartu tertutup dengan muka poker, atau teriak "BOHONG!" sebelum giliranmu—yang kalah menarik pelatuk silinder 1/6!',
+    minPlayers: 2,
+    maxPlayers: 12,
+    durationLabel: '5–8 Menit · Tanpa Timer',
+    available: true,
+    rulesSummary: [
+      'Minimal 2 pemain berkumpul di satu ruang. Setiap sub-ronde, sistem memilih acak Meja Raja, Meja Ratu, atau Meja As dan membagikan 5 kartu rahasia ke masing-masing pemain.',
+      'Dek berisi kartu Raja, Ratu, As, serta kartu Joker (Kartu Bebas) yang selalu sah dianggap cocok untuk jenis meja apa pun.',
+      'Pada giliranmu, pilih salah satu aksi: taruh 1–3 kartu tertutup sambil mengklaim semuanya cocok dengan Meja, ATAU teriak "BOHONG!" untuk membongkar klaim pemain tepat sebelummu.',
+      'Jika ternyata ada kartu meleset (bukan pangkat Meja dan bukan Joker), sang penaruh kartu kalah. Jika semua kartunya jujur, sang penuduh yang kalah!',
+      'Di mode Silinder 1/6, yang kalah menarik pelatuk revolver (peluang kena peluru rahasia makin naik hingga 100%). Pemenang terakhir meraih bonus poin!',
+    ],
+  },
 ];
 
 export function getPartyGame(gameType: GameType): PartyGameDefinition {

@@ -38,6 +38,8 @@ export function getDefaultPacksForGame(gameType: GameType): string[] {
       return ['menara_nusantara'];
     case 'cuma_bercanda':
       return ['tongkrongan', 'kantor_kampus'];
+    case 'meja_pembohong':
+      return ['klasik'];
     case 'spyfall':
     default:
       return ['nusantara', 'klasik'];

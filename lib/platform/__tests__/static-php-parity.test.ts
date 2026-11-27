@@ -44,6 +44,7 @@ describe('Static Export + PHP 8 + PDO MySQL Architecture Parity', () => {
       'public/api/lib/engine_malam_siluman.php',
       'public/api/lib/engine_ular_tangga.php',
       'public/api/lib/engine_cuma_bercanda.php',
+      'public/api/lib/engine_meja_pembohong.php',
       'public/api/lib/rooms.php',
       'public/api/lib/dispatcher.php',
       'public/api/lib/lan_signal.php',

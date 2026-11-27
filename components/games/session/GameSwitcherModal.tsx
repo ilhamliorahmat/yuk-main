@@ -7,6 +7,7 @@ import {
   Brush,
   Check,
   Dices,
+  Flame,
   Moon,
   Radio,
   Search,
@@ -96,6 +97,14 @@ const GAME_OPTIONS: Array<{
     playersHint: '2–12 pemain',
     icon: SmilePlus,
     accent: 'text-amber-300',
+  },
+  {
+    id: 'meja_pembohong',
+    title: 'Meja Pembohong',
+    subtitle: 'Buang kartu tertutup, gertak meja, atau teriak BOHONG! Uji nyali silinder 1/6.',
+    playersHint: '2–12 pemain',
+    icon: Flame,
+    accent: 'text-emerald-400',
   },
 ];
 

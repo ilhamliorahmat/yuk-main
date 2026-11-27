@@ -1,25 +1,79 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { LanPairingModal } from '@/components/lan/LanPairingModal';
+import dynamic from 'next/dynamic';
 import { useRoomSession } from '@/hooks/use-room-session';
 import type { RoomPlayerDoc } from '@/lib/games/types';
 import { isLanRoomId } from '@/lib/lan/lan-protocol';
 import { lanRuntime } from '@/lib/lan/lan-runtime';
-import { FaktaHariIniRoomView } from './fakta-hari-ini/FaktaHariIniRoomView';
-import { KataKataRoomView } from './kata-kata/KataKataRoomView';
-import { MalamSilumanRoomView } from './malam-siluman/MalamSilumanRoomView';
-import { PelukisGadunganRoomView } from './pelukis-gadungan/PelukisGadunganRoomView';
-import { SatuFrekuensiRoomView } from './satu-frekuensi/SatuFrekuensiRoomView';
-import { GameSwitcherModal } from './session/GameSwitcherModal';
-import { LayarPanggungView } from './session/LayarPanggungView';
-import { NumpangModal } from './session/NumpangModal';
-import { QrInviteModal } from './session/QrInviteModal';
-import { RekapPermainanOverlay } from './session/RekapPermainanOverlay';
 import { RoomControlStrip } from './session/RoomControlStrip';
-import { CumaBercandaRoomView } from './cuma-bercanda/CumaBercandaRoomView';
-import { SpyfallRoomView } from './spyfall/SpyfallRoomView';
-import { UlarTanggaRoomView } from './ular-tangga/UlarTanggaRoomView';
+
+const RoomLoadingFallback = () => (
+  <div className="min-h-[60vh] flex items-center justify-center p-6 text-sm text-slate-400">
+    Memuat arena permainan...
+  </div>
+);
+
+const LanPairingModal = dynamic(
+  () => import('@/components/lan/LanPairingModal').then((m) => m.LanPairingModal),
+  { ssr: false },
+);
+const GameSwitcherModal = dynamic(
+  () => import('./session/GameSwitcherModal').then((m) => m.GameSwitcherModal),
+  { ssr: false },
+);
+const LayarPanggungView = dynamic(
+  () => import('./session/LayarPanggungView').then((m) => m.LayarPanggungView),
+  { ssr: false, loading: RoomLoadingFallback },
+);
+const NumpangModal = dynamic(
+  () => import('./session/NumpangModal').then((m) => m.NumpangModal),
+  { ssr: false },
+);
+const QrInviteModal = dynamic(
+  () => import('./session/QrInviteModal').then((m) => m.QrInviteModal),
+  { ssr: false },
+);
+const RekapPermainanOverlay = dynamic(
+  () => import('./session/RekapPermainanOverlay').then((m) => m.RekapPermainanOverlay),
+  { ssr: false },
+);
+const SpyfallRoomView = dynamic(
+  () => import('./spyfall/SpyfallRoomView').then((m) => m.SpyfallRoomView),
+  { ssr: false, loading: RoomLoadingFallback },
+);
+const KataKataRoomView = dynamic(
+  () => import('./kata-kata/KataKataRoomView').then((m) => m.KataKataRoomView),
+  { ssr: false, loading: RoomLoadingFallback },
+);
+const SatuFrekuensiRoomView = dynamic(
+  () => import('./satu-frekuensi/SatuFrekuensiRoomView').then((m) => m.SatuFrekuensiRoomView),
+  { ssr: false, loading: RoomLoadingFallback },
+);
+const FaktaHariIniRoomView = dynamic(
+  () => import('./fakta-hari-ini/FaktaHariIniRoomView').then((m) => m.FaktaHariIniRoomView),
+  { ssr: false, loading: RoomLoadingFallback },
+);
+const PelukisGadunganRoomView = dynamic(
+  () => import('./pelukis-gadungan/PelukisGadunganRoomView').then((m) => m.PelukisGadunganRoomView),
+  { ssr: false, loading: RoomLoadingFallback },
+);
+const MalamSilumanRoomView = dynamic(
+  () => import('./malam-siluman/MalamSilumanRoomView').then((m) => m.MalamSilumanRoomView),
+  { ssr: false, loading: RoomLoadingFallback },
+);
+const UlarTanggaRoomView = dynamic(
+  () => import('./ular-tangga/UlarTanggaRoomView').then((m) => m.UlarTanggaRoomView),
+  { ssr: false, loading: RoomLoadingFallback },
+);
+const CumaBercandaRoomView = dynamic(
+  () => import('./cuma-bercanda/CumaBercandaRoomView').then((m) => m.CumaBercandaRoomView),
+  { ssr: false, loading: RoomLoadingFallback },
+);
+const MejaPembohongRoomView = dynamic(
+  () => import('./meja-pembohong/MejaPembohongRoomView').then((m) => m.MejaPembohongRoomView),
+  { ssr: false, loading: RoomLoadingFallback },
+);
 
 interface ActiveRoomContainerProps {
   roomId: string;
@@ -264,6 +318,24 @@ export function ActiveRoomContainer({
     if (room.gameType === 'cuma_bercanda') {
       return (
         <CumaBercandaRoomView
+          room={room}
+          players={players}
+          mySecret={mySecret}
+          messages={messages}
+          presence={presence}
+          myUid={effectiveSeatUid}
+          myName={effectiveSeatName}
+          deviceUid={myUid}
+          deviceName={myName}
+          onBeforeLeave={() => setIsLeaving(true)}
+          onExitToHub={onExitToHub}
+        />
+      );
+    }
+
+    if (room.gameType === 'meja_pembohong') {
+      return (
+        <MejaPembohongRoomView
           room={room}
           players={players}
           mySecret={mySecret}

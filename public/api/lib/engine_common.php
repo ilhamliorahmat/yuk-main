@@ -48,6 +48,7 @@ function yukmain_default_packs_for_game(string $gameType): array
         'malam_siluman'    => ['malam_siluman'],
         'ular_tangga'      => ['menara_nusantara'],
         'cuma_bercanda'    => ['tongkrongan', 'kantor_kampus'],
+        'meja_pembohong'   => ['klasik'],
         default            => ['nusantara', 'klasik'],
     };
 }
@@ -237,6 +238,23 @@ function yukmain_sanitize_cuma_bercanda_settings($raw): array
         'allowGoldenUpvote' => isset($raw['allowGoldenUpvote']) && is_bool($raw['allowGoldenUpvote'])
             ? $raw['allowGoldenUpvote']
             : true,
+    ];
+}
+
+function yukmain_default_meja_pembohong_settings(): array
+{
+    return [
+        'mode' => 'silinder',
+    ];
+}
+
+function yukmain_sanitize_meja_pembohong_settings($raw): array
+{
+    if (!is_array($raw)) {
+        return yukmain_default_meja_pembohong_settings();
+    }
+    return [
+        'mode' => (($raw['mode'] ?? '') === 'cepat') ? 'cepat' : 'silinder',
     ];
 }
 

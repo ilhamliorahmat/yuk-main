@@ -2,6 +2,7 @@
 
 import { sanitizeMalamSilumanSettings } from '@/lib/games/malam-siluman/engine';
 import { sanitizeCumaBercandaSettings } from '@/lib/games/cuma-bercanda/packs';
+import { sanitizeMejaPembohongSettings } from '@/lib/games/meja-pembohong/engine';
 import { sanitizeUlarTanggaSettings } from '@/lib/games/ular-tangga/packs';
 import type {
   CumaBercandaSettings,
@@ -14,6 +15,7 @@ import type {
   CustomWordPair,
   GameType,
   MalamSilumanSettings,
+  MejaPembohongSettings,
   PlayerSecretDoc,
   RoomDoc,
   RoomPlayerDoc,
@@ -795,6 +797,58 @@ export async function returnCumaBercandaToLobby(params: {
   roomId: string;
 }): Promise<void> {
   await dispatchRoomAction(params.roomId, 'returnCumaBercandaToLobby', {});
+}
+
+// --- Settings & Actions: Game #9 (Meja Pembohong / meja_pembohong) ---
+
+export async function updateMejaPembohongSettings(params: {
+  roomId: string;
+  settings: Partial<MejaPembohongSettings>;
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'updateMejaPembohongSettings', {
+    settings: sanitizeMejaPembohongSettings(params.settings),
+  });
+}
+
+export async function startMejaPembohongRound(params: {
+  roomId: string;
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'startMejaPembohongRound', {});
+}
+
+export async function playMejaPembohongCards(params: {
+  roomId: string;
+  actorUid: string;
+  cardIds: string[];
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'playMejaPembohongCards', {
+    cardIds: params.cardIds,
+    actAsUid: params.actorUid,
+  });
+}
+
+export async function callMejaPembohongLiar(params: {
+  roomId: string;
+  actorUid: string;
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'callMejaPembohongLiar', {
+    actAsUid: params.actorUid,
+  });
+}
+
+export async function nextMejaPembohongSubRound(params: {
+  roomId: string;
+  actorUid?: string;
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'nextMejaPembohongSubRound', {
+    ...(params.actorUid ? { actAsUid: params.actorUid } : {}),
+  });
+}
+
+export async function returnMejaPembohongToLobby(params: {
+  roomId: string;
+}): Promise<void> {
+  await dispatchRoomAction(params.roomId, 'returnMejaPembohongToLobby', {});
 }
 
 // --- Session & Cross-Game Actions (v3.1.0) ---

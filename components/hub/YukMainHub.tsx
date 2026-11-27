@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Image, { type StaticImageData } from 'next/image';
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'motion/react';
@@ -35,7 +36,8 @@ import bercandaCover from '@/src/assets/images/yukmain_bercanda_cover_1795786860
 import bercandaEmblem from '@/src/assets/images/yukmain_bercanda_emblem_1795786860651.jpg';
 import ularCover from '@/src/assets/images/yukmain_ular_cover_1795263812261.jpg';
 import ularEmblem from '@/src/assets/images/yukmain_ular_emblem_1795263811980.jpg';
-import { LanPairingModal } from '@/components/lan/LanPairingModal';
+import mejaCover from '@/src/assets/images/yukmain_meja_cover_1795790293388.jpg';
+import mejaEmblem from '@/src/assets/images/yukmain_meja_emblem_1795790294641.jpg';
 import { OfflineNoticeBanner } from '@/components/pwa/OfflineNoticeBanner';
 import { useAuth } from '@/hooks/use-auth';
 import { useOnlineStatus } from '@/hooks/use-pwa';
@@ -46,13 +48,12 @@ import {
   saveLocalLanNickname,
   type NetworkMode,
 } from '@/lib/lan/lan-protocol';
-import { lanRuntime } from '@/lib/lan/lan-runtime';
-import {
-  createRoom,
-  joinRoomAsStageDisplay,
-  joinRoomByCode,
-} from '@/lib/platform/room-service';
 import { AuthDialog } from './AuthDialog';
+
+const LanPairingModal = dynamic(
+  () => import('@/components/lan/LanPairingModal').then((mod) => mod.LanPairingModal),
+  { ssr: false },
+);
 
 const CREATOR_GITHUB_URL = 'https://github.com/ilhamliorahmat/';
 const CREATOR_WEBSITE_URL = 'https://liorahmat.xo.je';
@@ -108,6 +109,11 @@ const GAME_VISUALS: Record<GameType, GameVisualMeta> = {
     cover: bercandaCover,
     emblem: bercandaEmblem,
     ctaClass: 'bg-amber-400 hover:bg-amber-300 text-slate-950',
+  },
+  meja_pembohong: {
+    cover: mejaCover,
+    emblem: mejaEmblem,
+    ctaClass: 'bg-emerald-500 hover:bg-emerald-400 text-slate-950',
   },
 };
 
@@ -184,6 +190,7 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
       const localProfile = saveLocalLanNickname(effectiveName);
       setBusyAction(`create:${gameType}`);
       try {
+        const { lanRuntime } = await import('@/lib/lan/lan-runtime');
         const { roomId } = lanRuntime.startHostRoom({
           hostUid: localProfile.uid,
           hostName: localProfile.displayName,
@@ -210,6 +217,7 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
 
     setBusyAction(`create:${gameType}`);
     try {
+      const { createRoom } = await import('@/lib/platform/room-service');
       const { roomId } = await createRoom({
         hostUid: user.uid,
         hostName: profile.displayName,
@@ -234,6 +242,7 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
 
     setBusyAction('join');
     try {
+      const { joinRoomByCode } = await import('@/lib/platform/room-service');
       const roomId = await joinRoomByCode({
         code: joinCode,
         uid: user.uid,
@@ -258,6 +267,7 @@ export function YukMainHub({ initialRoomCode = '', onEnterRoom }: YukMainHubProp
 
     setBusyAction('stage');
     try {
+      const { joinRoomAsStageDisplay } = await import('@/lib/platform/room-service');
       const { roomId } = await joinRoomAsStageDisplay({ code: joinCode });
       onEnterRoom(roomId, { isStageDisplay: true });
     } catch (err) {

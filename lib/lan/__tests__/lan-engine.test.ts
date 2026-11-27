@@ -706,7 +706,81 @@ describe('LanHostAuthority — Zero-Leak Isolation & All 5 Games + Session Platf
       auth.getSnapshotForPeer('host_1', false).secretsByOwnedSeat.host_1!.bercandaHand,
     ).toHaveLength(7);
   });
+
+  it('runs Meja Pembohong over LAN with zero-leak private hands, card play, and BOHONG challenge resolution', () => {
+    const auth = new LanHostAuthority({
+      hostUid: 'host_1',
+      hostName: 'Host',
+      avatarColor: '#DC2626',
+      gameType: 'meja_pembohong',
+      code: 'MP9999',
+    });
+    auth.registerPeer({
+      uid: 'guest_2',
+      displayName: 'Guest 2',
+      avatarColor: '#2563EB',
+      isStageDisplay: false,
+    });
+
+    auth.handleAction('host_1', 'updateMejaPembohongSettings', {
+      settings: { mode: 'cepat' },
+    });
+    auth.handleAction('host_1', 'startMejaPembohongRound', {});
+
+    const started = auth.getRoom();
+    expect(started.status).toBe('playing');
+    expect(started.mejaPembohongState?.phase).toBe('playing');
+    expect(started.mejaPembohongState?.mode).toBe('cepat');
+
+    // Stage receives ZERO secret hands
+    expect(auth.getSnapshotForPeer('tv_stage', true).secretsByOwnedSeat).toEqual({});
+
+    const activeUid = started.mejaPembohongState!.currentTurnUid;
+    const otherUid = activeUid === 'host_1' ? 'guest_2' : 'host_1';
+
+    // Each peer ONLY sees their own 5-card mejaHand
+    const activeSnap = auth.getSnapshotForPeer(activeUid, false);
+    const otherSnap = auth.getSnapshotForPeer(otherUid, false);
+    expect(Object.keys(activeSnap.secretsByOwnedSeat)).toEqual([activeUid]);
+    expect(activeSnap.secretsByOwnedSeat[activeUid]!.mejaHand).toHaveLength(5);
+    expect(otherSnap.secretsByOwnedSeat[otherUid]!.mejaHand).toHaveLength(5);
+
+    const cardToPlay = activeSnap.secretsByOwnedSeat[activeUid]!.mejaHand![0];
+    auth.handleAction(activeUid, 'playMejaPembohongCards', {
+      cardIds: [cardToPlay.id],
+      actAsUid: activeUid,
+    });
+
+    const afterPlay = auth.getRoom();
+    expect(afterPlay.mejaPembohongState?.currentTurnUid).toBe(otherUid);
+    expect(afterPlay.mejaPembohongState?.pileCardCount).toBe(1);
+    expect(afterPlay.mejaPembohongState?.lastClaim?.cardCount).toBe(1);
+    // Public claim does NOT reveal the actual played card rank
+    expect(JSON.stringify(afterPlay.mejaPembohongState?.lastClaim)).not.toContain(cardToPlay.id);
+
+    auth.handleAction(otherUid, 'callMejaPembohongLiar', {
+      actAsUid: otherUid,
+    });
+
+    const afterChallenge = auth.getRoom();
+    expect(afterChallenge.mejaPembohongState?.phase).toBe('challenge_reveal');
+    expect(afterChallenge.mejaPembohongState?.lastChallenge?.revealedCards).toHaveLength(1);
+    expect(afterChallenge.mejaPembohongState?.lastChallenge?.revealedCards[0].id).toBe(
+      cardToPlay.id,
+    );
+
+    // Host advances to sub-round 2
+    auth.handleAction('host_1', 'nextMejaPembohongSubRound', {});
+    expect(auth.getRoom().mejaPembohongState?.phase).toBe('playing');
+    expect(auth.getRoom().mejaPembohongState?.subRoundNumber).toBe(2);
+
+    // Return to lobby & switch game resets state
+    auth.handleAction('host_1', 'returnMejaPembohongToLobby', {});
+    expect(auth.getRoom().status).toBe('lobby');
+    expect(auth.getRoom().mejaPembohongState).toBeNull();
+  });
 });
+
 
 
 

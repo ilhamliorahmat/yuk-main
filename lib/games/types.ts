@@ -6,7 +6,8 @@ export type GameType =
   | 'pelukis_gadungan'
   | 'malam_siluman'
   | 'ular_tangga'
-  | 'cuma_bercanda';
+  | 'cuma_bercanda'
+  | 'meja_pembohong';
 
 export type RoomStatus = 'lobby' | 'playing' | 'voting' | 'spy_guess' | 'round_end';
 
@@ -380,6 +381,74 @@ export interface CumaBercandaState {
   votesByUid?: Record<string, CumaBercandaVoteRecord>;
 }
 
+// --- Game #9: Meja Pembohong (meja_pembohong) ---
+
+export type MejaTableRank = 'raja' | 'ratu' | 'as';
+
+export type MejaCardRank = MejaTableRank | 'joker';
+
+export type MejaPembohongMode = 'silinder' | 'cepat';
+
+export type MejaPembohongPhase = 'playing' | 'challenge_reveal' | 'reveal';
+
+export interface MejaCard {
+  id: string;
+  rank: MejaCardRank;
+}
+
+export interface MejaClaimPublic {
+  claimId: string;
+  byUid: string;
+  byName: string;
+  cardCount: number;
+  claimedRank: MejaTableRank;
+}
+
+export interface MejaChallengeReveal {
+  challengerUid: string;
+  challengerName: string;
+  accusedUid: string;
+  accusedName: string;
+  claimedRank: MejaTableRank;
+  revealedCards: MejaCard[];
+  wasLie: boolean;
+  loserUid: string;
+  loserName: string;
+  winnerUid: string;
+  winnerName: string;
+  chamberStep: number | null;
+  hitBullet: boolean;
+  eliminatedUid: string | null;
+  summary: string;
+}
+
+export interface MejaPembohongSettings {
+  mode: MejaPembohongMode;
+}
+
+export interface MejaPembohongState {
+  phase: MejaPembohongPhase;
+  mode: MejaPembohongMode;
+  subRoundNumber: number;
+  maxSubRounds: number | null;
+  tableRank: MejaTableRank;
+  participantUids: string[];
+  participantNamesByUid: Record<string, string>;
+  livingUids: string[];
+  eliminatedUids: string[];
+  turnOrder: string[];
+  currentTurnUid: string;
+  currentTurnName: string;
+  handCountByUid: Record<string, number>;
+  shotsTakenByUid: Record<string, number>;
+  pileCardCount: number;
+  lastClaim: MejaClaimPublic | null;
+  lastChallenge: MejaChallengeReveal | null;
+  winnerUids: string[];
+  winnerNames: string[];
+  eventLog: string[];
+}
+
 export interface EliminationEntry {
   uid: string;
   displayName: string;
@@ -416,7 +485,8 @@ export interface RoundResult {
     | 'siluman'
     | 'tumbal'
     | 'petualang'
-    | 'komikus';
+    | 'komikus'
+    | 'pembohong';
   reason: string;
   locationName: string;
   guessedLocation: string | null;
@@ -462,6 +532,10 @@ export interface ServerRoundStateDoc {
     string,
     { entryId: string; authorUid: string; authorName: string; panel3: BercandaCard }
   >;
+  // Meja Pembohong authoritative private hands, hidden claim cards & 1/6 chamber bullet slots
+  mejaHandsByUid?: Record<string, MejaCard[]>;
+  mejaPendingClaimCards?: MejaCard[];
+  mejaTrapSlotByUid?: Record<string, number>;
   createdAtMs: number;
 }
 
@@ -544,6 +618,7 @@ export interface RoomDoc {
   malamSilumanSettings?: MalamSilumanSettings | null;
   ularTanggaSettings?: UlarTanggaSettings | null;
   cumaBercandaSettings?: CumaBercandaSettings | null;
+  mejaPembohongSettings?: MejaPembohongSettings | null;
   eliminatedUids?: string[];
   eliminationLog?: EliminationEntry[];
   frequencyState?: FrequencyState | null;
@@ -552,6 +627,7 @@ export interface RoomDoc {
   malamSilumanState?: MalamSilumanState | null;
   ularTanggaState?: UlarTanggaState | null;
   cumaBercandaState?: CumaBercandaState | null;
+  mejaPembohongState?: MejaPembohongState | null;
   activeVote: VoteState | null;
   pendingSpyGuess: PendingSpyGuess | null;
   lastRoundResult: RoundResult | null;
@@ -620,6 +696,7 @@ export interface PlayerSecretDoc {
   bercandaHand?: BercandaCard[];
   bercandaOwnedEntryId?: string | null;
   bercandaSubmittedCardId?: string | null;
+  mejaHand?: MejaCard[];
   createdAt?: unknown;
 }
 

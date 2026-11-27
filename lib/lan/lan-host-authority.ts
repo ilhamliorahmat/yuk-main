@@ -69,6 +69,16 @@ import {
   sanitizeCustomBercandaCard,
 } from '../games/cuma-bercanda/packs';
 import {
+  computeMejaScoreLeaders,
+  dealMejaPembohongRound,
+  defaultMejaPembohongSettings,
+  MEJA_RANK_LABELS,
+  playMejaCards,
+  resolveMejaChallenge,
+  sanitizeMejaPembohongSettings,
+  startNextMejaSubRound,
+} from '../games/meja-pembohong/engine';
+import {
   advanceUlarTurn,
   applyUlarBagItem,
   applyUlarSkill,
@@ -244,6 +254,7 @@ export class LanHostAuthority {
       malamSilumanSettings: DEFAULT_MALAM_SILUMAN_SETTINGS,
       ularTanggaSettings: getDefaultUlarTanggaSettings(),
       cumaBercandaSettings: defaultCumaBercandaSettings(),
+      mejaPembohongSettings: defaultMejaPembohongSettings(),
       eliminatedUids: [],
       eliminationLog: [],
       frequencyState: null,
@@ -252,6 +263,7 @@ export class LanHostAuthority {
       malamSilumanState: null,
       ularTanggaState: null,
       cumaBercandaState: null,
+      mejaPembohongState: null,
       activeVote: null,
       pendingSpyGuess: null,
       lastRoundResult: null,
@@ -619,6 +631,7 @@ export class LanHostAuthority {
         const nextBrb = Boolean(payload.isBrb);
         this.players.set(targetUid, { ...target, isBrb: nextBrb, updatedAt: now });
         this.ensureUlarTanggaTurnValid();
+        this.ensureMejaPembohongTurnValid(now);
         this.pushSystemMessage(
           nextBrb
             ? `${target.displayName} lagi BRB sebentar (dilewati di ronde baru).`
@@ -655,6 +668,7 @@ export class LanHostAuthority {
         delete this.presence[leavingUid];
         this.ensureFaktaControllerFailover();
         this.ensureUlarTanggaTurnValid();
+        this.ensureMejaPembohongTurnValid(now);
         if (leaving) {
           this.pushSystemMessage(`${leaving.displayName} keluar dari ruang LAN.`);
         }
@@ -2699,6 +2713,244 @@ export class LanHostAuthority {
         return this.finalizeCumaBercandaLanReveal(this.room.cumaBercandaState, now);
       }
 
+      // ===================== GAME #9: MEJA PEMBOHONG =====================
+      case 'updateMejaPembohongSettings': {
+        this.requireHost(senderDeviceUid);
+        const settings = sanitizeMejaPembohongSettings(
+          payload.settings ?? this.room.mejaPembohongSettings,
+        );
+        this.room = {
+          ...this.room,
+          mejaPembohongSettings: settings,
+          updatedAt: now,
+        };
+        return {};
+      }
+
+      case 'startMejaPembohongRound': {
+        this.requireHost(senderDeviceUid);
+        if (this.room.gameType !== 'meja_pembohong') {
+          throw new Error('Ruang tidak disetel untuk Meja Pembohong.');
+        }
+        const nextRoundNum = this.room.roundNumber + 1;
+        const roundId = `r_${now}_${nextRoundNum}`;
+        const deal = dealMejaPembohongRound({
+          roundId,
+          roundNumber: nextRoundNum,
+          players: this.getPlayersList(),
+          settings: this.room.mejaPembohongSettings,
+          createdAtMs: now,
+        });
+
+        this.serverState = deal.serverState;
+        this.secretsByRound.set(roundId, new Map(Object.entries(deal.playerSecrets)));
+        this.room = {
+          ...this.room,
+          status: 'playing',
+          roundNumber: nextRoundNum,
+          currentRoundId: roundId,
+          roundEndsAtMs: 0,
+          firstSpeakerUid: deal.mejaPembohongState.currentTurnUid,
+          mejaPembohongState: deal.mejaPembohongState,
+          activeVote: null,
+          pendingSpyGuess: null,
+          lastRoundResult: null,
+          updatedAt: now,
+        };
+        const rankLabel = MEJA_RANK_LABELS[deal.mejaPembohongState.tableRank].toUpperCase();
+        this.pushSystemMessage(
+          `Meja Pembohong Ronde #${nextRoundNum} dimulai! Meja: ${rankLabel} · Giliran: ${deal.mejaPembohongState.currentTurnName}.`,
+        );
+        return { roundId, roundNumber: nextRoundNum };
+      }
+
+      case 'playMejaPembohongCards': {
+        const actor = this.resolveActor(senderDeviceUid, payload);
+        if (this.room.status !== 'playing' || !this.room.mejaPembohongState || !this.serverState) {
+          throw new Error('Tidak ada ronde Meja Pembohong yang aktif.');
+        }
+        const rawIds = Array.isArray(payload.cardIds) ? payload.cardIds.map((x) => String(x)) : [];
+        const claimId = `cl_${now}_${Math.random().toString(36).slice(2, 6)}`;
+        const res = playMejaCards({
+          state: this.room.mejaPembohongState,
+          handsByUid: this.serverState.mejaHandsByUid ?? {},
+          actorUid: actor.uid,
+          cardIds: rawIds,
+          claimId,
+        });
+
+        this.serverState = {
+          ...this.serverState,
+          mejaHandsByUid: res.nextHandsByUid,
+          mejaPendingClaimCards: res.playedCards,
+        };
+
+        const roundSecrets = this.secretsByRound.get(this.room.currentRoundId);
+        const actorSecret = roundSecrets?.get(actor.uid);
+        if (roundSecrets && actorSecret) {
+          roundSecrets.set(actor.uid, {
+            ...actorSecret,
+            mejaHand: res.nextHandsByUid[actor.uid] ?? [],
+          });
+        }
+
+        this.room = {
+          ...this.room,
+          mejaPembohongState: res.nextState,
+          updatedAt: now,
+        };
+        return {
+          pileCardCount: res.nextState.pileCardCount,
+          nextTurnUid: res.nextState.currentTurnUid,
+        };
+      }
+
+      case 'callMejaPembohongLiar': {
+        const actor = this.resolveActor(senderDeviceUid, payload);
+        if (this.room.status !== 'playing' || !this.room.mejaPembohongState || !this.serverState) {
+          throw new Error('Tidak ada ronde Meja Pembohong yang aktif.');
+        }
+
+        const playerScoresByUid: Record<string, number> = {};
+        for (const p of this.getPlayersList()) {
+          playerScoresByUid[p.uid] = p.score;
+        }
+
+        const res = resolveMejaChallenge({
+          state: this.room.mejaPembohongState,
+          challengerUid: actor.uid,
+          pendingClaimCards: this.serverState.mejaPendingClaimCards ?? [],
+          trapSlotByUid: this.serverState.mejaTrapSlotByUid ?? {},
+          playerScoresByUid,
+        });
+
+        this.applyScoreDeltas(res.scoreDeltas);
+        this.serverState = {
+          ...this.serverState,
+          mejaPendingClaimCards: [],
+        };
+
+        const stampedResult = res.roundResult
+          ? {
+              ...res.roundResult,
+              roundNumber: this.room.roundNumber,
+              resolvedAtMs: now,
+            }
+          : null;
+
+        this.room = {
+          ...this.room,
+          status: res.matchFinished ? 'round_end' : 'playing',
+          currentMatchRounds: res.matchFinished
+            ? (this.room.currentMatchRounds ?? 0) + 1
+            : this.room.currentMatchRounds,
+          mejaPembohongState: res.nextState,
+          lastRoundResult: stampedResult ?? this.room.lastRoundResult,
+          updatedAt: now,
+        };
+        this.pushSystemMessage(res.challengeReveal.summary);
+        return {
+          wasLie: res.challengeReveal.wasLie,
+          hitBullet: res.challengeReveal.hitBullet,
+          matchFinished: res.matchFinished,
+        };
+      }
+
+      case 'nextMejaPembohongSubRound': {
+        if (this.room.status !== 'playing' || !this.room.mejaPembohongState || !this.serverState) {
+          throw new Error('Tidak ada ronde Meja Pembohong yang aktif.');
+        }
+        const mp = this.room.mejaPembohongState;
+        const canAcceptEmpty =
+          mp.phase === 'playing' &&
+          (mp.handCountByUid[mp.currentTurnUid] ?? 0) === 0 &&
+          (senderDeviceUid === this.room.hostUid ||
+            this.ownsSeat(senderDeviceUid, mp.currentTurnUid));
+
+        if (mp.phase === 'challenge_reveal') {
+          this.requireHost(senderDeviceUid);
+        } else if (!canAcceptEmpty) {
+          throw new Error('Belum saatnya membagikan tangan kartu baru.');
+        }
+
+        const nextSub = startNextMejaSubRound({
+          state: mp,
+          trapSlotByUid: this.serverState.mejaTrapSlotByUid ?? {},
+        });
+
+        if (nextSub.matchFinished) {
+          const playerScoresByUid: Record<string, number> = {};
+          for (const p of this.getPlayersList()) {
+            playerScoresByUid[p.uid] = p.score;
+          }
+          const leaders = computeMejaScoreLeaders({
+            participantUids: mp.participantUids,
+            participantNamesByUid: mp.participantNamesByUid,
+            playerScoresByUid,
+          });
+          const champText = leaders.winnerNames.join(' & ') || 'Juara';
+          const reason = `Meja Pembohong selesai! Pemenang: ${champText}.`;
+          this.room = {
+            ...this.room,
+            status: 'round_end',
+            currentMatchRounds: (this.room.currentMatchRounds ?? 0) + 1,
+            mejaPembohongState: {
+              ...nextSub.nextState,
+              phase: 'reveal',
+              winnerUids: leaders.winnerUids,
+              winnerNames: leaders.winnerNames,
+            },
+            lastRoundResult: {
+              roundNumber: this.room.roundNumber,
+              winnerTeam: 'pembohong',
+              reason,
+              locationName: `Meja ${MEJA_RANK_LABELS[mp.tableRank]}`,
+              guessedLocation: null,
+              spyUids: leaders.winnerUids,
+              spyNames: leaders.winnerNames,
+              resolvedAtMs: now,
+              scoresApplied: true,
+            },
+            updatedAt: now,
+          };
+          this.pushSystemMessage(reason);
+          return { matchFinished: true };
+        }
+
+        this.serverState = {
+          ...this.serverState,
+          mejaHandsByUid: nextSub.nextHandsByUid,
+          mejaPendingClaimCards: [],
+        };
+
+        const roundSecrets = this.secretsByRound.get(this.room.currentRoundId);
+        if (roundSecrets) {
+          for (const uid of mp.participantUids) {
+            const existingSec = roundSecrets.get(uid);
+            if (existingSec) {
+              roundSecrets.set(uid, {
+                ...existingSec,
+                mejaHand: nextSub.nextHandsByUid[uid] ?? [],
+              });
+            }
+          }
+        }
+
+        this.room = {
+          ...this.room,
+          mejaPembohongState: nextSub.nextState,
+          updatedAt: now,
+        };
+        const rankLabel = MEJA_RANK_LABELS[nextSub.nextState.tableRank].toUpperCase();
+        this.pushSystemMessage(
+          `Tangan #${nextSub.nextState.subRoundNumber} dibuka! Meja: ${rankLabel} · Giliran: ${nextSub.nextState.currentTurnName}.`,
+        );
+        return {
+          subRoundNumber: nextSub.nextState.subRoundNumber,
+          matchFinished: false,
+        };
+      }
+
       // ===================== RETURN TO LOBBY =====================
       case 'returnRoomToLobby':
       case 'returnKataKataToLobby':
@@ -2707,7 +2959,8 @@ export class LanHostAuthority {
       case 'returnPelukisToLobby':
       case 'returnMalamSilumanToLobby':
       case 'returnUlarTanggaToLobby':
-      case 'returnCumaBercandaToLobby': {
+      case 'returnCumaBercandaToLobby':
+      case 'returnMejaPembohongToLobby': {
         this.requireHost(senderDeviceUid);
         this.room = {
           ...this.room,
@@ -2722,6 +2975,7 @@ export class LanHostAuthority {
           malamSilumanState: null,
           ularTanggaState: null,
           cumaBercandaState: null,
+          mejaPembohongState: null,
           updatedAt: now,
         };
         return {};
@@ -2744,6 +2998,7 @@ export class LanHostAuthority {
             'malam_siluman',
             'ular_tangga',
             'cuma_bercanda',
+            'meja_pembohong',
           ].includes(nextGameType)
         ) {
           throw new Error('Jenis permainan tidak valid.');
@@ -2786,6 +3041,7 @@ export class LanHostAuthority {
           malamSilumanState: null,
           ularTanggaState: null,
           cumaBercandaState: null,
+          mejaPembohongState: null,
           activeVote: null,
           pendingSpyGuess: null,
           lastRoundResult: null,
@@ -2995,6 +3251,66 @@ export class LanHostAuthority {
       },
       updatedAt: Date.now(),
     };
+  }
+
+  private ensureMejaPembohongTurnValid(now: number): void {
+    const mp = this.room.mejaPembohongState;
+    if (!mp || this.room.status !== 'playing' || mp.phase === 'reveal') return;
+    const validLiving = mp.livingUids.filter((uid) => {
+      const p = this.players.get(uid);
+      return Boolean(p && !p.isBrb);
+    });
+    if (validLiving.length <= 1) {
+      const champUid = validLiving[0] ?? mp.livingUids[0] ?? '';
+      const champName = mp.participantNamesByUid[champUid] ?? 'Pemain';
+      const reason = `Pemain lain keluar/BRB. ${champName} memenangkan Meja Pembohong!`;
+      this.room = {
+        ...this.room,
+        status: 'round_end',
+        currentMatchRounds: (this.room.currentMatchRounds ?? 0) + 1,
+        mejaPembohongState: {
+          ...mp,
+          phase: 'reveal',
+          livingUids: validLiving,
+          winnerUids: champUid ? [champUid] : [],
+          winnerNames: champUid ? [champName] : [],
+          eventLog: [reason, ...mp.eventLog].slice(0, 12),
+        },
+        lastRoundResult: {
+          roundNumber: this.room.roundNumber,
+          winnerTeam: 'pembohong',
+          reason,
+          locationName: `Meja ${MEJA_RANK_LABELS[mp.tableRank]}`,
+          guessedLocation: null,
+          spyUids: champUid ? [champUid] : [],
+          spyNames: champUid ? [champName] : [],
+          resolvedAtMs: now,
+          scoresApplied: true,
+        },
+        updatedAt: now,
+      };
+      this.pushSystemMessage(reason);
+      return;
+    }
+
+    if (!validLiving.includes(mp.currentTurnUid)) {
+      const nextUid = validLiving[0];
+      const nextName = mp.participantNamesByUid[nextUid] ?? 'Pemain';
+      this.room = {
+        ...this.room,
+        mejaPembohongState: {
+          ...mp,
+          livingUids: validLiving,
+          currentTurnUid: nextUid,
+          currentTurnName: nextName,
+          eventLog: [
+            `Giliran diteruskan ke ${nextName} karena pemain sebelumnya keluar/BRB.`,
+            ...mp.eventLog,
+          ].slice(0, 12),
+        },
+        updatedAt: now,
+      };
+    }
   }
 
   private finalizePelukisVoteTally(

@@ -13,6 +13,7 @@ const YUKMAIN_ALLOWED_GAME_TYPES = [
     'malam_siluman',
     'ular_tangga',
     'cuma_bercanda',
+    'meja_pembohong',
 ];
 
 function yukmain_row_to_player(array $row): array
@@ -191,6 +192,7 @@ function yukmain_build_default_room(string $roomId, string $code, string $gameTy
         'malamSilumanSettings'  => yukmain_default_malam_siluman_settings(),
         'ularTanggaSettings'    => yukmain_default_ular_tangga_settings(),
         'cumaBercandaSettings'  => yukmain_default_cuma_bercanda_settings(),
+        'mejaPembohongSettings' => yukmain_default_meja_pembohong_settings(),
         'eliminatedUids'        => [],
         'eliminationLog'        => [],
         'frequencyState'        => null,
@@ -199,6 +201,7 @@ function yukmain_build_default_room(string $roomId, string $code, string $gameTy
         'malamSilumanState'     => null,
         'ularTanggaState'       => null,
         'cumaBercandaState'     => null,
+        'mejaPembohongState'    => null,
         'activeVote'            => null,
         'pendingSpyGuess'       => null,
         'lastRoundResult'       => null,
@@ -330,6 +333,7 @@ function yukmain_perform_empty_room_reset_locked(PDO $tx, array $roomRow, int $n
     $room['malamSilumanState'] = null;
     $room['ularTanggaState'] = null;
     $room['cumaBercandaState'] = null;
+    $room['mejaPembohongState'] = null;
     $room['activeVote'] = null;
     $room['pendingSpyGuess'] = null;
     $room['lastRoundResult'] = null;
@@ -589,6 +593,14 @@ function yukmain_leave_room(PDO $pdo, array $user, string $roomId): array
             $nextUt = yukmain_ut_ensure_turn_valid($room, $remaining);
             if ($nextUt !== null) {
                 $room['ularTanggaState'] = $nextUt;
+            }
+        }
+
+        // Meja Pembohong turn failover if current turn player left
+        if (($room['status'] ?? 'lobby') === 'playing' && !empty($room['mejaPembohongState']) && function_exists('yukmain_mp_ensure_turn_valid')) {
+            $mpMsg = yukmain_mp_ensure_turn_valid($room, $remaining, $now);
+            if ($mpMsg !== null) {
+                yukmain_insert_and_prune_chat($tx, $roomId, 'system', 'Yuk Main', $mpMsg, 'system');
             }
         }
 

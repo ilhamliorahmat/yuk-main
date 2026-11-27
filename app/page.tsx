@@ -1,18 +1,27 @@
 'use client';
 
 import React, { Suspense, useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
-import { ActiveRoomContainer } from '@/components/games/ActiveRoomContainer';
 import { AuthDialog } from '@/components/hub/AuthDialog';
 import { YukMainHub } from '@/components/hub/YukMainHub';
 import { useAuth } from '@/hooks/use-auth';
 import { getLocalLanProfile, isLanRoomId } from '@/lib/lan/lan-protocol';
-import { lanRuntime } from '@/lib/lan/lan-runtime';
-import {
-  checkAndResetExpiredRoomSession,
-  joinRoomAsStageDisplay,
-  joinRoomByCode,
-} from '@/lib/platform/room-service';
+
+const ActiveRoomContainer = dynamic(
+  () =>
+    import('@/components/games/ActiveRoomContainer').then(
+      (mod) => mod.ActiveRoomContainer,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-screen bg-[#0B1018] text-slate-300 flex items-center justify-center p-6 text-sm">
+        Memuat ruang permainan Yuk Main...
+      </div>
+    ),
+  },
+);
 
 function YukMainAppContent() {
   const searchParams = useSearchParams();
@@ -45,7 +54,11 @@ function YukMainAppContent() {
     if (checkedResumeRef.current === resumeKey) return;
     checkedResumeRef.current = resumeKey;
 
-    void checkAndResetExpiredRoomSession(activeRoomId, user.uid).catch(() => {});
+    void import('@/lib/platform/room-service')
+      .then(({ checkAndResetExpiredRoomSession }) =>
+        checkAndResetExpiredRoomSession(activeRoomId, user.uid),
+      )
+      .catch(() => {});
   }, [authReady, activeRoomId, isLanRoom, user, isStageDisplay]);
 
   // Auto-join when authenticated user arrives via ?room=XXXXXX or ?room=XXXXXX&stage=1
@@ -60,14 +73,17 @@ function YukMainAppContent() {
       if (!cancelled) setAutoJoinBusy(true);
     });
 
-    const joinPromise = wantsStageDisplay
-      ? joinRoomAsStageDisplay({ code: inviteCode }).then((res) => res.roomId)
-      : joinRoomByCode({
-          code: inviteCode,
-          uid: user.uid,
-          displayName: profile.displayName,
-          avatarColor: profile.avatarColor,
-        });
+    const joinPromise = import('@/lib/platform/room-service').then(
+      ({ joinRoomAsStageDisplay, joinRoomByCode }) =>
+        wantsStageDisplay
+          ? joinRoomAsStageDisplay({ code: inviteCode }).then((res) => res.roomId)
+          : joinRoomByCode({
+              code: inviteCode,
+              uid: user.uid,
+              displayName: profile.displayName,
+              avatarColor: profile.avatarColor,
+            }),
+    );
 
     void joinPromise
       .then((roomId) => {
@@ -111,7 +127,9 @@ function YukMainAppContent() {
 
   const handleExitRoom = () => {
     if (isLanRoomId(activeRoomId)) {
-      lanRuntime.teardown();
+      void import('@/lib/lan/lan-runtime').then(({ lanRuntime }) => {
+        lanRuntime.teardown();
+      });
     }
     setActiveRoomId(null);
     setIsStageDisplay(false);
